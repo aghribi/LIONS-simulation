@@ -130,7 +130,7 @@ Inputs are synthetic, written per test into a temporary directory (`tests/synthe
 ## Documentation
 
 Technical guide: `docs/guide/` (inputs, outputs, coordinates, algorithms, bunch generation, GUI, worked example).
-Sphinx site with the guide, the glossary and the API:
+Sphinx site with the guide, the glossary and the API: https://aghribi.github.io/LIONS-simulation/ (built from `main`). Local build:
 
 ```bash
 uv sync
