@@ -4,8 +4,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 project = "LIONS"
-author = "Omar Kamalou"
-copyright = "2026, Omar Kamalou"
+author = "Omar Kamalou, Adnan Ghribi"
+copyright = "2026, Omar Kamalou, Adnan Ghribi"
 
 extensions = [
     "myst_parser",
