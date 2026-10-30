@@ -100,13 +100,12 @@ class SimulationWorker(QThread):
 
             # Import du moteur de simulation
             import lions
-            from lion_m import LionData
+            from lion_m import State
 
             # Reponses fournies par la file d'entree (meme sequence que le CLI)
             lions.banner()
-            d = LionData()
-            d.repswap = input().strip()
-            d.idebug = 0
+            d = State()
+            d.swap_bytes = input().strip()
             lions.init(d, input().strip())
             lions.read_vertical_sorter(d)
             bidim = lions.BidimManager()
@@ -130,12 +129,12 @@ class SimulationWorker(QThread):
 
     def _on_step(self, d):
         """Hook de lions.track : progression, donnees de plot, arret."""
-        ite = d.ite
+        ite = d.step
         # Progression limitee a ~200 emissions pour ne pas noyer la boucle Qt
-        if ite % max(1, d.nbdt // 200) == 0 or ite == 1 or ite == d.nbdt:
-            self.progress.emit(ite, d.nbdt)
-        if ite == 0 or (d.ifreq > 0 and
-                        (ite % d.ifreq == 0 or ite == 1 or ite == d.nbdt)):
+        if ite % max(1, d.n_steps // 200) == 0 or ite == 1 or ite == d.n_steps:
+            self.progress.emit(ite, d.n_steps)
+        if ite == 0 or (d.output_every > 0 and
+                        (ite % d.output_every == 0 or ite == 1 or ite == d.n_steps)):
             self._emit_data(d)
         if self.stop_flag:
             print(f'\n--- Simulation arretee a l iteration {ite + 1} ---')
@@ -145,11 +144,11 @@ class SimulationWorker(QThread):
     def _emit_data(self, d):
         """Extrait les donnees de la simulation pour les plots (par famille)."""
         try:
-            nbrfam = getattr(d, 'nbrfam', 1)
+            nbrfam = d.n_families
             for k in range(nbrfam):
-                i1 = d.index[k]
+                i1 = d.family_start[k]
                 rr = np.sqrt(d.x[i1]**2 + d.y[i1]**2)
-                wmevpa = d.am0c2[i1] * (d.ga[i1] - 1.0) / 1.60217733e-13 / d.a[k]
+                wmevpa = d.rest_energy[i1] * (d.gamma[i1] - 1.0) / 1.60217733e-13 / d.mass_number[k]
                 ppp = np.sqrt(d.px[i1]**2 + d.py[i1]**2 + d.pz[i1]**2)
                 tpz = 0.0
                 if ppp > 0:
@@ -165,15 +164,15 @@ class SimulationWorker(QThread):
                     tetnew_k = 0.0
 
                 # Calculer dphi (dephasage HF)
-                phihf = 180.0 / d.pi * d.omhf * d.t
-                tetall_k = tetnew_k + 360.0 * (d.numtou - 1)
-                dph = phihf - d.harm * tetall_k - 90.0
+                phihf = 180.0 / np.pi * d.omega_rf * d.t
+                tetall_k = tetnew_k + 360.0 * (d.turn - 1)
+                dph = phihf - d.harmonic * tetall_k - 90.0
 
                 data = {
                     'family': k,
                     'nbrfam': nbrfam,
-                    'ite': d.ite,
-                    'numtou': d.numtou,
+                    'ite': d.step,
+                    'numtou': d.turn,
                     'x0_mm': float(d.x[i1] * 1000.0),
                     'y0_mm': float(d.y[i1] * 1000.0),
                     'r0_mm': float(rr * 1000.0),
@@ -186,11 +185,11 @@ class SimulationWorker(QThread):
                 }
 
                 # === Scatter: toutes les particules actives de la famille ===
-                n_k = d.nbrion[k]
+                n_k = d.family_size[k]
                 if n_k > 1:
-                    idx_s = d.index[k]
+                    idx_s = d.family_start[k]
                     idx_e = idx_s + n_k
-                    ok_k = d.ok[idx_s:idx_e]
+                    ok_k = d.alive[idx_s:idx_e]
 
                     x_a = d.x[idx_s:idx_e][ok_k] * 1000.0
                     y_a = d.y[idx_s:idx_e][ok_k] * 1000.0
@@ -214,13 +213,13 @@ class SimulationWorker(QThread):
                     tpz_a[ppp_a == 0] = 0.0
 
                     # Energie (MeV/A)
-                    ga_a = d.ga[idx_s:idx_e][ok_k]
-                    am0c2_a = d.am0c2[idx_s:idx_e][ok_k]
-                    wmevpa_a = am0c2_a * (ga_a - 1.0) / 1.60217733e-13 / d.a[k]
+                    ga_a = d.gamma[idx_s:idx_e][ok_k]
+                    am0c2_a = d.rest_energy[idx_s:idx_e][ok_k]
+                    wmevpa_a = am0c2_a * (ga_a - 1.0) / 1.60217733e-13 / d.mass_number[k]
 
                     # dphi (deg)
-                    tetall_a = theta_a + 360.0 * (d.numtou - 1)
-                    dph_a = phihf - d.harm * tetall_a - 90.0
+                    tetall_a = theta_a + 360.0 * (d.turn - 1)
+                    dph_a = phihf - d.harmonic * tetall_a - 90.0
 
                     data['scatter_x'] = x_a
                     data['scatter_y'] = y_a
@@ -230,7 +229,7 @@ class SimulationWorker(QThread):
                     data['scatter_pz'] = tpz_a
                     data['scatter_dph'] = dph_a
                     data['scatter_wmevpa'] = wmevpa_a
-                    data['scatter_turn'] = d.numtou - 1.0 + theta_a / 360.0
+                    data['scatter_turn'] = d.turn - 1.0 + theta_a / 360.0
 
                 self.iteration_data.emit(data)
         except Exception:

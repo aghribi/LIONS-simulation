@@ -11,7 +11,10 @@ import numpy as np
 import struct
 import sys
 import os
-from lion_m import LionData
+from lion_m import State
+
+C_LIGHT = 299792458.0  # m/s
+SQRT8 = np.sqrt(8.0)  # rms -> full width of a uniform 6D distribution
 
 
 # =============================================================================
@@ -386,76 +389,76 @@ def addh(rmin, rmax, nr, ntet, tbz, d2bz, dbzx, dbzy, ncoh, coh, phihar):
 def boite(d):
     """Vérifie quelles particules sont dans la boîte de simulation."""
     d.r = np.sqrt(d.x * d.x + d.y * d.y)
-    d.box = ((d.r > d.rmin) & (d.r < (d.rmax - 0.02)) &
+    d.in_box = ((d.r > d.map_rmin) & (d.r < (d.map_rmax - 0.02)) &
              (d.z > d.zmin) & (d.z < d.zmax))
-    d.box = d.box & d.ok
-    d.nbox = np.count_nonzero(d.box)
+    d.in_box = d.in_box & d.alive
+    d.n_in_box = np.count_nonzero(d.in_box)
 
 
 def box1(d):
     """Vérifie les particules dans la zone centrale."""
-    d.centre = d.box & (d.r < d.rmax1) & (np.abs(d.y) < (d.ymax1 - d.hy1))
-    d.nbox1 = np.count_nonzero(d.centre)
+    d.in_central = d.in_box & (d.r < d.central_rmax) & (np.abs(d.y) < (d.central_ymax - d.central_dy))
+    d.n_central = np.count_nonzero(d.in_central)
 
 
-def box2(d):
-    """Vérifie les particules dans la zone périphérique."""
-    d.periph = ((d.vecx > d.xmin2) & (d.vecx < d.xmax2) &
-                (d.vecy > d.ymin2) & (d.vecy < d.ymax2) &
-                d.box & ~d.centre)
-    d.nbox2 = np.count_nonzero(d.periph)
+def box2(d, vecx, vecy):
+    """Vérifie les particules dans la zone périphérique (vecx, vecy : repere du gap)."""
+    d.in_outer = ((vecx > d.outer_xmin) & (vecx < d.outer_xmax) &
+                (vecy > d.outer_ymin) & (vecy < d.outer_ymax) &
+                d.in_box & ~d.in_central)
+    d.n_outer = np.count_nonzero(d.in_outer)
 
 
 def boxdf(d, i):
     """Vérifie les particules dans un déflecteur électrique."""
     # i est 0-based en Python
-    cond_in = (((d.x - d.xdfi[i]) * d.uydfi[i] - (d.y - d.ydfi[i]) * d.uxdfi[i]) <= 0.0)
-    cond_out = (((d.x - d.xdfo[i]) * d.uydfo[i] - (d.y - d.ydfo[i]) * d.uxdfo[i]) >= 0.0)
+    cond_in = (((d.x - d.deflector_in_x[i]) * d.deflector_in_uy[i] - (d.y - d.deflector_in_y[i]) * d.deflector_in_ux[i]) <= 0.0)
+    cond_out = (((d.x - d.deflector_out_x[i]) * d.deflector_out_uy[i] - (d.y - d.deflector_out_y[i]) * d.deflector_out_ux[i]) >= 0.0)
 
     if i > 0:
-        d.extra = d.sortant & cond_in & cond_out & d.ok
-        d.nextra = np.count_nonzero(d.extra)
+        d.in_element = d.extracted & cond_in & cond_out & d.alive
+        d.n_in_element = np.count_nonzero(d.in_element)
         return
 
-    if d.iteext == 0:
-        d.extra = (d.r > d.rdf[i]) & cond_in & cond_out
-        d.extra = d.extra | (d.sortant & cond_in & cond_out)
-        d.sortant = d.sortant | d.extra
+    if d.extraction_start_step == 0:
+        d.in_element = (d.r > d.deflector_r[i]) & cond_in & cond_out
+        d.in_element = d.in_element | (d.extracted & cond_in & cond_out)
+        d.extracted = d.extracted | d.in_element
     else:
-        d.extra = (d.ite >= d.iteext) & cond_in & cond_out
-        d.extra = d.extra | (d.sortant & cond_in & cond_out)
-        d.sortant = d.sortant | d.extra
+        d.in_element = (d.step >= d.extraction_start_step) & cond_in & cond_out
+        d.in_element = d.in_element | (d.extracted & cond_in & cond_out)
+        d.extracted = d.extracted | d.in_element
 
-    d.sortant = d.sortant & d.ok
-    d.extra = d.extra & d.ok
-    d.nextra = np.count_nonzero(d.extra)
+    d.extracted = d.extracted & d.alive
+    d.in_element = d.in_element & d.alive
+    d.n_in_element = np.count_nonzero(d.in_element)
 
 
 def boxdm(d, i):
     """Vérifie les particules dans un dipôle magnétique."""
-    cond_in = (((d.x - d.xdm[i]) * d.uydmi[i] - (d.y - d.ydm[i]) * d.uxdmi[i]) <= 0.0)
-    cond_out = (((d.x - d.xdm[i]) * d.uydmo[i] - (d.y - d.ydm[i]) * d.uxdmo[i]) >= 0.0)
-    d.extra = d.sortant & cond_in & cond_out & d.ok
-    d.nextra = np.count_nonzero(d.extra)
+    cond_in = (((d.x - d.dipole_x[i]) * d.dipole_in_uy[i] - (d.y - d.dipole_y[i]) * d.dipole_in_ux[i]) <= 0.0)
+    cond_out = (((d.x - d.dipole_x[i]) * d.dipole_out_uy[i] - (d.y - d.dipole_y[i]) * d.dipole_out_ux[i]) >= 0.0)
+    d.in_element = d.extracted & cond_in & cond_out & d.alive
+    d.n_in_element = np.count_nonzero(d.in_element)
 
 
 def boxgex(d, i):
     """Vérifie les particules aux grilles d'extraction."""
-    cond_cross = (((d.x - d.xgex[i]) * d.uygex[i] -
-                   (d.y - d.ygex[i]) * d.uxgex[i]) <= 0.0)
+    cond_cross = (((d.x - d.grid_x[i]) * d.grid_uy[i] -
+                   (d.y - d.grid_y[i]) * d.grid_ux[i]) <= 0.0)
 
-    if d.ndf == 0 and d.ndm == 0 and d.ngex == 1:
-        if d.ite < d.iteext:
-            d.franchi[:] = False
+    if d.n_deflectors == 0 and d.n_dipoles == 0 and d.n_grids == 1:
+        if d.step < d.extraction_start_step:
+            d.crossed_grid[:] = False
             return
-        d.franchi = (d.indgex == 0) & d.ok & cond_cross
-        reset_mask = (d.indgex == 1) & (
-            ((d.x - d.xgex[i]) * d.uygex[i] -
-             (d.y - d.ygex[i]) * d.uxgex[i]) > 0.0)
-        d.indgex[reset_mask] = 0
+        d.crossed_grid = (d.grid_reached == 0) & d.alive & cond_cross
+        reset_mask = (d.grid_reached == 1) & (
+            ((d.x - d.grid_x[i]) * d.grid_uy[i] -
+             (d.y - d.grid_y[i]) * d.grid_ux[i]) > 0.0)
+        d.grid_reached[reset_mask] = 0
         return
 
-    d.franchi = d.sortant & d.ok & (d.indgex == i) & cond_cross
+    d.crossed_grid = d.extracted & d.alive & (d.grid_reached == i) & cond_cross
 
 
 # =============================================================================
@@ -463,27 +466,27 @@ def boxgex(d, i):
 # =============================================================================
 def piege(d):
     """Gère le piégeage des ions dans les obstacles."""
-    if d.nbrpie == 0:
+    if d.n_traps == 0:
         return
     mask_z = (d.z < d.zmin) | (d.z > d.zmax)
-    d.ok[mask_z] = False
+    d.alive[mask_z] = False
 
-    if d.ite <= d.itepiem:
-        for k in range(d.nbrpie):
-            rpie2 = d.rpie[k]**2
-            mask_pie = ((d.x - d.xpie[k])**2 + (d.y - d.ypie[k])**2) <= rpie2
-            d.ok[mask_pie] = False
+    if d.step <= d.trap_last_step:
+        for k in range(d.n_traps):
+            rpie2 = d.trap_r[k]**2
+            mask_pie = ((d.x - d.trap_x[k])**2 + (d.y - d.trap_y[k])**2) <= rpie2
+            d.alive[mask_pie] = False
 
-    d.nbrok = np.count_nonzero(d.ok)
-    if d.iflpie == 1:
-        not_ok = ~d.ok
+    d.n_alive = np.count_nonzero(d.alive)
+    if d.trapped_follow == 1:
+        not_ok = ~d.alive
         d.x[not_ok] = d.x[0]
         d.y[not_ok] = d.y[0]
         d.z[not_ok] = d.z[0]
         d.px[not_ok] = d.px[0]
         d.py[not_ok] = d.py[0]
         d.pz[not_ok] = d.pz[0]
-        d.ga[not_ok] = d.ga[0]
+        d.gamma[not_ok] = d.gamma[0]
 
 
 # =============================================================================
@@ -491,9 +494,9 @@ def piege(d):
 # =============================================================================
 def pousse(d):
     """Avance les particules avec le Boris pusher."""
-    if d.iflpie == 0:
-        m = d.ok  # masque
-        vec_m = d.qdts2m0[m] / d.ga[m]
+    if d.trapped_follow == 0:
+        m = d.alive  # masque
+        vec_m = d.boris_b_coef[m] / d.gamma[m]
         a1_m = vec_m * d.bx[m]
         a2_m = vec_m * d.by[m]
         a3_m = vec_m * d.bz[m]
@@ -511,9 +514,9 @@ def pousse(d):
         s32 = s23 - a1_m
         s23 = s23 + a1_m
 
-        fx_m = d.qdtsm0c[m] * d.ex[m]
-        fy_m = d.qdtsm0c[m] * d.ey[m]
-        fz_m = d.qdtsm0c[m] * d.ez[m]
+        fx_m = d.boris_e_coef[m] * d.ex[m]
+        fy_m = d.boris_e_coef[m] * d.ey[m]
+        fz_m = d.boris_e_coef[m] * d.ez[m]
 
         v4 = vec_m * (fx_m + 2.0 * d.px[m])
         v5 = vec_m * (fy_m + 2.0 * d.py[m])
@@ -522,14 +525,14 @@ def pousse(d):
         d.py[m] = d.py[m] + s21 * v4 - (v1 + v3) * v5 + s23 * v6 + fy_m
         d.pz[m] = d.pz[m] + s31 * v4 + s32 * v5 - (v1 + v2) * v6 + fz_m
 
-        d.ga[m] = np.sqrt(1.0 + d.px[m]**2 + d.py[m]**2 + d.pz[m]**2)
-        vec_m = d.cdt / d.ga[m]
+        d.gamma[m] = np.sqrt(1.0 + d.px[m]**2 + d.py[m]**2 + d.pz[m]**2)
+        vec_m = d.c_dt / d.gamma[m]
         d.x[m] = d.x[m] + vec_m * d.px[m]
         d.y[m] = d.y[m] + vec_m * d.py[m]
         d.z[m] = d.z[m] + vec_m * d.pz[m]
     else:
         # Pas de masque, toutes les particules
-        vec = d.qdts2m0 / d.ga
+        vec = d.boris_b_coef / d.gamma
         a1 = vec * d.bx
         a2 = vec * d.by
         a3 = vec * d.bz
@@ -547,9 +550,9 @@ def pousse(d):
         s32 = s23 - a1
         s23 = s23 + a1
 
-        fx = d.qdtsm0c * d.ex
-        fy = d.qdtsm0c * d.ey
-        fz = d.qdtsm0c * d.ez
+        fx = d.boris_e_coef * d.ex
+        fy = d.boris_e_coef * d.ey
+        fz = d.boris_e_coef * d.ez
 
         v4 = vec * (fx + 2.0 * d.px)
         v5 = vec * (fy + 2.0 * d.py)
@@ -558,8 +561,8 @@ def pousse(d):
         d.py = d.py + s21 * v4 - (v1 + v3) * v5 + s23 * v6 + fy
         d.pz = d.pz + s31 * v4 + s32 * v5 - (v1 + v2) * v6 + fz
 
-        d.ga = np.sqrt(1.0 + d.px**2 + d.py**2 + d.pz**2)
-        vec = d.cdt / d.ga
+        d.gamma = np.sqrt(1.0 + d.px**2 + d.py**2 + d.pz**2)
+        vec = d.c_dt / d.gamma
         d.x = d.x + vec * d.px
         d.y = d.y + vec * d.py
         d.z = d.z + vec * d.pz
@@ -570,7 +573,46 @@ def pousse(d):
 # =============================================================================
 def calcbe(d):
     """Calcul des champs magnétique et électrique pour toutes les particules."""
-    np_ = d.np_
+    hrhtetm1 = 1.0 / (d.map_dr * d.map_dtheta)
+    hrm1 = 1.0 / d.map_dr
+    htetm1 = 1.0 / d.map_dtheta
+    hx1hy1m1 = 1.0 / (d.central_dx * d.central_dy)
+    hx1m1 = 1.0 / d.central_dx
+    hx2hy2m1 = 1.0 / (d.outer_dx * d.outer_dy)
+    hx2m1 = 1.0 / d.outer_dx
+    hy1m1 = 1.0 / d.central_dy
+    hy2m1 = 1.0 / d.outer_dy
+    ivec = np.zeros(d.n_particles, dtype=np.int32)
+    jvec = np.zeros(d.n_particles, dtype=np.int32)
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
+    vec3 = np.zeros(d.n_particles)
+    vec4 = np.zeros(d.n_particles)
+    veca = np.zeros(d.n_particles)
+    vecb1 = np.zeros(d.n_particles)
+    vecb2 = np.zeros(d.n_particles)
+    vecb3 = np.zeros(d.n_particles)
+    vecb4 = np.zeros(d.n_particles)
+    vecb = np.zeros(d.n_particles)
+    vecd1 = np.zeros(d.n_particles)
+    vecd2 = np.zeros(d.n_particles)
+    vecp1 = np.zeros(d.n_particles)
+    vecp2 = np.zeros(d.n_particles)
+    vecp3 = np.zeros(d.n_particles)
+    vecp4 = np.zeros(d.n_particles)
+    vecpc = np.zeros(d.n_particles)
+    vecx = np.zeros(d.n_particles)
+    vecy = np.zeros(d.n_particles)
+    vecz = np.zeros(d.n_particles)
+    vex1 = np.zeros(d.n_particles)
+    vex2 = np.zeros(d.n_particles)
+    vex3 = np.zeros(d.n_particles)
+    vex4 = np.zeros(d.n_particles)
+    vey1 = np.zeros(d.n_particles)
+    vey2 = np.zeros(d.n_particles)
+    vey3 = np.zeros(d.n_particles)
+    vey4 = np.zeros(d.n_particles)
+    np_ = d.n_particles
 
     # Calcul de B
     nbiz = np.count_nonzero((d.x / d.r > 1.0) | (d.x / d.r < -1.0))
@@ -581,58 +623,58 @@ def calcbe(d):
             if rap > 1.0 or rap < -1.0:
                 print(f'{i} {d.x[i]} {d.y[i]} {d.r[i]} {rap}')
 
-    d.veca = d.x / d.r
-    mask_normal = (d.veca > -1.0) & (d.veca < 1.0)
-    mask_ge1 = d.veca >= 1.0
-    mask_lem1 = d.veca <= -1.0
-    d.teta[mask_normal] = np.arccos(d.veca[mask_normal])
-    d.teta[mask_ge1] = np.arccos(1.0)
-    d.teta[mask_lem1] = np.arccos(-1.0)
+    veca = d.x / d.r
+    mask_normal = (veca > -1.0) & (veca < 1.0)
+    mask_ge1 = veca >= 1.0
+    mask_lem1 = veca <= -1.0
+    d.theta[mask_normal] = np.arccos(veca[mask_normal])
+    d.theta[mask_ge1] = np.arccos(1.0)
+    d.theta[mask_lem1] = np.arccos(-1.0)
     mask_yneg = d.y < 0.0
-    d.teta[mask_yneg] = 2.0 * d.pi - d.teta[mask_yneg]
+    d.theta[mask_yneg] = 2.0 * np.pi - d.theta[mask_yneg]
 
-    d.ivec[:] = 0
-    d.jvec[:] = 0
-    mask = d.box
-    d.ivec[mask] = ((d.r[mask] - d.rmin) * d.hrm1).astype(np.int32)
-    d.jvec[mask] = (d.teta[mask] * d.htetm1).astype(np.int32)
-    d.veca[:] = d.r - d.rmin - d.ivec * d.hr
-    d.vecb_arr[:] = d.teta - d.jvec * d.htet
-    d.vecd1[:] = d.veca - d.hr
-    d.vecd2[:] = d.vecb_arr - d.htet
-    d.vecz[:] = d.z * d.z * 0.5
+    ivec[:] = 0
+    jvec[:] = 0
+    mask = d.in_box
+    ivec[mask] = ((d.r[mask] - d.map_rmin) * hrm1).astype(np.int32)
+    jvec[mask] = (d.theta[mask] * htetm1).astype(np.int32)
+    veca[:] = d.r - d.map_rmin - ivec * d.map_dr
+    vecb[:] = d.theta - jvec * d.map_dtheta
+    vecd1[:] = veca - d.map_dr
+    vecd2[:] = vecb - d.map_dtheta
+    vecz[:] = d.z * d.z * 0.5
 
     for k in range(np_):
-        ik = d.ivec[k]
-        jk = d.jvec[k]
-        d.bz[k] = (d.vecd1[k] * d.vecd2[k] * (d.tbz[ik, jk] -
-                   d.vecz[k] * d.d2bz[ik, jk]) -
-                   d.veca[k] * d.vecd2[k] * (d.tbz[ik+1, jk] -
-                   d.vecz[k] * d.d2bz[ik+1, jk]) +
-                   d.veca[k] * d.vecb_arr[k] * (d.tbz[ik+1, jk+1] -
-                   d.vecz[k] * d.d2bz[ik+1, jk+1]) -
-                   d.vecd1[k] * d.vecb_arr[k] * (d.tbz[ik, jk+1] -
-                   d.vecz[k] * d.d2bz[ik, jk+1])) * d.hrhtetm1
-        d.bx[k] = (d.vecd1[k] * d.vecd2[k] * d.dbzx[ik, jk] -
-                   d.veca[k] * d.vecd2[k] * d.dbzx[ik+1, jk] +
-                   d.veca[k] * d.vecb_arr[k] * d.dbzx[ik+1, jk+1] -
-                   d.vecd1[k] * d.vecb_arr[k] * d.dbzx[ik, jk+1]
-                   ) * d.z[k] * d.hrhtetm1
-        d.by[k] = (d.vecd1[k] * d.vecd2[k] * d.dbzy[ik, jk] -
-                   d.veca[k] * d.vecd2[k] * d.dbzy[ik+1, jk] +
-                   d.veca[k] * d.vecb_arr[k] * d.dbzy[ik+1, jk+1] -
-                   d.vecd1[k] * d.vecb_arr[k] * d.dbzy[ik, jk+1]
-                   ) * d.z[k] * d.hrhtetm1
+        ik = ivec[k]
+        jk = jvec[k]
+        d.bz[k] = (vecd1[k] * vecd2[k] * (d.bz_map[ik, jk] -
+                   vecz[k] * d.d2bz_map[ik, jk]) -
+                   veca[k] * vecd2[k] * (d.bz_map[ik+1, jk] -
+                   vecz[k] * d.d2bz_map[ik+1, jk]) +
+                   veca[k] * vecb[k] * (d.bz_map[ik+1, jk+1] -
+                   vecz[k] * d.d2bz_map[ik+1, jk+1]) -
+                   vecd1[k] * vecb[k] * (d.bz_map[ik, jk+1] -
+                   vecz[k] * d.d2bz_map[ik, jk+1])) * hrhtetm1
+        d.bx[k] = (vecd1[k] * vecd2[k] * d.dbzdx_map[ik, jk] -
+                   veca[k] * vecd2[k] * d.dbzdx_map[ik+1, jk] +
+                   veca[k] * vecb[k] * d.dbzdx_map[ik+1, jk+1] -
+                   vecd1[k] * vecb[k] * d.dbzdx_map[ik, jk+1]
+                   ) * d.z[k] * hrhtetm1
+        d.by[k] = (vecd1[k] * vecd2[k] * d.dbzdy_map[ik, jk] -
+                   veca[k] * vecd2[k] * d.dbzdy_map[ik+1, jk] +
+                   veca[k] * vecb[k] * d.dbzdy_map[ik+1, jk+1] -
+                   vecd1[k] * vecb[k] * d.dbzdy_map[ik, jk+1]
+                   ) * d.z[k] * hrhtetm1
 
-    mask_bz0 = (d.box & (d.bz == 0.0)) | (~d.box)
+    mask_bz0 = (d.in_box & (d.bz == 0.0)) | (~d.in_box)
     d.bx[mask_bz0] = 0.0
     d.by[mask_bz0] = 0.0
     d.bz[mask_bz0] = -0.00001
 
-    mask_rle = d.r <= d.rmin
+    mask_rle = d.r <= d.map_rmin
     d.bx[mask_rle] = 0.0
     d.by[mask_rle] = 0.0
-    d.bz[mask_rle] = d.tbz[0, 0]
+    d.bz[mask_rle] = d.bz_map[0, 0]
 
     # Calcul de E au centre
     d.ex[:] = 0.0
@@ -640,163 +682,163 @@ def calcbe(d):
     d.ez[:] = 0.0
     box1(d)
 
-    if d.nbox1 > 0:
-        m_c = d.centre
-        d.ivec[m_c] = ((d.x[m_c] - d.xmin1) * d.hx1m1).astype(np.int32)
-        d.jvec[m_c] = ((d.y[m_c] - d.ymin1) * d.hy1m1).astype(np.int32)
-        d.veca[m_c] = d.x[m_c] - d.xmin1 - d.ivec[m_c] * d.hx1
-        d.vecb_arr[m_c] = d.y[m_c] - d.ymin1 - d.jvec[m_c] * d.hy1
-        d.vecd1[m_c] = d.veca[m_c] - d.hx1
-        d.vecd2[m_c] = d.vecb_arr[m_c] - d.hy1
-        d.vecp1[m_c] = d.vecd1[m_c] * d.vecd2[m_c]
-        d.vecp2[m_c] = -d.veca[m_c] * d.vecd2[m_c]
-        d.vecp3[m_c] = d.veca[m_c] * d.vecb_arr[m_c]
-        d.vecp4[m_c] = -d.vecd1[m_c] * d.vecb_arr[m_c]
-        d.vecz[m_c] = d.z[m_c]**2 * 0.5
+    if d.n_central > 0:
+        m_c = d.in_central
+        ivec[m_c] = ((d.x[m_c] - d.central_xmin) * hx1m1).astype(np.int32)
+        jvec[m_c] = ((d.y[m_c] - d.central_ymin) * hy1m1).astype(np.int32)
+        veca[m_c] = d.x[m_c] - d.central_xmin - ivec[m_c] * d.central_dx
+        vecb[m_c] = d.y[m_c] - d.central_ymin - jvec[m_c] * d.central_dy
+        vecd1[m_c] = veca[m_c] - d.central_dx
+        vecd2[m_c] = vecb[m_c] - d.central_dy
+        vecp1[m_c] = vecd1[m_c] * vecd2[m_c]
+        vecp2[m_c] = -veca[m_c] * vecd2[m_c]
+        vecp3[m_c] = veca[m_c] * vecb[m_c]
+        vecp4[m_c] = -vecd1[m_c] * vecb[m_c]
+        vecz[m_c] = d.z[m_c]**2 * 0.5
 
         for k in range(np_):
-            if d.centre[k]:
-                ik = d.ivec[k]
-                jk = d.jvec[k]
-                d.vecb1[k] = d.d2pot1[ik, jk]
-                d.vecb2[k] = d.d2pot1[ik+1, jk]
-                d.vecb3[k] = d.d2pot1[ik+1, jk+1]
-                d.vecb4[k] = d.d2pot1[ik, jk+1]
-                vz = d.vecz[k]
-                d.vex1[k] = (-(d.pot1[ik+1, jk] - d.pot1[ik-1, jk]) +
-                             vz * (d.d2pot1[ik+1, jk] - d.d2pot1[ik-1, jk])
-                             ) * 0.5 / d.hx1
-                d.vex2[k] = (-(d.pot1[ik+2, jk] - d.pot1[ik, jk]) +
-                             vz * (d.d2pot1[ik+2, jk] - d.d2pot1[ik, jk])
-                             ) * 0.5 / d.hx1
-                d.vex3[k] = (-(d.pot1[ik+2, jk+1] - d.pot1[ik, jk+1]) +
-                             vz * (d.d2pot1[ik+2, jk+1] - d.d2pot1[ik, jk+1])
-                             ) * 0.5 / d.hx1
-                d.vex4[k] = (-(d.pot1[ik+1, jk+1] - d.pot1[ik-1, jk+1]) +
-                             vz * (d.d2pot1[ik+1, jk+1] - d.d2pot1[ik-1, jk+1])
-                             ) * 0.5 / d.hx1
-                d.vey1[k] = (-(d.pot1[ik, jk+1] - d.pot1[ik, jk-1]) +
-                             vz * (d.d2pot1[ik, jk+1] - d.d2pot1[ik, jk-1])
-                             ) * 0.5 / d.hy1
-                d.vey2[k] = (-(d.pot1[ik+1, jk+1] - d.pot1[ik+1, jk-1]) +
-                             vz * (d.d2pot1[ik+1, jk+1] - d.d2pot1[ik+1, jk-1])
-                             ) * 0.5 / d.hy1
-                d.vey3[k] = (-(d.pot1[ik+1, jk+2] - d.pot1[ik+1, jk]) +
-                             vz * (d.d2pot1[ik+1, jk+2] - d.d2pot1[ik+1, jk])
-                             ) * 0.5 / d.hy1
-                d.vey4[k] = (-(d.pot1[ik, jk+2] - d.pot1[ik, jk]) +
-                             vz * (d.d2pot1[ik, jk+2] - d.d2pot1[ik, jk])
-                             ) * 0.5 / d.hy1
+            if d.in_central[k]:
+                ik = ivec[k]
+                jk = jvec[k]
+                vecb1[k] = d.central_d2pot[ik, jk]
+                vecb2[k] = d.central_d2pot[ik+1, jk]
+                vecb3[k] = d.central_d2pot[ik+1, jk+1]
+                vecb4[k] = d.central_d2pot[ik, jk+1]
+                vz = vecz[k]
+                vex1[k] = (-(d.central_pot[ik+1, jk] - d.central_pot[ik-1, jk]) +
+                             vz * (d.central_d2pot[ik+1, jk] - d.central_d2pot[ik-1, jk])
+                             ) * 0.5 / d.central_dx
+                vex2[k] = (-(d.central_pot[ik+2, jk] - d.central_pot[ik, jk]) +
+                             vz * (d.central_d2pot[ik+2, jk] - d.central_d2pot[ik, jk])
+                             ) * 0.5 / d.central_dx
+                vex3[k] = (-(d.central_pot[ik+2, jk+1] - d.central_pot[ik, jk+1]) +
+                             vz * (d.central_d2pot[ik+2, jk+1] - d.central_d2pot[ik, jk+1])
+                             ) * 0.5 / d.central_dx
+                vex4[k] = (-(d.central_pot[ik+1, jk+1] - d.central_pot[ik-1, jk+1]) +
+                             vz * (d.central_d2pot[ik+1, jk+1] - d.central_d2pot[ik-1, jk+1])
+                             ) * 0.5 / d.central_dx
+                vey1[k] = (-(d.central_pot[ik, jk+1] - d.central_pot[ik, jk-1]) +
+                             vz * (d.central_d2pot[ik, jk+1] - d.central_d2pot[ik, jk-1])
+                             ) * 0.5 / d.central_dy
+                vey2[k] = (-(d.central_pot[ik+1, jk+1] - d.central_pot[ik+1, jk-1]) +
+                             vz * (d.central_d2pot[ik+1, jk+1] - d.central_d2pot[ik+1, jk-1])
+                             ) * 0.5 / d.central_dy
+                vey3[k] = (-(d.central_pot[ik+1, jk+2] - d.central_pot[ik+1, jk]) +
+                             vz * (d.central_d2pot[ik+1, jk+2] - d.central_d2pot[ik+1, jk])
+                             ) * 0.5 / d.central_dy
+                vey4[k] = (-(d.central_pot[ik, jk+2] - d.central_pot[ik, jk]) +
+                             vz * (d.central_d2pot[ik, jk+2] - d.central_d2pot[ik, jk])
+                             ) * 0.5 / d.central_dy
 
-        nto = int(d.omhf * d.t / (2.0 * d.pi))
-        omhft = d.omhf * d.t - nto * 2.0 * d.pi
-        pcright = d.pothfd * np.cos(omhft + d.dphid)
-        pcleft = d.pothfg * np.cos(omhft + d.dphig)
-        d.vecpc[d.x >= 0.0] = pcright
-        d.vecpc[d.x < 0.0] = pcleft
+        nto = int(d.omega_rf * d.t / (2.0 * np.pi))
+        omhft = d.omega_rf * d.t - nto * 2.0 * np.pi
+        pcright = d.v_dee_right * np.cos(omhft + d.phase_right)
+        pcleft = d.v_dee_left * np.cos(omhft + d.phase_left)
+        vecpc[d.x >= 0.0] = pcright
+        vecpc[d.x < 0.0] = pcleft
 
-        m_c = d.centre
-        d.ex[m_c] = d.vecpc[m_c] * (
-            d.vex1[m_c] * d.vecp1[m_c] + d.vex2[m_c] * d.vecp2[m_c] +
-            d.vex3[m_c] * d.vecp3[m_c] + d.vex4[m_c] * d.vecp4[m_c]
-        ) * d.hx1hy1m1
-        d.ey[m_c] = d.vecpc[m_c] * (
-            d.vey1[m_c] * d.vecp1[m_c] + d.vey2[m_c] * d.vecp2[m_c] +
-            d.vey3[m_c] * d.vecp3[m_c] + d.vey4[m_c] * d.vecp4[m_c]
-        ) * d.hx1hy1m1
-        d.ez[m_c] = d.z[m_c] * d.vecpc[m_c] * (
-            d.vecp1[m_c] * d.vecb1[m_c] + d.vecp2[m_c] * d.vecb2[m_c] +
-            d.vecp3[m_c] * d.vecb3[m_c] + d.vecp4[m_c] * d.vecb4[m_c]
-        ) * d.hx1hy1m1
+        m_c = d.in_central
+        d.ex[m_c] = vecpc[m_c] * (
+            vex1[m_c] * vecp1[m_c] + vex2[m_c] * vecp2[m_c] +
+            vex3[m_c] * vecp3[m_c] + vex4[m_c] * vecp4[m_c]
+        ) * hx1hy1m1
+        d.ey[m_c] = vecpc[m_c] * (
+            vey1[m_c] * vecp1[m_c] + vey2[m_c] * vecp2[m_c] +
+            vey3[m_c] * vecp3[m_c] + vey4[m_c] * vecp4[m_c]
+        ) * hx1hy1m1
+        d.ez[m_c] = d.z[m_c] * vecpc[m_c] * (
+            vecp1[m_c] * vecb1[m_c] + vecp2[m_c] * vecb2[m_c] +
+            vecp3[m_c] * vecb3[m_c] + vecp4[m_c] * vecb4[m_c]
+        ) * hx1hy1m1
 
     # Calcul de E périphérique
-    if (d.nbox == d.nbox1) and (d.ndm == 0) and (d.ndf == 0) and (d.ngex == 1):
+    if (d.n_in_box == d.n_central) and (d.n_dipoles == 0) and (d.n_deflectors == 0) and (d.n_grids == 1):
         pass  # goto 300
-    elif d.nbox == d.nbox1:
+    elif d.n_in_box == d.n_central:
         _calcbe_vertical(d)
         _calcbe_extraction(d)
         return
     else:
-        dc1 = np.cos(d.teta1)
-        ds1 = np.sin(d.teta1)
-        mask_nc = ~d.centre
-        d.vecx[mask_nc] = np.abs(d.x[mask_nc]) * dc1 + (np.abs(d.y[mask_nc]) - d.yomega) * ds1
-        d.vecy[mask_nc] = -np.abs(d.x[mask_nc]) * ds1 + (np.abs(d.y[mask_nc]) - d.yomega) * dc1
+        dc1 = np.cos(d.dee_half_angle)
+        ds1 = np.sin(d.dee_half_angle)
+        mask_nc = ~d.in_central
+        vecx[mask_nc] = np.abs(d.x[mask_nc]) * dc1 + (np.abs(d.y[mask_nc]) - d.gap_offset) * ds1
+        vecy[mask_nc] = -np.abs(d.x[mask_nc]) * ds1 + (np.abs(d.y[mask_nc]) - d.gap_offset) * dc1
 
-        box2(d)
-        nto = int(d.omhf * d.t / (2.0 * d.pi))
-        omhft = d.omhf * d.t - nto * 2.0 * d.pi
+        box2(d, vecx, vecy)
+        nto = int(d.omega_rf * d.t / (2.0 * np.pi))
+        omhft = d.omega_rf * d.t - nto * 2.0 * np.pi
 
-        if d.nbox2 > 0:
-            if d.nbox1 == 0:
-                pcright = d.pothfd * np.cos(omhft + d.dphid)
-                pcleft = d.pothfg * np.cos(omhft + d.dphig)
-                d.vecpc[d.x >= 0.0] = pcright
-                d.vecpc[d.x < 0.0] = pcleft
+        if d.n_outer > 0:
+            if d.n_central == 0:
+                pcright = d.v_dee_right * np.cos(omhft + d.phase_right)
+                pcleft = d.v_dee_left * np.cos(omhft + d.phase_left)
+                vecpc[d.x >= 0.0] = pcright
+                vecpc[d.x < 0.0] = pcleft
 
-            m_p = d.periph
-            d.ivec[m_p] = ((d.vecx[m_p] - d.xmin2) * d.hx2m1).astype(np.int32)
-            d.jvec[m_p] = ((d.vecy[m_p] - d.ymin2) * d.hy2m1).astype(np.int32)
-            d.veca[m_p] = d.vecx[m_p] - d.xmin2 - d.ivec[m_p] * d.hx2
-            d.vecb_arr[m_p] = d.vecy[m_p] - d.ymin2 - d.jvec[m_p] * d.hy2
-            d.vecd1[m_p] = d.veca[m_p] - d.hx2
-            d.vecd2[m_p] = d.vecb_arr[m_p] - d.hy2
-            d.vecp1[m_p] = d.vecd1[m_p] * d.vecd2[m_p]
-            d.vecp2[m_p] = -d.veca[m_p] * d.vecd2[m_p]
-            d.vecp3[m_p] = d.veca[m_p] * d.vecb_arr[m_p]
-            d.vecp4[m_p] = -d.vecd1[m_p] * d.vecb_arr[m_p]
-            d.vecz[m_p] = d.z[m_p]**2 * 0.5
+            m_p = d.in_outer
+            ivec[m_p] = ((vecx[m_p] - d.outer_xmin) * hx2m1).astype(np.int32)
+            jvec[m_p] = ((vecy[m_p] - d.outer_ymin) * hy2m1).astype(np.int32)
+            veca[m_p] = vecx[m_p] - d.outer_xmin - ivec[m_p] * d.outer_dx
+            vecb[m_p] = vecy[m_p] - d.outer_ymin - jvec[m_p] * d.outer_dy
+            vecd1[m_p] = veca[m_p] - d.outer_dx
+            vecd2[m_p] = vecb[m_p] - d.outer_dy
+            vecp1[m_p] = vecd1[m_p] * vecd2[m_p]
+            vecp2[m_p] = -veca[m_p] * vecd2[m_p]
+            vecp3[m_p] = veca[m_p] * vecb[m_p]
+            vecp4[m_p] = -vecd1[m_p] * vecb[m_p]
+            vecz[m_p] = d.z[m_p]**2 * 0.5
 
             for k in range(np_):
-                if d.periph[k]:
-                    ik = d.ivec[k]
-                    jk = d.jvec[k]
-                    d.vec1[k] = d.pot2[ik, jk]
-                    d.vec2[k] = d.pot2[ik+1, jk]
-                    d.vec3[k] = d.pot2[ik+1, jk+1]
-                    d.vec4[k] = d.pot2[ik, jk+1]
-                    d.vecb1[k] = d.d2pot2[ik, jk]
-                    d.vecb2[k] = d.d2pot2[ik+1, jk]
-                    d.vecb3[k] = d.d2pot2[ik+1, jk+1]
-                    d.vecb4[k] = d.d2pot2[ik, jk+1]
+                if d.in_outer[k]:
+                    ik = ivec[k]
+                    jk = jvec[k]
+                    vec1[k] = d.outer_pot[ik, jk]
+                    vec2[k] = d.outer_pot[ik+1, jk]
+                    vec3[k] = d.outer_pot[ik+1, jk+1]
+                    vec4[k] = d.outer_pot[ik, jk+1]
+                    vecb1[k] = d.outer_d2pot[ik, jk]
+                    vecb2[k] = d.outer_d2pot[ik+1, jk]
+                    vecb3[k] = d.outer_d2pot[ik+1, jk+1]
+                    vecb4[k] = d.outer_d2pot[ik, jk+1]
 
-            d.ex[m_p] = -d.vecpc[m_p] * (
-                d.vecd2[m_p] * (d.vec1[m_p] - d.vec2[m_p] -
-                                d.vecz[m_p] * (d.vecb1[m_p] - d.vecb2[m_p])) +
-                d.vecb_arr[m_p] * (d.vec3[m_p] - d.vec4[m_p] +
-                                   d.vecz[m_p] * (d.vecb3[m_p] - d.vecb4[m_p]))
-            ) * d.hx2hy2m1
-            d.ey[m_p] = -d.vecpc[m_p] * (
-                d.vecd1[m_p] * (d.vec1[m_p] - d.vec4[m_p] -
-                                d.vecz[m_p] * (d.vecb1[m_p] - d.vecb4[m_p])) -
-                d.veca[m_p] * (d.vec2[m_p] - d.vec3[m_p] +
-                               d.vecz[m_p] * (d.vecb2[m_p] - d.vecb3[m_p]))
-            ) * d.hx2hy2m1
+            d.ex[m_p] = -vecpc[m_p] * (
+                vecd2[m_p] * (vec1[m_p] - vec2[m_p] -
+                                vecz[m_p] * (vecb1[m_p] - vecb2[m_p])) +
+                vecb[m_p] * (vec3[m_p] - vec4[m_p] +
+                                   vecz[m_p] * (vecb3[m_p] - vecb4[m_p]))
+            ) * hx2hy2m1
+            d.ey[m_p] = -vecpc[m_p] * (
+                vecd1[m_p] * (vec1[m_p] - vec4[m_p] -
+                                vecz[m_p] * (vecb1[m_p] - vecb4[m_p])) -
+                veca[m_p] * (vec2[m_p] - vec3[m_p] +
+                               vecz[m_p] * (vecb2[m_p] - vecb3[m_p]))
+            ) * hx2hy2m1
 
             # Rotation inverse
             vec_tmp = d.ex[m_p] * dc1 - d.ey[m_p] * ds1
             d.ey[m_p] = d.ex[m_p] * ds1 + d.ey[m_p] * dc1
             d.ex[m_p] = vec_tmp
 
-            d.ez[m_p] = d.z[m_p] * d.vecpc[m_p] * (
-                d.vecp1[m_p] * d.vecb1[m_p] + d.vecp2[m_p] * d.vecb2[m_p] +
-                d.vecp3[m_p] * d.vecb3[m_p] + d.vecp4[m_p] * d.vecb4[m_p]
-            ) * d.hx2hy2m1
+            d.ez[m_p] = d.z[m_p] * vecpc[m_p] * (
+                vecp1[m_p] * vecb1[m_p] + vecp2[m_p] * vecb2[m_p] +
+                vecp3[m_p] * vecb3[m_p] + vecp4[m_p] * vecb4[m_p]
+            ) * hx2hy2m1
 
             # Symétries
             m1 = m_p & (d.x < 0.0) & (d.y > 0.0)
-            d.ex[m1] = d.heps * d.ex[m1]
-            d.ey[m1] = -d.heps * d.ey[m1]
+            d.ex[m1] = d.harmonic_sign * d.ex[m1]
+            d.ey[m1] = -d.harmonic_sign * d.ey[m1]
 
             m2 = m_p & (d.x > 0.0) & (d.y < 0.0)
             d.ey[m2] = -d.ey[m2]
 
             m3 = m_p & (d.x < 0.0) & (d.y < 0.0)
-            d.ex[m3] = d.heps * d.ex[m3]
-            d.ey[m3] = d.heps * d.ey[m3]
+            d.ex[m3] = d.harmonic_sign * d.ex[m3]
+            d.ey[m3] = d.harmonic_sign * d.ey[m3]
 
             m4 = m_p & (d.x < 0.0)
-            d.ez[m4] = -d.heps * d.ez[m4]
+            d.ez[m4] = -d.harmonic_sign * d.ez[m4]
 
     # Tri vertical
     _calcbe_vertical(d)
@@ -807,54 +849,54 @@ def calcbe(d):
 
 def _calcbe_vertical(d):
     """Ajout du test tri vertical."""
-    d.pot_ver_vrai = 0.0
-    if d.h_ver == 0.0:
+    d.sorter_voltage_seen = 0.0
+    if d.sorter_gap == 0.0:
         return
-    mask_ver = ((d.r >= d.rmin_ver) & (d.r <= d.rmax_ver) &
-                (d.teta >= d.teta1_ver) & (d.teta <= d.teta2_ver))
+    mask_ver = ((d.r >= d.sorter_rmin) & (d.r <= d.sorter_rmax) &
+                (d.theta >= d.sorter_theta1) & (d.theta <= d.sorter_theta2))
     d.ez[mask_ver] = (d.ez[mask_ver] -
-        d.pot_ver * (1.0 - d.dpotspot) / d.h_ver / 2.0 *
-        np.cos(2.0 * d.omhf * d.t * (1.0 + d.anuz / 2.0 / d.harm) +
-               2.0 * d.phi_ver - d.pi / 2.0) -
-        d.pot_ver * (1.0 + d.dpotspot) / d.h_ver / 2.0 *
-        np.cos(2.0 * d.omhf * d.t * (1.0 - d.anuz / 2.0 / d.harm) +
-               2.0 * d.phi_ver - d.pi / 2.0))
-    if (d.r[0] >= d.rmin_ver and d.r[0] <= d.rmax_ver and
-            d.teta[0] >= d.teta1_ver and d.teta[0] <= d.teta2_ver):
-        d.pot_ver_vrai = -d.ez[0] * d.h_ver
+        d.sorter_voltage * (1.0 - d.sorter_dv) / d.sorter_gap / 2.0 *
+        np.cos(2.0 * d.omega_rf * d.t * (1.0 + d.sorter_nuz / 2.0 / d.harmonic) +
+               2.0 * d.sorter_phase - np.pi / 2.0) -
+        d.sorter_voltage * (1.0 + d.sorter_dv) / d.sorter_gap / 2.0 *
+        np.cos(2.0 * d.omega_rf * d.t * (1.0 - d.sorter_nuz / 2.0 / d.harmonic) +
+               2.0 * d.sorter_phase - np.pi / 2.0))
+    if (d.r[0] >= d.sorter_rmin and d.r[0] <= d.sorter_rmax and
+            d.theta[0] >= d.sorter_theta1 and d.theta[0] <= d.sorter_theta2):
+        d.sorter_voltage_seen = -d.ez[0] * d.sorter_gap
 
 
 def _calcbe_extraction(d):
     """Calcul de l'extraction."""
-    for i in range(d.ndf):
+    for i in range(d.n_deflectors):
         boxdf(d, i)
-        if d.nextra != 0:
-            mask = d.extra
+        if d.n_in_element != 0:
+            mask = d.in_element
             vec_p = np.sqrt(d.px[mask]**2 + d.py[mask]**2)
-            d.ex[mask] = d.edf[i] * d.py[mask] / vec_p
-            d.ey[mask] = -d.edf[i] * d.px[mask] / vec_p
+            d.ex[mask] = d.deflector_e[i] * d.py[mask] / vec_p
+            d.ey[mask] = -d.deflector_e[i] * d.px[mask] / vec_p
 
-    for i in range(d.ndm):
+    for i in range(d.n_dipoles):
         boxdm(d, i)
-        if d.nextra != 0:
-            mask = d.extra
-            vec_dm = np.sqrt((d.x[mask] - d.xdm[i])**2 + (d.y[mask] - d.ydm[i])**2)
-            vec1_dm = vec_dm - d.rdm[i]
-            d.bx[mask] += d.z[mask] * d.bdm[i] * (d.x[mask] - d.xdm[i]) / vec_dm
-            d.by[mask] += d.z[mask] * d.bdm[i] * (d.y[mask] - d.ydm[i]) / vec_dm
-            d.bz[mask] += vec1_dm * d.bdm[i]
+        if d.n_in_element != 0:
+            mask = d.in_element
+            vec_dm = np.sqrt((d.x[mask] - d.dipole_x[i])**2 + (d.y[mask] - d.dipole_y[i])**2)
+            vec1_dm = vec_dm - d.dipole_r[i]
+            d.bx[mask] += d.z[mask] * d.dipole_gradient[i] * (d.x[mask] - d.dipole_x[i]) / vec_dm
+            d.by[mask] += d.z[mask] * d.dipole_gradient[i] * (d.y[mask] - d.dipole_y[i]) / vec_dm
+            d.bz[mask] += vec1_dm * d.dipole_gradient[i]
 
     # Grilles d'extraction
-    if d.rex < 0.0 and d.ngex > 0:
-        if d.ite >= d.itegex:
-            for kg in range(d.ngex):
+    if d.extraction < 0.0 and d.n_grids > 0:
+        if d.step >= d.grid_start_step:
+            for kg in range(d.n_grids):
                 boxgex(d, kg)
-                d.indgex[d.franchi] = kg + 1  # 1-based in data
-                for i in range(d.n):
-                    if d.franchi[i]:
+                d.grid_reached[d.crossed_grid] = kg + 1  # 1-based in data
+                for i in range(d.n_particles):
+                    if d.crossed_grid[i]:
                         if (70 + kg + 1) in files_dict:
                             files_dict[70 + kg + 1].write(
-                                f' {i+1:5d} {d.ite:6d}'
+                                f' {i+1:5d} {d.step:6d}'
                                 f' {d.x[i]:15.8e} {d.y[i]:15.8e} {d.z[i]:15.8e}'
                                 f' {d.px[i]:15.8e} {d.py[i]:15.8e} {d.pz[i]:15.8e}'
                                 f' {d.bz[i]:8.5f}\n')
@@ -865,61 +907,89 @@ def _calcbe_extraction(d):
 # =============================================================================
 def calcb(d):
     """Calcul simplifié du champ magnétique (pendant l'initialisation)."""
-    d.teta = np.arccos(np.clip(d.x / d.r, -1.0, 1.0))
-    d.teta[d.y < 0.0] = 2.0 * d.pi - d.teta[d.y < 0.0]
+    hrhtet = d.map_dr * d.map_dtheta
+    ivec = np.zeros(d.n_particles, dtype=np.int32)
+    jvec = np.zeros(d.n_particles, dtype=np.int32)
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
+    vec3 = np.zeros(d.n_particles)
+    vec4 = np.zeros(d.n_particles)
+    veca = np.zeros(d.n_particles)
+    vecb1 = np.zeros(d.n_particles)
+    vecb2 = np.zeros(d.n_particles)
+    vecb3 = np.zeros(d.n_particles)
+    vecb4 = np.zeros(d.n_particles)
+    vecb = np.zeros(d.n_particles)
+    vecd1 = np.zeros(d.n_particles)
+    vecd2 = np.zeros(d.n_particles)
+    vecp1 = np.zeros(d.n_particles)
+    vecp2 = np.zeros(d.n_particles)
+    vecp3 = np.zeros(d.n_particles)
+    vecp4 = np.zeros(d.n_particles)
+    vecx1 = np.zeros(d.n_particles)
+    vecx2 = np.zeros(d.n_particles)
+    vecx3 = np.zeros(d.n_particles)
+    vecx4 = np.zeros(d.n_particles)
+    vecy1 = np.zeros(d.n_particles)
+    vecy2 = np.zeros(d.n_particles)
+    vecy3 = np.zeros(d.n_particles)
+    vecy4 = np.zeros(d.n_particles)
+    vecz = np.zeros(d.n_particles)
+    d.theta = np.arccos(np.clip(d.x / d.r, -1.0, 1.0))
+    d.theta[d.y < 0.0] = 2.0 * np.pi - d.theta[d.y < 0.0]
 
-    mask = d.box
-    d.ivec[mask] = ((d.r[mask] - d.rmin) / d.hr).astype(np.int32)
-    d.jvec[mask] = (d.teta[mask] / d.htet).astype(np.int32)
-    d.veca[mask] = d.r[mask] - d.rmin - d.ivec[mask] * d.hr
-    d.vecb_arr[mask] = d.teta[mask] - d.jvec[mask] * d.htet
-    d.vecd1[mask] = d.veca[mask] - d.hr
-    d.vecd2[mask] = d.vecb_arr[mask] - d.htet
-    d.vecp1[mask] = d.vecd1[mask] * d.vecd2[mask]
-    d.vecp2[mask] = -d.veca[mask] * d.vecd2[mask]
-    d.vecp3[mask] = d.veca[mask] * d.vecb_arr[mask]
-    d.vecp4[mask] = -d.vecd1[mask] * d.vecb_arr[mask]
-    d.vecz[mask] = d.z[mask]**2 / 2.0
+    mask = d.in_box
+    ivec[mask] = ((d.r[mask] - d.map_rmin) / d.map_dr).astype(np.int32)
+    jvec[mask] = (d.theta[mask] / d.map_dtheta).astype(np.int32)
+    veca[mask] = d.r[mask] - d.map_rmin - ivec[mask] * d.map_dr
+    vecb[mask] = d.theta[mask] - jvec[mask] * d.map_dtheta
+    vecd1[mask] = veca[mask] - d.map_dr
+    vecd2[mask] = vecb[mask] - d.map_dtheta
+    vecp1[mask] = vecd1[mask] * vecd2[mask]
+    vecp2[mask] = -veca[mask] * vecd2[mask]
+    vecp3[mask] = veca[mask] * vecb[mask]
+    vecp4[mask] = -vecd1[mask] * vecb[mask]
+    vecz[mask] = d.z[mask]**2 / 2.0
 
-    for k in range(d.np_):
-        if d.box[k]:
-            ik = d.ivec[k]
-            jk = d.jvec[k]
-            vk = d.vecz[k]
-            d.vecb1[k] = d.tbz[ik, jk]
-            d.vecb2[k] = d.tbz[ik+1, jk]
-            d.vecb3[k] = d.tbz[ik+1, jk+1]
-            d.vecb4[k] = d.tbz[ik, jk+1]
-            d.vec1[k] = -vk * d.d2bz[ik, jk]
-            d.vec2[k] = -vk * d.d2bz[ik+1, jk]
-            d.vec3[k] = -vk * d.d2bz[ik+1, jk+1]
-            d.vec4[k] = -vk * d.d2bz[ik, jk+1]
-            d.vecx1[k] = d.dbzx[ik, jk]
-            d.vecx2[k] = d.dbzx[ik+1, jk]
-            d.vecx3[k] = d.dbzx[ik+1, jk+1]
-            d.vecx4[k] = d.dbzx[ik, jk+1]
-            d.vecy1[k] = d.dbzy[ik, jk]
-            d.vecy2[k] = d.dbzy[ik+1, jk]
-            d.vecy3[k] = d.dbzy[ik+1, jk+1]
-            d.vecy4[k] = d.dbzy[ik, jk+1]
+    for k in range(d.n_particles):
+        if d.in_box[k]:
+            ik = ivec[k]
+            jk = jvec[k]
+            vk = vecz[k]
+            vecb1[k] = d.bz_map[ik, jk]
+            vecb2[k] = d.bz_map[ik+1, jk]
+            vecb3[k] = d.bz_map[ik+1, jk+1]
+            vecb4[k] = d.bz_map[ik, jk+1]
+            vec1[k] = -vk * d.d2bz_map[ik, jk]
+            vec2[k] = -vk * d.d2bz_map[ik+1, jk]
+            vec3[k] = -vk * d.d2bz_map[ik+1, jk+1]
+            vec4[k] = -vk * d.d2bz_map[ik, jk+1]
+            vecx1[k] = d.dbzdx_map[ik, jk]
+            vecx2[k] = d.dbzdx_map[ik+1, jk]
+            vecx3[k] = d.dbzdx_map[ik+1, jk+1]
+            vecx4[k] = d.dbzdx_map[ik, jk+1]
+            vecy1[k] = d.dbzdy_map[ik, jk]
+            vecy2[k] = d.dbzdy_map[ik+1, jk]
+            vecy3[k] = d.dbzdy_map[ik+1, jk+1]
+            vecy4[k] = d.dbzdy_map[ik, jk+1]
 
-    d.vec1[mask] += d.vecb1[mask]
-    d.vec2[mask] += d.vecb2[mask]
-    d.vec3[mask] += d.vecb3[mask]
-    d.vec4[mask] += d.vecb4[mask]
-    d.bz[mask] = (d.vecp1[mask] * d.vec1[mask] + d.vecp2[mask] * d.vec2[mask] +
-                  d.vecp3[mask] * d.vec3[mask] + d.vecp4[mask] * d.vec4[mask]) / d.hrhtet
+    vec1[mask] += vecb1[mask]
+    vec2[mask] += vecb2[mask]
+    vec3[mask] += vecb3[mask]
+    vec4[mask] += vecb4[mask]
+    d.bz[mask] = (vecp1[mask] * vec1[mask] + vecp2[mask] * vec2[mask] +
+                  vecp3[mask] * vec3[mask] + vecp4[mask] * vec4[mask]) / hrhtet
     d.bx[mask] = d.z[mask] * (
-        d.vecp1[mask] * d.vecx1[mask] + d.vecp2[mask] * d.vecx2[mask] +
-        d.vecp3[mask] * d.vecx3[mask] + d.vecp4[mask] * d.vecx4[mask]) / d.hrhtet
+        vecp1[mask] * vecx1[mask] + vecp2[mask] * vecx2[mask] +
+        vecp3[mask] * vecx3[mask] + vecp4[mask] * vecx4[mask]) / hrhtet
     d.by[mask] = d.z[mask] * (
-        d.vecp1[mask] * d.vecy1[mask] + d.vecp2[mask] * d.vecy2[mask] +
-        d.vecp3[mask] * d.vecy3[mask] + d.vecp4[mask] * d.vecy4[mask]) / d.hrhtet
+        vecp1[mask] * vecy1[mask] + vecp2[mask] * vecy2[mask] +
+        vecp3[mask] * vecy3[mask] + vecp4[mask] * vecy4[mask]) / hrhtet
 
-    mask_rle = d.r <= d.rmin
+    mask_rle = d.r <= d.map_rmin
     d.bx[mask_rle] = 0.0
     d.by[mask_rle] = 0.0
-    d.bz[mask_rle] = d.tbz[0, 0]
+    d.bz[mask_rle] = d.bz_map[0, 0]
 
 
 # =============================================================================
@@ -927,58 +997,61 @@ def calcb(d):
 # =============================================================================
 def caldxs(d):
     """Calcul des coordonnées dans l'espace de phase."""
-    for k in range(d.nbrfam):
-        nbr = d.nbrion[k]
-        i1 = d.index[k]
+    vec = np.zeros(d.n_particles)
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
+    for k in range(d.n_families):
+        nbr = d.family_size[k]
+        i1 = d.family_start[k]
         i2 = i1 + nbr
         d.p[i1] = np.sqrt(d.px[i1]**2 + d.py[i1]**2 + d.pz[i1]**2)
-        rc = -d.am0c[k] * d.p[i1] / d.q[i1] / d.bz[i1]
-        d.dxd[0, :nbr] = d.x[i1:i2] - d.x[i1]
-        d.dxd[4, :nbr] = d.y[i1:i2] - d.y[i1]
+        rc = -d.mass_c[k] * d.p[i1] / d.charge[i1] / d.bz[i1]
+        d.ps_cartesian[0, :nbr] = d.x[i1:i2] - d.x[i1]
+        d.ps_cartesian[4, :nbr] = d.y[i1:i2] - d.y[i1]
         ri1 = np.sqrt(d.x[i1]**2 + d.y[i1]**2)
         tetai1 = np.arccos(d.x[i1] / ri1)
         if d.y[i1] < 0.0:
-            tetai1 = 2.0 * d.pi - tetai1
+            tetai1 = 2.0 * np.pi - tetai1
         pri1 = (d.x[i1] * d.px[i1] + d.y[i1] * d.py[i1]) / ri1
         tpri1 = np.arcsin(pri1 / d.p[i1])
         co = np.cos(tetai1 - tpri1)
         si = np.sin(tetai1 - tpri1)
-        d.vec[:nbr] = d.dxd[0, :nbr] * co + d.dxd[4, :nbr] * si
-        d.dxd[4, :nbr] = -d.dxd[0, :nbr] * si + d.dxd[4, :nbr] * co
-        d.dxd[0, :nbr] = d.vec[:nbr]
+        vec[:nbr] = d.ps_cartesian[0, :nbr] * co + d.ps_cartesian[4, :nbr] * si
+        d.ps_cartesian[4, :nbr] = -d.ps_cartesian[0, :nbr] * si + d.ps_cartesian[4, :nbr] * co
+        d.ps_cartesian[0, :nbr] = vec[:nbr]
         for ii in range(nbr):
-            d.dxs[4, ii] = rc * np.arctan(d.dxd[4, ii] / (rc + d.dxd[0, ii]))
-        d.vec[:nbr] = np.sin(d.dxs[4, :nbr] / 2.0 / rc)**2
-        d.dxs[0, :nbr] = (d.dxd[0, :nbr] + 2.0 * rc * d.vec[:nbr]) / (1.0 - 2.0 * d.vec[:nbr])
-        d.vec1[:nbr] = np.cos(d.dxs[4, :nbr] / rc)
-        d.vec2[:nbr] = np.sin(d.dxs[4, :nbr] / rc)
-        d.dxd[1, :nbr] = d.px[i1:i2] - d.px[i1] * d.vec1[:nbr] + d.py[i1] * d.vec2[:nbr]
-        d.dxd[5, :nbr] = d.py[i1:i2] - d.px[i1] * d.vec2[:nbr] - d.py[i1] * d.vec1[:nbr]
-        d.vec[:nbr] = d.dxd[1, :nbr] * co + d.dxd[5, :nbr] * si
-        d.dxd[5, :nbr] = -d.dxd[1, :nbr] * si + d.dxd[5, :nbr] * co
-        d.dxd[1, :nbr] = d.vec[:nbr]
-        d.dxs[1, :nbr] = d.dxd[1, :nbr] * d.vec1[:nbr] + d.dxd[5, :nbr] * d.vec2[:nbr]
-        d.dxs[5, :nbr] = -d.dxd[1, :nbr] * d.vec2[:nbr] + d.dxd[5, :nbr] * d.vec1[:nbr]
-        d.dxs[2, :nbr] = d.z[i1:i2] - d.z[i1]
-        d.dxs[3, :nbr] = d.pz[i1:i2] - d.pz[i1]
-        d.dxs[5, :nbr] = np.sqrt(
-            (d.p[i1] + d.dxs[5, :nbr])**2 +
-            d.dxs[1, :nbr]**2 + d.dxs[3, :nbr]**2) - d.p[i1]
+            d.ps[4, ii] = rc * np.arctan(d.ps_cartesian[4, ii] / (rc + d.ps_cartesian[0, ii]))
+        vec[:nbr] = np.sin(d.ps[4, :nbr] / 2.0 / rc)**2
+        d.ps[0, :nbr] = (d.ps_cartesian[0, :nbr] + 2.0 * rc * vec[:nbr]) / (1.0 - 2.0 * vec[:nbr])
+        vec1[:nbr] = np.cos(d.ps[4, :nbr] / rc)
+        vec2[:nbr] = np.sin(d.ps[4, :nbr] / rc)
+        d.ps_cartesian[1, :nbr] = d.px[i1:i2] - d.px[i1] * vec1[:nbr] + d.py[i1] * vec2[:nbr]
+        d.ps_cartesian[5, :nbr] = d.py[i1:i2] - d.px[i1] * vec2[:nbr] - d.py[i1] * vec1[:nbr]
+        vec[:nbr] = d.ps_cartesian[1, :nbr] * co + d.ps_cartesian[5, :nbr] * si
+        d.ps_cartesian[5, :nbr] = -d.ps_cartesian[1, :nbr] * si + d.ps_cartesian[5, :nbr] * co
+        d.ps_cartesian[1, :nbr] = vec[:nbr]
+        d.ps[1, :nbr] = d.ps_cartesian[1, :nbr] * vec1[:nbr] + d.ps_cartesian[5, :nbr] * vec2[:nbr]
+        d.ps[5, :nbr] = -d.ps_cartesian[1, :nbr] * vec2[:nbr] + d.ps_cartesian[5, :nbr] * vec1[:nbr]
+        d.ps[2, :nbr] = d.z[i1:i2] - d.z[i1]
+        d.ps[3, :nbr] = d.pz[i1:i2] - d.pz[i1]
+        d.ps[5, :nbr] = np.sqrt(
+            (d.p[i1] + d.ps[5, :nbr])**2 +
+            d.ps[1, :nbr]**2 + d.ps[3, :nbr]**2) - d.p[i1]
 
         for i in range(6):
             for j in range(6):
-                d.cor[i, j] = np.sum(d.dxs[i, :nbr] * d.dxs[j, :nbr]) / nbr
+                d.sigma[i, j] = np.sum(d.ps[i, :nbr] * d.ps[j, :nbr]) / nbr
 
-        tetai1 = tetai1 * 180.0 / d.pi
+        tetai1 = tetai1 * 180.0 / np.pi
         ri1mm = ri1 * 1000.0
-        d.t1[:] = 0.0
-        d.t1[0, 0] = -1.0
-        d.t1[1, 1] = -1.0
+        d.dc_transform[:] = 0.0
+        d.dc_transform[0, 0] = -1.0
+        d.dc_transform[1, 1] = -1.0
         for i in range(2, 6):
-            d.t1[i, i] = 1.0
-        d.t1[0, 5] = ri1 / d.p[i1]
-        d.t1[4, 1] = -d.t1[0, 5]
-        d.cordc = d.t1 @ d.cor @ d.t1.T
+            d.dc_transform[i, i] = 1.0
+        d.dc_transform[0, 5] = ri1 / d.p[i1]
+        d.dc_transform[4, 1] = -d.dc_transform[0, 5]
+        d.sigma_dc = d.dc_transform @ d.sigma @ d.dc_transform.T
 
 
 # =============================================================================
@@ -986,51 +1059,59 @@ def caldxs(d):
 # =============================================================================
 def calgri(d):
     """Calcul des coordonnées sur grille."""
-    for k in range(d.nbrfam):
-        nbr = d.nbrion[k]
-        i1 = d.index[k]
+    vec = np.zeros(d.n_particles)
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
+    vec3 = np.zeros(d.n_particles)
+    vec4 = np.zeros(d.n_particles)
+    vec5 = np.zeros(d.n_particles)
+    vec6 = np.zeros(d.n_particles)
+    for k in range(d.n_families):
+        nbr = d.family_size[k]
+        i1 = d.family_start[k]
         i2 = i1 + nbr
         d.p[i1:i2] = np.sqrt(d.px[i1:i2]**2 + d.py[i1:i2]**2 + d.pz[i1:i2]**2)
-        d.vec[:nbr] = -d.am0c[k] * d.p[i1:i2] / d.q[i1:i2] / d.bz[i1]
-        d.vec1[i1:i2] = d.x[i1:i2] + d.py[i1:i2] * d.dt / d.qdtsm0c[i1] / d.bz[i1]
-        d.vec2[i1:i2] = d.y[i1:i2] - d.px[i1:i2] * d.dt / d.qdtsm0c[i1] / d.bz[i1]
-        ux = (d.x[i1] - d.vec1[i1]) / d.vec[0]
-        uy = (d.y[i1] - d.vec2[i1]) / d.vec[0]
-        d.vec3[i1:i2] = ((d.x[i1] - d.vec1[i1:i2]) * ux +
-                         (d.y[i1] - d.vec2[i1:i2]) * uy)
-        d.vec4[i1:i2] = ((d.x[i1] - d.vec1[i1:i2])**2 +
-                         (d.y[i1] - d.vec2[i1:i2])**2 - d.vec[:nbr]**2)
-        d.rgri[i1:i2] = -d.vec3[i1:i2] + np.sqrt(np.abs(d.vec3[i1:i2]**2 - d.vec4[i1:i2]))
-        d.xgri[i1:i2] = d.x[i1] + d.rgri[i1:i2] * ux
-        d.ygri[i1:i2] = d.y[i1] + d.rgri[i1:i2] * uy
-        d.vec3[i1:i2] = np.sqrt((d.xgri[i1:i2] - d.vec1[i1:i2])**2 +
-                                (d.ygri[i1:i2] - d.vec2[i1:i2])**2)
-        d.vec4[i1:i2] = np.sqrt((d.xgri[i1:i2] - d.vec1[i1])**2 +
-                                (d.ygri[i1:i2] - d.vec2[i1])**2)
-        d.vec5[i1:i2] = (
-            (d.xgri[i1:i2] - d.vec1[i1:i2]) * (d.ygri[i1:i2] - d.vec2[i1]) -
-            (d.ygri[i1:i2] - d.vec2[i1:i2]) * (d.xgri[i1:i2] - d.vec1[i1])
-        ) / d.vec3[i1:i2] / d.vec4[i1:i2]
-        d.tprgri[i1:i2] = np.arcsin(d.vec5[i1:i2])
-        d.vec4[i1:i2] = np.sqrt((d.x[i1:i2] - d.vec1[i1:i2])**2 +
-                                (d.y[i1:i2] - d.vec2[i1:i2])**2)
-        d.vec6[i1:i2] = (
-            (d.xgri[i1:i2] - d.vec1[i1:i2]) * (d.y[i1:i2] - d.vec2[i1:i2]) -
-            (d.ygri[i1:i2] - d.vec2[i1:i2]) * (d.x[i1:i2] - d.vec1[i1:i2])
-        ) / d.vec3[i1:i2] / d.vec4[i1:i2]
-        d.phigri[i1:i2] = d.harm * np.arcsin(d.vec6[i1:i2])
+        vec[:nbr] = -d.mass_c[k] * d.p[i1:i2] / d.charge[i1:i2] / d.bz[i1]
+        vec1[i1:i2] = d.x[i1:i2] + d.py[i1:i2] * d.dt / d.boris_e_coef[i1] / d.bz[i1]
+        vec2[i1:i2] = d.y[i1:i2] - d.px[i1:i2] * d.dt / d.boris_e_coef[i1] / d.bz[i1]
+        ux = (d.x[i1] - vec1[i1]) / vec[0]
+        uy = (d.y[i1] - vec2[i1]) / vec[0]
+        vec3[i1:i2] = ((d.x[i1] - vec1[i1:i2]) * ux +
+                         (d.y[i1] - vec2[i1:i2]) * uy)
+        vec4[i1:i2] = ((d.x[i1] - vec1[i1:i2])**2 +
+                         (d.y[i1] - vec2[i1:i2])**2 - vec[:nbr]**2)
+        d.proj_offset[i1:i2] = -vec3[i1:i2] + np.sqrt(np.abs(vec3[i1:i2]**2 - vec4[i1:i2]))
+        d.proj_x[i1:i2] = d.x[i1] + d.proj_offset[i1:i2] * ux
+        d.proj_y[i1:i2] = d.y[i1] + d.proj_offset[i1:i2] * uy
+        vec3[i1:i2] = np.sqrt((d.proj_x[i1:i2] - vec1[i1:i2])**2 +
+                                (d.proj_y[i1:i2] - vec2[i1:i2])**2)
+        vec4[i1:i2] = np.sqrt((d.proj_x[i1:i2] - vec1[i1])**2 +
+                                (d.proj_y[i1:i2] - vec2[i1])**2)
+        vec5[i1:i2] = (
+            (d.proj_x[i1:i2] - vec1[i1:i2]) * (d.proj_y[i1:i2] - vec2[i1]) -
+            (d.proj_y[i1:i2] - vec2[i1:i2]) * (d.proj_x[i1:i2] - vec1[i1])
+        ) / vec3[i1:i2] / vec4[i1:i2]
+        d.proj_angle[i1:i2] = np.arcsin(vec5[i1:i2])
+        vec4[i1:i2] = np.sqrt((d.x[i1:i2] - vec1[i1:i2])**2 +
+                                (d.y[i1:i2] - vec2[i1:i2])**2)
+        vec6[i1:i2] = (
+            (d.proj_x[i1:i2] - vec1[i1:i2]) * (d.y[i1:i2] - vec2[i1:i2]) -
+            (d.proj_y[i1:i2] - vec2[i1:i2]) * (d.x[i1:i2] - vec1[i1:i2])
+        ) / vec3[i1:i2] / vec4[i1:i2]
+        d.proj_phase[i1:i2] = d.harmonic * np.arcsin(vec6[i1:i2])
+    return vec
 
 
 def calgric(d):
     """Calcul sur grille pour corrélations."""
-    nbr = d.nbrion[0]
-    calgri(d)
-    d.dxsgri[0, :nbr] = d.rgri[:nbr]
-    d.dxsgri[1, :nbr] = d.tprgri[:nbr] * d.p[0]
-    d.dxsgri[2, :nbr] = d.dxs[2, :nbr]
-    d.dxsgri[3, :nbr] = d.dxs[3, :nbr]
-    d.dxsgri[4, :nbr] = d.phigri[:nbr] * d.vec[:nbr] / d.harm
-    d.dxsgri[5, :nbr] = d.dxs[5, :nbr]
+    nbr = d.family_size[0]
+    vec = calgri(d)
+    d.ps_projected[0, :nbr] = d.proj_offset[:nbr]
+    d.ps_projected[1, :nbr] = d.proj_angle[:nbr] * d.p[0]
+    d.ps_projected[2, :nbr] = d.ps[2, :nbr]
+    d.ps_projected[3, :nbr] = d.ps[3, :nbr]
+    d.ps_projected[4, :nbr] = d.proj_phase[:nbr] * vec[:nbr] / d.harmonic
+    d.ps_projected[5, :nbr] = d.ps[5, :nbr]
 
 
 # =============================================================================
@@ -1039,253 +1120,345 @@ def calgric(d):
 files_dict = {}
 
 
+def distribute_bunch(d, sigma_matrices):
+    """Bunch from the sigma matrices (after the field map is read), then optional bunch load."""
+    dxtmp = np.zeros((6, d.n_particles))
+    rot = np.zeros((6, 6))
+    vec = np.zeros(d.n_particles)
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
+    vec3 = np.zeros(d.n_particles)
+    vec4 = np.zeros(d.n_particles)
+    if d.correlations != 0:
+        m = 6
+        boite(d)
+        calcb(d)
+        for k in range(d.n_families):
+            nbr = d.family_size[k]
+            if nbr <= 1:
+                continue  # une seule particule, pas de distribution a appliquer
+            ps = remp(m, nbr)
+            d.ps[:, :nbr] = ps
+            rcor = choles(m, sigma_matrices[k])
+            trcor = rcor.T
+            dxtmp[:6, :nbr] = 0.0
+            for i in range(6):
+                for j in range(6):
+                    dxtmp[i, :nbr] += trcor[i, j] * d.ps[j, :nbr]
+            d.ps[:6, :nbr] = dxtmp[:6, :nbr]
+
+            i1 = d.family_start[k]
+            i2 = i1 + d.family_size[k]
+            rc = -d.mass_c[k] * d.p[i1] / d.charge[i1] / d.bz[i1]
+
+            if d.r0[k] > d.central_rmax:
+                print('prise en compte de sqrt(cos(phi))...')
+                vec4[:nbr] = np.sqrt(np.cos(d.harmonic * d.ps[4, :nbr] / rc))
+                d.ps[0, :nbr] = d.ps[0, :nbr] * vec4[:nbr] - rc * (1.0 - vec4[:nbr])
+            else:
+                print('pas de sqrt(cos(phi))...')
+
+            vec1[:nbr] = np.cos(d.ps[4, :nbr] / rc)
+            vec2[:nbr] = np.sin(d.ps[4, :nbr] / rc)
+            vec3[:nbr] = np.sin(d.ps[4, :nbr] / rc / 2.0)**2
+            d.ps_cartesian[0, :nbr] = d.ps[0, :nbr] - 2.0 * (rc + d.ps[0, :nbr]) * vec3[:nbr]
+            d.ps[5, :nbr] = np.sqrt(
+                (d.p[i1] + d.ps[5, :nbr])**2 -
+                d.ps[1, :nbr]**2 - d.ps[3, :nbr]**2) - d.p[i1]
+            d.ps_cartesian[4, :nbr] = (rc + d.ps[0, :nbr]) * vec2[:nbr]
+            d.ps_cartesian[1, :nbr] = d.ps[1, :nbr] * vec1[:nbr] - d.ps[5, :nbr] * vec2[:nbr]
+            d.ps_cartesian[5, :nbr] = d.ps[1, :nbr] * vec2[:nbr] + d.ps[5, :nbr] * vec1[:nbr]
+            d.ps_cartesian[2:4, :nbr] = d.ps[2:4, :nbr]
+
+            co = np.cos(d.theta0[k] - d.pr0[k])
+            si = np.sin(d.theta0[k] - d.pr0[k])
+            rot[:] = 0.0
+            rot[0, 0] = co
+            rot[0, 4] = -si
+            rot[1, 1] = co
+            rot[1, 5] = -si
+            rot[2, 2] = 1.0
+            rot[3, 3] = 1.0
+            rot[4, 0] = si
+            rot[4, 4] = co
+            rot[5, 1] = si
+            rot[5, 5] = co
+            dxtmp[:6, :nbr] = 0.0
+            for i in range(6):
+                for j in range(6):
+                    dxtmp[i, :nbr] += rot[i, j] * d.ps_cartesian[j, :nbr]
+            d.ps_cartesian[:6, :nbr] = dxtmp[:6, :nbr]
+
+            d.x[i1:i2] += d.ps_cartesian[0, :nbr]
+            d.y[i1:i2] += d.ps_cartesian[4, :nbr]
+            vec[:nbr] = d.px[i1:i2] * vec1[:nbr] - d.py[i1:i2] * vec2[:nbr]
+            d.py[i1:i2] = d.px[i1:i2] * vec2[:nbr] + d.py[i1:i2] * vec1[:nbr] + d.ps_cartesian[5, :nbr]
+            d.px[i1:i2] = vec[:nbr] + d.ps_cartesian[1, :nbr]
+            if d.phase_space[:2] in ('3d', '6d'):
+                d.z[i1:i2] += d.ps_cartesian[2, :nbr]
+                d.pz[i1:i2] += d.ps_cartesian[3, :nbr]
+            if d.r0[k] > d.central_rmax:
+                d.px[i1:i2] *= vec4[:nbr]
+                d.py[i1:i2] *= vec4[:nbr]
+                d.pz[i1:i2] *= vec4[:nbr]
+
+        if d.bunch_load_file != 'no':
+            print('attention : chargement paquet d ions...')
+            with open(d.bunch_load_file, 'rb') as f26:
+                for i in range(d.n_particles):
+                    data = np.fromfile(f26, dtype=np.float64, count=3)
+                    if len(data) == 3:
+                        d.x[i], d.y[i], d.z[i] = data
+                for i in range(d.n_particles):
+                    data = np.fromfile(f26, dtype=np.float64, count=3)
+                    if len(data) == 3:
+                        d.px[i], d.py[i], d.pz[i] = data
+
+
 # =============================================================================
 # init - Initialisation du programme
 # =============================================================================
 def init(d, ficin):
     """Initialisation : lecture du fichier de données ficin, cartes de champ, etc."""
+    dbzxlu = np.zeros((250, 91))
+    dbzylu = np.zeros((250, 91))
     files_dict.clear()
 
-    d.pi = np.pi
-    d.clum = 299792458.0
-    d.rac8 = np.sqrt(8.0)
 
-    d.ficin = ficin
-    with open(d.ficin, 'r') as f20_raw:
+    d.deck_file = ficin
+    with open(d.deck_file, 'r') as f20_raw:
       f20 = FortranFile(f20_raw)
       with f20:  # dummy context for indentation
-        d.corps = f20.readline().strip().strip('"').strip("'")
+        d.title = f20.readline().strip().strip('"').strip("'")
         vals = f20.readline().split()
-        d.npaspt = int(vals[0])
+        d.steps_per_turn = int(vals[0])
         vals = f20.readline().split()
-        d.r1th = fortran_float(vals[0])
-        d.ntours = int(vals[1])
+        d.design_r_final = fortran_float(vals[0])
+        d.design_turns = int(vals[1])
         vals = f20.readline().split()
-        d.fhf = fortran_float(vals[0])
-        d.pothf = fortran_float(vals[1])
-        d.teta1 = fortran_float(vals[2])
-        d.harm = fortran_float(vals[3])
-        d.dbsb = fortran_float(vals[4])
+        d.rf_frequency = fortran_float(vals[0])
+        d.dee_half_angle = fortran_float(vals[2])
+        d.harmonic = fortran_float(vals[3])
+        d.db_over_b = fortran_float(vals[4])
         vals = f20.readline().split()
-        d.dphid = fortran_float(vals[0]) * d.pi / 180.0
-        d.dphig = fortran_float(vals[1]) * d.pi / 180.0
+        d.phase_right = fortran_float(vals[0]) * np.pi / 180.0
+        d.phase_left = fortran_float(vals[1]) * np.pi / 180.0
         vals = f20.readline().split()
-        d.pothfd = -fortran_float(vals[0])
-        d.pothfg = -fortran_float(vals[1])
+        d.v_dee_right = -fortran_float(vals[0])
+        d.v_dee_left = -fortran_float(vals[1])
         vals = f20.readline().split()
-        d.ncoh[0] = int(vals[0])
-        if d.ncoh[0] != 0:
+        d.harmonic_n_coef[0] = int(vals[0])
+        if d.harmonic_n_coef[0] != 0:
             vals = f20.readline().split()
-            for i in range(d.ncoh[0]):
-                d.coh[i, 0] = fortran_float(vals[i])
-            d.phihar[0] = fortran_float(f20.readline().split()[0])
+            for i in range(d.harmonic_n_coef[0]):
+                d.harmonic_coef[i, 0] = fortran_float(vals[i])
+            d.harmonic_phase[0] = fortran_float(f20.readline().split()[0])
         vals = f20.readline().split()
-        d.ncoh[1] = int(vals[0])
-        if d.ncoh[1] != 0:
+        d.harmonic_n_coef[1] = int(vals[0])
+        if d.harmonic_n_coef[1] != 0:
             vals = f20.readline().split()
-            for i in range(d.ncoh[1]):
-                d.coh[i, 1] = fortran_float(vals[i])
-            d.phihar[1] = fortran_float(f20.readline().split()[0])
+            for i in range(d.harmonic_n_coef[1]):
+                d.harmonic_coef[i, 1] = fortran_float(vals[i])
+            d.harmonic_phase[1] = fortran_float(f20.readline().split()[0])
 
-        d.yomega = 0.0
-        if d.teta1 < 0.0:
+        d.gap_offset = 0.0
+        if d.dee_half_angle < 0.0:
             print('attention : gap en biais...')
             print('on remet teta1 positif')
             print('et on va lire le decalage...')
-            d.teta1 = -d.teta1
-            d.yomega = fortran_float(f20.readline().split()[0])
-            print(f'decalage yomega : {d.yomega}')
+            d.dee_half_angle = -d.dee_half_angle
+            d.gap_offset = fortran_float(f20.readline().split()[0])
+            print(f'decalage yomega : {d.gap_offset}')
 
         vals = f20.readline().split()
         d.zmin = fortran_float(vals[0])
         d.zmax = fortran_float(vals[1])
-        d.rmax1 = fortran_float(vals[2])
+        d.central_rmax = fortran_float(vals[2])
         vals = f20.readline().split()
-        d.rex = fortran_float(vals[0])
-        d.tet1ex = fortran_float(vals[1])
-        d.tet2ex = fortran_float(vals[2])
-        d.eex = fortran_float(vals[3])
-        d.ndf = 0
-        d.ndm = 0
+        d.extraction = fortran_float(vals[0])
+        d.cut_bunch = fortran_float(vals[1])
+        d.grids_on = fortran_float(vals[2])
+        d.grid_start = fortran_float(vals[3])
+        d.n_deflectors = 0
+        d.n_dipoles = 0
 
-        if d.rex < 0.0:
-            if d.tet1ex <= 0.0:
-                d.iteext = 0
+        if d.extraction < 0.0:
+            if d.cut_bunch <= 0.0:
+                d.extraction_start_step = 0
                 print('extraction : le paquet sera coupe')
             else:
-                d.iteext = int(d.tet1ex + 0.5)
+                d.extraction_start_step = int(d.cut_bunch + 0.5)
                 print('extraction : le paquet sera entier')
-            d.ndf = int(f20.readline().split()[0])
-            if d.ndf > 0:
-                for i in range(d.ndf):
+            d.n_deflectors = int(f20.readline().split()[0])
+            if d.n_deflectors > 0:
+                for i in range(d.n_deflectors):
                     vals = f20.readline().split()
-                    d.rdf[i] = fortran_float(vals[0])
-                    d.edf[i] = fortran_float(vals[1])
-                    d.xdfi[i] = fortran_float(vals[2])
-                    d.ydfi[i] = fortran_float(vals[3])
-                    d.xdfo[i] = fortran_float(vals[4])
-                    d.ydfo[i] = fortran_float(vals[5])
+                    d.deflector_r[i] = fortran_float(vals[0])
+                    d.deflector_e[i] = fortran_float(vals[1])
+                    d.deflector_in_x[i] = fortran_float(vals[2])
+                    d.deflector_in_y[i] = fortran_float(vals[3])
+                    d.deflector_out_x[i] = fortran_float(vals[4])
+                    d.deflector_out_y[i] = fortran_float(vals[5])
                     tetdfid = fortran_float(vals[6])
                     tetdfod = fortran_float(vals[7])
-                    d.tetdfi[i] = tetdfid * d.pi / 180.0
-                    d.tetdfo[i] = tetdfod * d.pi / 180.0
-                    d.uxdfi[i] = np.cos(d.tetdfi[i])
-                    d.uydfi[i] = np.sin(d.tetdfi[i])
-                    d.uxdfo[i] = np.cos(d.tetdfo[i])
-                    d.uydfo[i] = np.sin(d.tetdfo[i])
-            d.ndm = int(f20.readline().split()[0])
-            if d.ndm > 0:
-                for i in range(d.ndm):
+                    d.deflector_in_angle[i] = tetdfid * np.pi / 180.0
+                    d.deflector_out_angle[i] = tetdfod * np.pi / 180.0
+                    d.deflector_in_ux[i] = np.cos(d.deflector_in_angle[i])
+                    d.deflector_in_uy[i] = np.sin(d.deflector_in_angle[i])
+                    d.deflector_out_ux[i] = np.cos(d.deflector_out_angle[i])
+                    d.deflector_out_uy[i] = np.sin(d.deflector_out_angle[i])
+            d.n_dipoles = int(f20.readline().split()[0])
+            if d.n_dipoles > 0:
+                for i in range(d.n_dipoles):
                     vals = f20.readline().split()
-                    d.rdm[i] = fortran_float(vals[0])
-                    d.bdm[i] = fortran_float(vals[1])
-                    d.xdm[i] = fortran_float(vals[2])
-                    d.ydm[i] = fortran_float(vals[3])
+                    d.dipole_r[i] = fortran_float(vals[0])
+                    d.dipole_gradient[i] = fortran_float(vals[1])
+                    d.dipole_x[i] = fortran_float(vals[2])
+                    d.dipole_y[i] = fortran_float(vals[3])
                     tetdmid = fortran_float(vals[4])
                     tetdmod = fortran_float(vals[5])
-                    d.tetdmi[i] = tetdmid * d.pi / 180.0
-                    d.tetdmo[i] = tetdmod * d.pi / 180.0
-                    d.uxdmi[i] = np.cos(d.tetdmi[i])
-                    d.uydmi[i] = np.sin(d.tetdmi[i])
-                    d.uxdmo[i] = np.cos(d.tetdmo[i])
-                    d.uydmo[i] = np.sin(d.tetdmo[i])
-            if d.tet2ex > 0.0:
+                    d.dipole_in_angle[i] = tetdmid * np.pi / 180.0
+                    d.dipole_out_angle[i] = tetdmod * np.pi / 180.0
+                    d.dipole_in_ux[i] = np.cos(d.dipole_in_angle[i])
+                    d.dipole_in_uy[i] = np.sin(d.dipole_in_angle[i])
+                    d.dipole_out_ux[i] = np.cos(d.dipole_out_angle[i])
+                    d.dipole_out_uy[i] = np.sin(d.dipole_out_angle[i])
+            if d.grids_on > 0.0:
                 print('grilles extraction...')
-                d.itegex = int(d.eex + 0.5)
-                d.ngex = int(f20.readline().split()[0])
-                for kg in range(d.ngex):
+                d.grid_start_step = int(d.grid_start + 0.5)
+                d.n_grids = int(f20.readline().split()[0])
+                for kg in range(d.n_grids):
                     vals = f20.readline().split()
-                    d.tetagex[kg] = fortran_float(vals[0])
-                    d.xgex[kg] = fortran_float(vals[1]) / 1000.0
-                    d.ygex[kg] = fortran_float(vals[2]) / 1000.0
-                    d.xgexc[kg] = fortran_float(vals[3]) / 1000.0
-                    d.ygexc[kg] = fortran_float(vals[4]) / 1000.0
-                    d.drgex[kg] = np.sqrt((d.xgex[kg] - d.xgexc[kg])**2 +
-                                          (d.ygex[kg] - d.ygexc[kg])**2)
-                    d.uxgex[kg] = (d.xgex[kg] - d.xgexc[kg]) / d.drgex[kg]
-                    d.uygex[kg] = (d.ygex[kg] - d.ygexc[kg]) / d.drgex[kg]
-                d.ficdebgex = f20.readline().strip()
-                for kg in range(d.ngex):
+                    d.grid_angle_deg[kg] = fortran_float(vals[0])
+                    d.grid_x[kg] = fortran_float(vals[1]) / 1000.0
+                    d.grid_y[kg] = fortran_float(vals[2]) / 1000.0
+                    d.grid_xc[kg] = fortran_float(vals[3]) / 1000.0
+                    d.grid_yc[kg] = fortran_float(vals[4]) / 1000.0
+                    d.grid_length[kg] = np.sqrt((d.grid_x[kg] - d.grid_xc[kg])**2 +
+                                          (d.grid_y[kg] - d.grid_yc[kg])**2)
+                    d.grid_ux[kg] = (d.grid_x[kg] - d.grid_xc[kg]) / d.grid_length[kg]
+                    d.grid_uy[kg] = (d.grid_y[kg] - d.grid_yc[kg]) / d.grid_length[kg]
+                d.grid_file_prefix = f20.readline().strip()
+                for kg in range(d.n_grids):
                     ficfingex = str(kg + 1)
-                    d.ficgex[kg] = d.ficdebgex + '.' + ficfingex
-                    fgex = open(d.ficgex[kg], 'w')
+                    d.grid_files[kg] = d.grid_file_prefix + '.' + ficfingex
+                    fgex = open(d.grid_files[kg], 'w')
                     files_dict[70 + kg + 1] = fgex
                     fgex.write('teta x y xc yc : \n')
-                    fgex.write(f'{d.tetagex[kg]} {d.xgex[kg]} {d.ygex[kg]}'
-                               f' {d.xgexc[kg]} {d.ygexc[kg]}\n')
+                    fgex.write(f'{d.grid_angle_deg[kg]} {d.grid_x[kg]} {d.grid_y[kg]}'
+                               f' {d.grid_xc[kg]} {d.grid_yc[kg]}\n')
 
-        d.dt = d.harm / d.fhf / d.npaspt
-        d.omhf = 2.0 * d.pi * d.fhf
-        d.omr = d.omhf / d.harm
-        d.cdt = d.clum * d.dt
-        d.teta1 = d.teta1 * d.pi / 180.0
-        d.tet1ex = d.tet1ex * d.pi / 180.0
-        d.tet2ex = d.tet2ex * d.pi / 180.0
-        iharm = int(d.harm + 0.5)
-        d.heps = 1.0
+        d.dt = d.harmonic / d.rf_frequency / d.steps_per_turn
+        d.omega_rf = 2.0 * np.pi * d.rf_frequency
+        d.omega_rev = d.omega_rf / d.harmonic
+        d.c_dt = C_LIGHT * d.dt
+        d.dee_half_angle = d.dee_half_angle * np.pi / 180.0
+        d.cut_bunch = d.cut_bunch * np.pi / 180.0
+        d.grids_on = d.grids_on * np.pi / 180.0
+        iharm = int(d.harmonic + 0.5)
+        d.harmonic_sign = 1.0
         if (iharm // 2) * 2 == iharm:
-            d.heps = -1.0
+            d.harmonic_sign = -1.0
 
-        d.nbrfam = int(f20.readline().split()[0])
-        if d.nbrfam > 1:
-            d.n = int(f20.readline().split()[0])
-        d.index[0] = 0  # 0-based
-        d.np_ = 0
+        d.n_families = int(f20.readline().split()[0])
+        if d.n_families > 1:
+            d.n_particles = int(f20.readline().split()[0])
+        d.family_start[0] = 0  # 0-based
+        n_loaded = 0
 
-        for k in range(d.nbrfam):
+        for k in range(d.n_families):
             vals = f20.readline().split()
-            d.nbrion[k] = int(vals[0])
-            d.amat[k] = fortran_float(vals[1])
-            d.a[k] = fortran_float(vals[2])
-            d.qn[k] = fortran_float(vals[3])
+            d.family_size[k] = int(vals[0])
+            d.atomic_mass[k] = fortran_float(vals[1])
+            d.mass_number[k] = fortran_float(vals[2])
+            d.charge_state[k] = fortran_float(vals[3])
             if k == 0:
-                if d.nbrfam == 1:
-                    d.n = d.nbrion[0]
-                d.allo()
-                d.sortant[:] = False
-                d.indgex[:] = 0
-                d.ok[:] = True
-                d.nbrok = d.n
-                d.nbrpie = 0
-                d.iflpie = 1
+                if d.n_families == 1:
+                    d.n_particles = d.family_size[0]
+                d.allocate()
+                d.extracted[:] = False
+                d.grid_reached[:] = 0
+                d.alive[:] = True
+                d.n_alive = d.n_particles
+                d.n_traps = 0
+                d.trapped_follow = 1
 
             vals = f20.readline().split()
             d.r0[k] = fortran_float(vals[0])
-            d.teta0[k] = fortran_float(vals[1])
+            d.theta0[k] = fortran_float(vals[1])
             d.z0[k] = fortran_float(vals[2])
             d.pr0[k] = fortran_float(vals[3])
             d.pz0[k] = fortran_float(vals[4])
             w0mev = fortran_float(vals[5])
-            d.phi0[k] = fortran_float(vals[6])
+            d.phi0_deg[k] = fortran_float(vals[6])
             if k == 0:
-                d.w0mev1 = w0mev
+                d.w0_mev_per_u = w0mev
 
-            d.teta0[k] *= d.pi / 180.0
+            d.theta0[k] *= np.pi / 180.0
             d.pr0[k] *= 0.001
             d.pz0[k] *= 0.001
-            d.np_ += d.nbrion[k]
-            if d.np_ > d.n:
-                print(f'n np : {d.n} {d.np_}')
+            n_loaded += d.family_size[k]
+            if n_loaded > d.n_particles:
+                print(f'n np : {d.n_particles} {n_loaded}')
                 print('changer n ou np...')
                 sys.exit(1)
-            d.index[k + 1] = d.index[k] + d.nbrion[k]
-            i1 = d.index[k]
-            i2 = d.index[k] + d.nbrion[k]
-            d.x[i1:i2] = d.r0[k] * np.cos(d.teta0[k])
-            d.y[i1:i2] = d.r0[k] * np.sin(d.teta0[k])
+            d.family_start[k + 1] = d.family_start[k] + d.family_size[k]
+            i1 = d.family_start[k]
+            i2 = d.family_start[k] + d.family_size[k]
+            d.x[i1:i2] = d.r0[k] * np.cos(d.theta0[k])
+            d.y[i1:i2] = d.r0[k] * np.sin(d.theta0[k])
             d.z[i1:i2] = d.z0[k]
-            d.w0[k] = w0mev * 1.60217733e-13 * d.a[k]
-            am0k = 1.6605402e-27 * (d.amat[k] - 0.0005486 * d.qn[k])
-            d.am0[i1:i2] = am0k
-            d.am0c[i1:i2] = d.am0[i1:i2] * d.clum
-            d.am0c2[i1:i2] = d.am0[i1:i2] * d.clum**2
-            d.am02c2[i1:i2] = d.am0c[i1:i2]**2
-            d.ga[i1:i2] = 1.0 + d.w0[k] / d.am0c2[i1:i2]
-            alpha = (d.pi / 2.0 + d.teta0[k]) - d.pr0[k]
-            d.p[i1:i2] = np.sqrt((d.ga[i1:i2] - 1.0) * (d.ga[i1:i2] + 1.0))
+            d.w0[k] = w0mev * 1.60217733e-13 * d.mass_number[k]
+            am0k = 1.6605402e-27 * (d.atomic_mass[k] - 0.0005486 * d.charge_state[k])
+            d.mass[i1:i2] = am0k
+            d.mass_c[i1:i2] = d.mass[i1:i2] * C_LIGHT
+            d.rest_energy[i1:i2] = d.mass[i1:i2] * C_LIGHT**2
+            d.gamma[i1:i2] = 1.0 + d.w0[k] / d.rest_energy[i1:i2]
+            alpha = (np.pi / 2.0 + d.theta0[k]) - d.pr0[k]
+            d.p[i1:i2] = np.sqrt((d.gamma[i1:i2] - 1.0) * (d.gamma[i1:i2] + 1.0))
             d.px[i1:i2] = d.p[i1:i2] * np.cos(alpha) * np.cos(d.pz0[k])
             d.py[i1:i2] = d.p[i1:i2] * np.sin(alpha) * np.cos(d.pz0[k])
             d.pz[i1:i2] = d.p[i1:i2] * np.sin(d.pz0[k])
-            d.q[i1:i2] = d.qn[k] * 1.60217733e-19
-            d.qdts2m0[i1:i2] = d.q[i1:i2] * d.dt / 2.0 / d.am0[i1:i2]
-            d.qdtsm0c[i1:i2] = d.q[i1:i2] * d.dt / d.am0c[i1:i2]
+            d.charge[i1:i2] = d.charge_state[k] * 1.60217733e-19
+            d.boris_b_coef[i1:i2] = d.charge[i1:i2] * d.dt / 2.0 / d.mass[i1:i2]
+            d.boris_e_coef[i1:i2] = d.charge[i1:i2] * d.dt / d.mass_c[i1:i2]
 
-        if d.tet2ex > 0.0 and d.ngex > 0:
-            for kg in range(d.ngex):
+        if d.grids_on > 0.0 and d.n_grids > 0:
+            for kg in range(d.n_grids):
                 f = files_dict[70 + kg + 1]
                 f.write('caracteristiques particules :\n')
-                f.write(f'{d.np_} {d.a[0]} {d.amat[0]} {d.qn[0]}\n')
+                f.write(f'{d.n_particles} {d.mass_number[0]} {d.atomic_mass[0]} {d.charge_state[0]}\n')
                 f.write('caracteristiques HF :\n')
-                f.write(f'{d.npaspt} {d.fhf} {d.harm}\n')
+                f.write(f'{d.steps_per_turn} {d.rf_frequency} {d.harmonic}\n')
 
-        d.iflcor = int(f20.readline().split()[0])
-        d.ficsig = "pas de fichier correl..."
+        d.correlations = int(f20.readline().split()[0])
+        d.sigma_file = "pas de fichier correl..."
         sigma_matrices = []
-        if d.iflcor != 0:
+        if d.correlations != 0:
             m = 6
-            d.ficsig = f20.readline().strip()
-            d.espace = f20.readline().strip()
-            f25 = open(d.ficsig, 'r')
+            d.sigma_file = f20.readline().strip()
+            d.phase_space = f20.readline().strip()
+            f25 = open(d.sigma_file, 'r')
             vals = f20.read_tokens(3)
-            d.ficcor = vals[0]
-            d.ficmat = vals[1]
-            d.ficdc = vals[2]
-            if d.ficcor != 'no':
-                files_dict[17] = open(d.ficcor, 'w')
+            d.correlation_file = vals[0]
+            d.matrix_file = vals[1]
+            d.dc_matrix_file = vals[2]
+            if d.correlation_file != 'no':
+                files_dict[17] = open(d.correlation_file, 'w')
                 files_dict[17].write(
                     '  tr     r      teta    dr    ds      dphi'
                     '   epsr    dwsw        wmpa     dw          dwdphi'
                     '       dz     epsz\n')
-            if d.ficmat != 'no':
-                files_dict[18] = open(d.ficmat, 'w')
-            if d.ficdc != 'no':
-                files_dict[19] = open(d.ficdc, 'w')
+            if d.matrix_file != 'no':
+                files_dict[18] = open(d.matrix_file, 'w')
+            if d.dc_matrix_file != 'no':
+                files_dict[19] = open(d.dc_matrix_file, 'w')
                 files_dict[19].write(
                     '  tr     r      teta   drdc  dsdc  dphidc'
                     ' epsrdc  dwswdc        wmpa   dwdc        dwdphidc\n')
 
             # Pre-lire les matrices sigma (calcul differe apres chargement champ magnetique)
-            for k in range(d.nbrfam):
+            for k in range(d.n_families):
                 cor_mat = np.zeros((6, 6), dtype=np.float64)
                 for i in range(6):
                     vals_sig = f25.readline().split()
@@ -1294,24 +1467,24 @@ def init(d, ficin):
                 sigma_matrices.append(cor_mat)
             f25.close()
 
-        if d.np_ != d.n:
-            print(f'n np : {d.n} {d.np_}')
+        if n_loaded != d.n_particles:
+            print(f'n np : {d.n_particles} {n_loaded}')
             print('changer n ou np...')
             sys.exit(1)
 
-        d.t0 = d.phi0[0] * d.pi / 180.0 / d.omhf
+        d.t0 = d.phi0_deg[0] * np.pi / 180.0 / d.omega_rf
         d.t = d.t0
 
         vals = f20.readline().split()
-        d.nbdt = int(vals[0])
-        d.ifreq = int(vals[1])
+        d.n_steps = int(vals[0])
+        d.output_every = int(vals[1])
         vals = f20.read_tokens(2)
-        d.ficz = vals[0]
-        d.ficxy = vals[1]
+        d.z_output_file = vals[0]
+        d.xy_output_file = vals[1]
         vals = f20.read_tokens(3)
-        d.ficb = vals[0]
-        d.ficv1 = vals[1]
-        d.ficv2 = vals[2]
+        d.bfield_file = vals[0]
+        d.central_potential_file = vals[1]
+        d.outer_potential_file = vals[2]
         # Fin optionnelle : [b_factor] [ficloa ficsto]. Le Fortran ne lit que
         # ficloa ficsto ; b_factor n'est reconnu que s'il est numerique.
         tail = []
@@ -1327,292 +1500,196 @@ def init(d, ficin):
                 tail = tail[1:]
             except ValueError:
                 pass
-        d.ficloa, d.ficsto = (tail + ['no', 'no'])[:2]
+        d.bunch_load_file, d.bunch_save_file = (tail + ['no', 'no'])[:2]
 
     # Lecture carte magnétique
-    with open(d.ficb, 'r') as f21_raw:
+    with open(d.bfield_file, 'r') as f21_raw:
       f21 = FortranFile(f21_raw)
       with f21:
         title = f21.readline().strip()
         vals = f21.readline().split()
-        d.rmin = fortran_float(vals[0])
-        d.rmax = fortran_float(vals[1])
-        d.nr = int(vals[2])
-        d.ntet = int(vals[3])
+        d.map_rmin = fortran_float(vals[0])
+        d.map_rmax = fortran_float(vals[1])
+        d.map_nr = int(vals[2])
+        d.map_ntheta = int(vals[3])
 
-        if d.ntet != 91:
+        if d.map_ntheta != 91:
             print('lecture carte tosca.big ou carte mesuree ...')
-            for i in range(d.nr):
-                vals = f21.read_tokens(d.ntet)
-                for j in range(d.ntet):
-                    d.tbz[i, j] = fortran_float(vals[j])
-            for i in range(d.nr):
-                vals = f21.read_tokens(d.ntet)
-                for j in range(d.ntet):
-                    d.d2bz[i, j] = fortran_float(vals[j])
-            for i in range(d.nr):
-                vals = f21.read_tokens(d.ntet)
-                for j in range(d.ntet):
-                    d.dbzx[i, j] = fortran_float(vals[j])
-            for i in range(d.nr):
-                vals = f21.read_tokens(d.ntet)
-                for j in range(d.ntet):
-                    d.dbzy[i, j] = fortran_float(vals[j])
-            d.htet = 2.0 * d.pi / (d.ntet - 1.0)
-            ntetall = d.ntet
+            for i in range(d.map_nr):
+                vals = f21.read_tokens(d.map_ntheta)
+                for j in range(d.map_ntheta):
+                    d.bz_map[i, j] = fortran_float(vals[j])
+            for i in range(d.map_nr):
+                vals = f21.read_tokens(d.map_ntheta)
+                for j in range(d.map_ntheta):
+                    d.d2bz_map[i, j] = fortran_float(vals[j])
+            for i in range(d.map_nr):
+                vals = f21.read_tokens(d.map_ntheta)
+                for j in range(d.map_ntheta):
+                    d.dbzdx_map[i, j] = fortran_float(vals[j])
+            for i in range(d.map_nr):
+                vals = f21.read_tokens(d.map_ntheta)
+                for j in range(d.map_ntheta):
+                    d.dbzdy_map[i, j] = fortran_float(vals[j])
+            d.map_dtheta = 2.0 * np.pi / (d.map_ntheta - 1.0)
+            ntetall = d.map_ntheta
         else:
             print('carte tosca.small (1/8eme) ...')
             # Lecture avec inversion de l'index j
-            for i in range(d.nr):
-                vals = f21.read_tokens(d.ntet)
-                for j in range(d.ntet):
-                    d.tbz[i, 91 - j] = fortran_float(vals[j])
-            for i in range(d.nr):
-                vals = f21.read_tokens(d.ntet)
-                for j in range(d.ntet):
-                    d.d2bz[i, 91 - j] = fortran_float(vals[j])
+            for i in range(d.map_nr):
+                vals = f21.read_tokens(d.map_ntheta)
+                for j in range(d.map_ntheta):
+                    d.bz_map[i, 91 - j] = fortran_float(vals[j])
+            for i in range(d.map_nr):
+                vals = f21.read_tokens(d.map_ntheta)
+                for j in range(d.map_ntheta):
+                    d.d2bz_map[i, 91 - j] = fortran_float(vals[j])
             try:
-                for i in range(d.nr):
-                    vals = f21.read_tokens(d.ntet)
-                    for j in range(d.ntet):
-                        d.dbzxlu[i, j] = fortran_float(vals[j])
-                for i in range(d.nr):
-                    vals = f21.read_tokens(d.ntet)
-                    for j in range(d.ntet):
-                        d.dbzylu[i, j] = fortran_float(vals[j])
+                for i in range(d.map_nr):
+                    vals = f21.read_tokens(d.map_ntheta)
+                    for j in range(d.map_ntheta):
+                        dbzxlu[i, j] = fortran_float(vals[j])
+                for i in range(d.map_nr):
+                    vals = f21.read_tokens(d.map_ntheta)
+                    for j in range(d.map_ntheta):
+                        dbzylu[i, j] = fortran_float(vals[j])
             except Exception:
                 print('attention fichier magnetique incomplet...')
                 print('bx et by seront nuls...')
                 print('vous resterez dans le plan median...')
-                d.dbzxlu[:d.nr, :d.ntet] = 0
-                d.dbzylu[:d.nr, :d.ntet] = 0
+                dbzxlu[:d.map_nr, :d.map_ntheta] = 0
+                dbzylu[:d.map_nr, :d.map_ntheta] = 0
 
             # Symétries de la carte magnétique
-            nr = d.nr
-            d.tbz[:nr, 180:91:-1] = d.tbz[:nr, :89]
-            d.tbz[:nr, 181:361] = d.tbz[:nr, 1:181]
-            d.tbz[:nr, 361:721] = d.tbz[:nr, 1:361]
-            d.d2bz[:nr, 180:91:-1] = d.d2bz[:nr, :89]
-            d.d2bz[:nr, 181:361] = d.d2bz[:nr, 1:181]
-            d.d2bz[:nr, 361:721] = d.d2bz[:nr, 1:361]
+            nr = d.map_nr
+            d.bz_map[:nr, 180:91:-1] = d.bz_map[:nr, :89]
+            d.bz_map[:nr, 181:361] = d.bz_map[:nr, 1:181]
+            d.bz_map[:nr, 361:721] = d.bz_map[:nr, 1:361]
+            d.d2bz_map[:nr, 180:91:-1] = d.d2bz_map[:nr, :89]
+            d.d2bz_map[:nr, 181:361] = d.d2bz_map[:nr, 1:181]
+            d.d2bz_map[:nr, 361:721] = d.d2bz_map[:nr, 1:361]
 
             r2 = np.sqrt(2.0) / 2.0
-            d.dbzx[:nr, 90::-1] = r2 * (d.dbzxlu[:nr, :91] + d.dbzylu[:nr, :91])
-            d.dbzy[:nr, 90::-1] = r2 * (d.dbzxlu[:nr, :91] - d.dbzylu[:nr, :91])
-            d.dbzx[:nr, 180:91:-1] = d.dbzy[:nr, :89]
-            d.dbzy[:nr, 180:91:-1] = d.dbzx[:nr, :89]
-            d.dbzx[:nr, 181:361] = -d.dbzx[:nr, 179::-1]
-            d.dbzy[:nr, 181:361] = d.dbzy[:nr, 179::-1]
-            d.dbzx[:nr, 361:721] = d.dbzx[:nr, 359::-1]
-            d.dbzy[:nr, 361:721] = -d.dbzy[:nr, 359::-1]
-            d.htet = d.pi / 4.0 / (d.ntet - 1.0)
+            d.dbzdx_map[:nr, 90::-1] = r2 * (dbzxlu[:nr, :91] + dbzylu[:nr, :91])
+            d.dbzdy_map[:nr, 90::-1] = r2 * (dbzxlu[:nr, :91] - dbzylu[:nr, :91])
+            d.dbzdx_map[:nr, 180:91:-1] = d.dbzdy_map[:nr, :89]
+            d.dbzdy_map[:nr, 180:91:-1] = d.dbzdx_map[:nr, :89]
+            d.dbzdx_map[:nr, 181:361] = -d.dbzdx_map[:nr, 179::-1]
+            d.dbzdy_map[:nr, 181:361] = d.dbzdy_map[:nr, 179::-1]
+            d.dbzdx_map[:nr, 361:721] = d.dbzdx_map[:nr, 359::-1]
+            d.dbzdy_map[:nr, 361:721] = -d.dbzdy_map[:nr, 359::-1]
+            d.map_dtheta = np.pi / 4.0 / (d.map_ntheta - 1.0)
             ntetall = 721
 
-    if d.ncoh[0] != 0 or d.ncoh[1] != 0:
+    if d.harmonic_n_coef[0] != 0 or d.harmonic_n_coef[1] != 0:
         print('carte mag. + rajout harmonique 1 et/ou 2...')
-        addh(d.rmin, d.rmax, d.nr, ntetall, d.tbz, d.d2bz,
-             d.dbzx, d.dbzy, d.ncoh, d.coh, d.phihar)
+        addh(d.map_rmin, d.map_rmax, d.map_nr, ntetall, d.bz_map, d.d2bz_map,
+             d.dbzdx_map, d.dbzdy_map, d.harmonic_n_coef, d.harmonic_coef, d.harmonic_phase)
 
-    d.hr = (d.rmax - d.rmin) / (d.nr - 1.0)
-    d.hrm1 = 1.0 / d.hr
-    d.htetm1 = 1.0 / d.htet
-    d.hrhtet = d.hr * d.htet
-    d.hrhtetm1 = 1.0 / d.hrhtet
+    d.map_dr = (d.map_rmax - d.map_rmin) / (d.map_nr - 1.0)
 
     # Sans b_factor, la carte est utilisee telle quelle (comme le Fortran).
     # Avec b_factor, elle est ramenee a max|Bz| = b_factor (T).
     if d.b_factor is not None:
-        bz_max = np.max(np.abs(d.tbz[:d.nr, :ntetall]))
+        bz_max = np.max(np.abs(d.bz_map[:d.map_nr, :ntetall]))
         if bz_max == 0.0:
-            raise ValueError(f'carte magnetique nulle ({d.ficb}) : b_factor inapplicable')
+            raise ValueError(f'carte magnetique nulle ({d.bfield_file}) : b_factor inapplicable')
         scale = d.b_factor / bz_max
-        d.tbz *= scale
-        d.d2bz *= scale
-        d.dbzx *= scale
-        d.dbzy *= scale
+        d.bz_map *= scale
+        d.d2bz_map *= scale
+        d.dbzdx_map *= scale
+        d.dbzdy_map *= scale
         print(f'carte magnetique : Bmax_lu = {bz_max:.6e} T, facteur B = {d.b_factor:.6f} T')
 
     # Correction relative dB/B
-    d.tbz *= (1.0 + d.dbsb)
-    d.d2bz *= (1.0 + d.dbsb)
+    d.bz_map *= (1.0 + d.db_over_b)
+    d.d2bz_map *= (1.0 + d.db_over_b)
 
     # Lecture potentiel centre
-    if d.ficv1 != 'no':
-        if d.repswap == 'y':
+    if d.central_potential_file != 'no':
+        if d.swap_bytes == 'y':
             fdtype = np.dtype(np.float64).newbyteorder('>')
             idtype = np.dtype(np.int32).newbyteorder('>')
         else:
             fdtype = np.float64
             idtype = np.int32
-        with open(d.ficv1, 'rb') as f22:
+        with open(d.central_potential_file, 'rb') as f22:
             # Lecture entête Fortran (record marker)
             rec = f22.read(4)
             header_floats = np.frombuffer(f22.read(32), dtype=fdtype)
             header_ints = np.frombuffer(f22.read(8), dtype=idtype)
-            d.xmin1 = float(header_floats[0]) / 1000.0
-            d.xmax1 = float(header_floats[1]) / 1000.0
-            d.ymin1 = float(header_floats[2]) / 1000.0
-            d.ymax1 = float(header_floats[3]) / 1000.0
+            d.central_xmin = float(header_floats[0]) / 1000.0
+            d.central_xmax = float(header_floats[1]) / 1000.0
+            d.central_ymin = float(header_floats[2]) / 1000.0
+            d.central_ymax = float(header_floats[3]) / 1000.0
             nx1 = int(header_ints[0])
             ny1 = int(header_ints[1])
             f22.read(4)  # fin record
             for i in range(nx1):
                 f22.read(4)
                 row = np.frombuffer(f22.read(ny1 * 8), dtype=fdtype)
-                d.pot1[i, :ny1] = row
+                d.central_pot[i, :ny1] = row
                 f22.read(4)
             try:
                 for i in range(nx1):
                     f22.read(4)
                     row = np.frombuffer(f22.read(ny1 * 8), dtype=fdtype)
-                    d.d2pot1[i, :ny1] = row
+                    d.central_d2pot[i, :ny1] = row
                     f22.read(4)
             except Exception:
                 print('attention fichier potentiel centre incomplet...')
                 print('ez sera nul...')
-                d.d2pot1[:] = 0.0
+                d.central_d2pot[:] = 0.0
     else:
         print('pas de fichier centre cyclo...')
         vals = parse_floats(read_input('xmin1 xmax1 ymin1 ymax1 nx1 ny1 ?'))
-        d.xmin1, d.xmax1, d.ymin1, d.ymax1 = vals[:4]
+        d.central_xmin, d.central_xmax, d.central_ymin, d.central_ymax = vals[:4]
         nx1 = int(vals[4])
         ny1 = int(vals[5])
-        d.pot1[:] = 0.0
-        d.d2pot1[:] = 0.0
+        d.central_pot[:] = 0.0
+        d.central_d2pot[:] = 0.0
 
-    d.hx1 = (d.xmax1 - d.xmin1) / (nx1 - 1.0)
-    d.hy1 = (d.ymax1 - d.ymin1) / (ny1 - 1.0)
-    d.hx1hy1 = d.hx1 * d.hy1
-    d.hx1m1 = 1.0 / d.hx1
-    d.hy1m1 = 1.0 / d.hy1
-    d.hx1hy1m1 = 1.0 / d.hx1hy1
+    d.central_dx = (d.central_xmax - d.central_xmin) / (nx1 - 1.0)
+    d.central_dy = (d.central_ymax - d.central_ymin) / (ny1 - 1.0)
 
     # Lecture potentiel périphérique
-    with open(d.ficv2, 'r') as f23_raw:
+    with open(d.outer_potential_file, 'r') as f23_raw:
       f23 = FortranFile(f23_raw)
       with f23:
         vals = f23.read_tokens(6)
-        d.xmin2 = fortran_float(vals[0])
-        d.xmax2 = fortran_float(vals[1])
-        d.ymin2 = fortran_float(vals[2])
-        d.ymax2 = fortran_float(vals[3])
+        d.outer_xmin = fortran_float(vals[0])
+        d.outer_xmax = fortran_float(vals[1])
+        d.outer_ymin = fortran_float(vals[2])
+        d.outer_ymax = fortran_float(vals[3])
         nx2 = int(fortran_float(vals[4]))
         ny2 = int(fortran_float(vals[5]))
         for i in range(nx2):
             vals = f23.read_tokens(ny2)
             for j in range(ny2):
-                d.pot2[i, j] = fortran_float(vals[j])
+                d.outer_pot[i, j] = fortran_float(vals[j])
         for i in range(nx2):
             vals = f23.read_tokens(ny2)
             for j in range(ny2):
-                d.d2pot2[i, j] = fortran_float(vals[j])
+                d.outer_d2pot[i, j] = fortran_float(vals[j])
 
-    d.hx2 = (d.xmax2 - d.xmin2) / (nx2 - 1.0)
-    d.hy2 = (d.ymax2 - d.ymin2) / (ny2 - 1.0)
-    d.hx2hy2 = d.hx2 * d.hy2
-    d.hx2m1 = 1.0 / d.hx2
-    d.hy2m1 = 1.0 / d.hy2
-    d.hx2hy2m1 = 1.0 / d.hx2hy2
+    d.outer_dx = (d.outer_xmax - d.outer_xmin) / (nx2 - 1.0)
+    d.outer_dy = (d.outer_ymax - d.outer_ymin) / (ny2 - 1.0)
 
-    # Distribution des particules (iflcor) - APRES chargement champ magnetique
-    if d.iflcor != 0:
-        m = 6
-        boite(d)
-        calcb(d)
-        for k in range(d.nbrfam):
-            nbr = d.nbrion[k]
-            if nbr <= 1:
-                continue  # une seule particule, pas de distribution a appliquer
-            ps = remp(m, nbr)
-            d.dxs[:, :nbr] = ps
-            rcor = choles(m, sigma_matrices[k])
-            trcor = rcor.T
-            d.dxtmp[:6, :nbr] = 0.0
-            for i in range(6):
-                for j in range(6):
-                    d.dxtmp[i, :nbr] += trcor[i, j] * d.dxs[j, :nbr]
-            d.dxs[:6, :nbr] = d.dxtmp[:6, :nbr]
-
-            i1 = d.index[k]
-            i2 = i1 + d.nbrion[k]
-            rc = -d.am0c[k] * d.p[i1] / d.q[i1] / d.bz[i1]
-
-            if d.r0[k] > d.rmax1:
-                print('prise en compte de sqrt(cos(phi))...')
-                d.vec4[:nbr] = np.sqrt(np.cos(d.harm * d.dxs[4, :nbr] / rc))
-                d.dxs[0, :nbr] = d.dxs[0, :nbr] * d.vec4[:nbr] - rc * (1.0 - d.vec4[:nbr])
-            else:
-                print('pas de sqrt(cos(phi))...')
-
-            d.vec1[:nbr] = np.cos(d.dxs[4, :nbr] / rc)
-            d.vec2[:nbr] = np.sin(d.dxs[4, :nbr] / rc)
-            d.vec3[:nbr] = np.sin(d.dxs[4, :nbr] / rc / 2.0)**2
-            d.dxd[0, :nbr] = d.dxs[0, :nbr] - 2.0 * (rc + d.dxs[0, :nbr]) * d.vec3[:nbr]
-            d.dxs[5, :nbr] = np.sqrt(
-                (d.p[i1] + d.dxs[5, :nbr])**2 -
-                d.dxs[1, :nbr]**2 - d.dxs[3, :nbr]**2) - d.p[i1]
-            d.dxd[4, :nbr] = (rc + d.dxs[0, :nbr]) * d.vec2[:nbr]
-            d.dxd[1, :nbr] = d.dxs[1, :nbr] * d.vec1[:nbr] - d.dxs[5, :nbr] * d.vec2[:nbr]
-            d.dxd[5, :nbr] = d.dxs[1, :nbr] * d.vec2[:nbr] + d.dxs[5, :nbr] * d.vec1[:nbr]
-            d.dxd[2:4, :nbr] = d.dxs[2:4, :nbr]
-
-            co = np.cos(d.teta0[k] - d.pr0[k])
-            si = np.sin(d.teta0[k] - d.pr0[k])
-            d.rot[:] = 0.0
-            d.rot[0, 0] = co
-            d.rot[0, 4] = -si
-            d.rot[1, 1] = co
-            d.rot[1, 5] = -si
-            d.rot[2, 2] = 1.0
-            d.rot[3, 3] = 1.0
-            d.rot[4, 0] = si
-            d.rot[4, 4] = co
-            d.rot[5, 1] = si
-            d.rot[5, 5] = co
-            d.dxtmp[:6, :nbr] = 0.0
-            for i in range(6):
-                for j in range(6):
-                    d.dxtmp[i, :nbr] += d.rot[i, j] * d.dxd[j, :nbr]
-            d.dxd[:6, :nbr] = d.dxtmp[:6, :nbr]
-
-            d.x[i1:i2] += d.dxd[0, :nbr]
-            d.y[i1:i2] += d.dxd[4, :nbr]
-            d.vec[:nbr] = d.px[i1:i2] * d.vec1[:nbr] - d.py[i1:i2] * d.vec2[:nbr]
-            d.py[i1:i2] = d.px[i1:i2] * d.vec2[:nbr] + d.py[i1:i2] * d.vec1[:nbr] + d.dxd[5, :nbr]
-            d.px[i1:i2] = d.vec[:nbr] + d.dxd[1, :nbr]
-            if d.espace[:2] in ('3d', '6d'):
-                d.z[i1:i2] += d.dxd[2, :nbr]
-                d.pz[i1:i2] += d.dxd[3, :nbr]
-            if d.r0[k] > d.rmax1:
-                d.px[i1:i2] *= d.vec4[:nbr]
-                d.py[i1:i2] *= d.vec4[:nbr]
-                d.pz[i1:i2] *= d.vec4[:nbr]
-
-        if d.ficloa != 'no':
-            print('attention : chargement paquet d ions...')
-            with open(d.ficloa, 'rb') as f26:
-                for i in range(d.n):
-                    data = np.fromfile(f26, dtype=np.float64, count=3)
-                    if len(data) == 3:
-                        d.x[i], d.y[i], d.z[i] = data
-                for i in range(d.n):
-                    data = np.fromfile(f26, dtype=np.float64, count=3)
-                    if len(data) == 3:
-                        d.px[i], d.py[i], d.pz[i] = data
+    distribute_bunch(d, sigma_matrices)
 
     rr = np.sqrt(d.x[0]**2 + d.y[0]**2)
-    d.tetnew = np.arccos(d.x[0] / rr)
+    d.theta_deg = np.arccos(d.x[0] / rr)
     if d.y[0] < 0.0:
-        d.tetnew = 2.0 * d.pi - d.tetnew
-    d.tetnew = 180.0 / d.pi * d.tetnew
-    d.numtou = 0
-    if d.npaspt < 0:
-        d.numtou = -d.nbdt // d.npaspt
+        d.theta_deg = 2.0 * np.pi - d.theta_deg
+    d.theta_deg = 180.0 / np.pi * d.theta_deg
+    d.turn = 0
+    if d.steps_per_turn < 0:
+        d.turn = -d.n_steps // d.steps_per_turn
 
-    if d.ficz != 'no':
-        files_dict[15] = open(d.ficz, 'w')
-    if d.ficxy != 'no':
-        files_dict[16] = open(d.ficxy, 'w')
+    if d.z_output_file != 'no':
+        files_dict[15] = open(d.z_output_file, 'w')
+    if d.xy_output_file != 'no':
+        files_dict[16] = open(d.xy_output_file, 'w')
 
 
 # =============================================================================
@@ -1620,36 +1697,27 @@ def init(d, ficin):
 # =============================================================================
 def info(d, iprinf_holder):
     """Affiche les informations de suivi."""
+    vec = np.zeros(d.n_particles)
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
 
     if iprinf_holder[0] == 1:
         iprinf_holder[0] = 0
-        d.ga0th = d.ga[0]
-        d.w0th = d.w0[0]
-        d.w0mevth = d.w0th / 1.60217733e-13 / d.a[0]
-        v0th = d.clum * np.sqrt((d.ga0th - 1.0) * (d.ga0th + 1.0)) / d.ga0th
-        d.r0th = v0th / d.omr
-        d.b0th = -v0th * d.am0[0] * d.ga0th / d.q[0] / d.r0th
-        d.ga1th = 1.0 / np.sqrt(1.0 - (d.ga0th**2 - 1.0) *
-                                 d.r1th**2 / d.ga0th**2 / d.r0th**2)
-        d.w1th = d.am0c2[0] * (d.ga1th - 1.0)
-        d.w1mevth = d.w1th / 1.6021773e-13 / d.a[0]
-        d.b1th = d.b0th / d.ga0th * d.ga1th
-        potth = d.am0c2[0] * (d.ga1th - d.ga0th) / 4.0 / d.ntours / d.q[0]
 
-        if d.ficz != 'no' and 15 in files_dict:
+        if d.z_output_file != 'no' and 15 in files_dict:
             f15 = files_dict[15]
             f15.write('Programme LIONS\n')
             f15.write('informations selon z\n')
 
-        if d.ficxy != 'no' and 16 in files_dict:
+        if d.xy_output_file != 'no' and 16 in files_dict:
             f16 = files_dict[16]
             f16.write('Programme LIONS\n')
-            f16.write(f'{d.corps}\n')
-            f16.write(f' masse atomique        :    {d.amat[0]:11.7f}\n')
-            f16.write(f' A                     :          {d.a[0]:5.1f}\n')
-            f16.write(f' q                     :          {d.qn[0]:5.1f}\n')
+            f16.write(f'{d.title}\n')
+            f16.write(f' masse atomique        :    {d.atomic_mass[0]:11.7f}\n')
+            f16.write(f' A                     :          {d.mass_number[0]:5.1f}\n')
+            f16.write(f' q                     :          {d.charge_state[0]:5.1f}\n')
             r0mm = d.r0[0] * 1000.0
-            teta0d = d.teta0[0] * 180.0 / d.pi
+            teta0d = d.theta0[0] * 180.0 / np.pi
             z0mm = d.z0[0] * 1000.0
             pr0m = d.pr0[0] * 1000.0
             pz0m = d.pz0[0] * 1000.0
@@ -1658,48 +1726,48 @@ def info(d, iprinf_holder):
             f16.write(f' z0     : {z0mm:6.1f}\n')
             f16.write(f' pr0    : {pr0m:8.2f}\n')
             f16.write(f' pz0    : {pz0m:8.2f}\n')
-            f16.write(f' w0     : {d.w0mev1:14.10f}\n')
-            f16.write(f' phi0   : {d.phi0[0]:11.2f}\n')
-            f16.write(f' fhf    : {d.fhf:9.0f}\n')
-            f16.write(f' harm   : {d.harm:9.0f}\n')
-            f16.write(f' pot_d  : {-d.pothfd:9.1f}\n')
-            f16.write(f' pot_g  : {-d.pothfg:9.1f}\n')
-            f16.write(f' db/b   : {d.dbsb:9.6f}\n')
+            f16.write(f' w0     : {d.w0_mev_per_u:14.10f}\n')
+            f16.write(f' phi0   : {d.phi0_deg[0]:11.2f}\n')
+            f16.write(f' fhf    : {d.rf_frequency:9.0f}\n')
+            f16.write(f' harm   : {d.harmonic:9.0f}\n')
+            f16.write(f' pot_d  : {-d.v_dee_right:9.1f}\n')
+            f16.write(f' pot_g  : {-d.v_dee_left:9.1f}\n')
+            f16.write(f' db/b   : {d.db_over_b:9.6f}\n')
             if d.b_factor is not None:
                 f16.write(f' B fact : {d.b_factor:9.6f} T\n')
             dtnano = d.dt * 1e9
-            f16.write(f' nb part: {d.n:14d}\n')
-            f16.write(f' nb iter: {d.nbdt:14d}\n')
-            f16.write(f' nb i/t : {d.npaspt:14d}\n')
+            f16.write(f' nb part: {d.n_particles:14d}\n')
+            f16.write(f' nb iter: {d.n_steps:14d}\n')
+            f16.write(f' nb i/t : {d.steps_per_turn:14d}\n')
             f16.write(f' dt(ns) : {dtnano:9.6f}\n')
             f16.write('    ite   tr   teta      x       y      xc'
                       '      yc        bz '
                       '    es      er           r      tpr'
                       '       w           dphi\n')
 
-    d.tetold = d.tetnew
+    d.theta_prev_deg = d.theta_deg
     rr = np.sqrt(d.x[0]**2 + d.y[0]**2)
-    d.tetnew = np.arccos(np.clip(d.x[0] / rr, -1.0, 1.0))
+    d.theta_deg = np.arccos(np.clip(d.x[0] / rr, -1.0, 1.0))
     if d.y[0] < 0.0:
-        d.tetnew = 2.0 * d.pi - d.tetnew
-    d.tetnew = 180.0 / d.pi * d.tetnew
+        d.theta_deg = 2.0 * np.pi - d.theta_deg
+    d.theta_deg = 180.0 / np.pi * d.theta_deg
 
-    if d.npaspt > 0:
-        if d.tetnew < d.tetold:
-            d.numtou += 1
+    if d.steps_per_turn > 0:
+        if d.theta_deg < d.theta_prev_deg:
+            d.turn += 1
     else:
-        if d.tetnew > d.tetold:
-            d.numtou -= 1
+        if d.theta_deg > d.theta_prev_deg:
+            d.turn -= 1
 
-    d.tetall = d.tetnew + 360.0 * (d.numtou - 1)
+    d.theta_total_deg = d.theta_deg + 360.0 * (d.turn - 1)
 
-    if (d.ite % d.ifreq != 0 and d.ite != 1 and
-            d.ite != d.nbdt and d.ite != (d.nbdt - 1)):
+    if (d.step % d.output_every != 0 and d.step != 1 and
+            d.step != d.n_steps and d.step != (d.n_steps - 1)):
         return
 
-    phihf = 180.0 / d.pi * d.omhf * d.t
-    dph = phihf - d.harm * d.tetall - 90.0
-    wmevpa = d.am0c2[0] * (d.ga[0] - 1.0) / 1.60217733e-13 / d.a[0]
+    phihf = 180.0 / np.pi * d.omega_rf * d.t
+    dph = phihf - d.harmonic * d.theta_total_deg - 90.0
+    wmevpa = d.rest_energy[0] * (d.gamma[0] - 1.0) / 1.60217733e-13 / d.mass_number[0]
     xmm = d.x[0] * 1000.0
     ymm = d.y[0] * 1000.0
     zmm = d.z[0] * 1000.0
@@ -1708,171 +1776,171 @@ def info(d, iprinf_holder):
     ppp = np.sqrt(d.px[0]**2 + d.py[0]**2 + d.pz[0]**2)
     pr_val = (xmm * d.px[0] + ymm * d.py[0]) / rmm
     tpr = np.arcsin(pr_val / ppp) * 1000.0
-    xc1mm = (d.x[0] + d.py[0] * d.dt / d.qdtsm0c[0] / d.bz[0]) * 1000.0
-    yc1mm = (d.y[0] - d.px[0] * d.dt / d.qdtsm0c[0] / d.bz[0]) * 1000.0
+    xc1mm = (d.x[0] + d.py[0] * d.dt / d.boris_e_coef[0] / d.bz[0]) * 1000.0
+    yc1mm = (d.y[0] - d.px[0] * d.dt / d.boris_e_coef[0] / d.bz[0]) * 1000.0
     eskvcm = (d.ex[0] * d.px[0] + d.ey[0] * d.py[0]) / pp / 100000.0
     erkvcm = (d.ex[0] * d.py[0] - d.ey[0] * d.px[0]) / pp / 100000.0
     ezkvcm = d.ez[0] / 100000.0
     tpz = np.arcsin(d.pz[0] / ppp) * 1000.0
 
-    if d.ite % d.ifreq != 0 and d.ite != 1:
+    if d.step % d.output_every != 0 and d.step != 1:
         pass  # skip normal output, go to end-of-run output
     else:
-        if d.ficz != 'no' and 15 in files_dict:
-            if abs(d.z[0]) > d.coupnuz:
-                anuz_c = (-1.0 / d.am0[0] / d.ga[0] * (d.harm / d.omhf)**2 / d.z[0] *
-                          d.q[0] * (d.ez[0] + d.clum / d.ga[0] *
+        if d.z_output_file != 'no' and 15 in files_dict:
+            if abs(d.z[0]) > d.nuz_z_cut:
+                anuz_c = (-1.0 / d.mass[0] / d.gamma[0] * (d.harmonic / d.omega_rf)**2 / d.z[0] *
+                          d.charge[0] * (d.ez[0] + C_LIGHT / d.gamma[0] *
                           (d.px[0] * d.by[0] - d.py[0] * d.bx[0])))
-                d.anuz_cyclo = np.sqrt(abs(anuz_c))
+                d.nuz = np.sqrt(abs(anuz_c))
             else:
-                d.anuz_cyclo = 0.0
+                d.nuz = 0.0
             files_dict[15].write(
-                f' {d.ite:6d}  {d.numtou:3d}  {d.tetnew:5.1f}'
+                f' {d.step:6d}  {d.turn:3d}  {d.theta_deg:5.1f}'
                 f' {xmm:8.2f} {ymm:8.2f} {zmm:8.2f} {rmm:8.2f}'
                 f'   {d.bx[0]:7.4f} {d.by[0]:7.4f} {d.bz[0]:7.4f}'
-                f' {ezkvcm:7.3f}     {tpz:6.1f} {d.anuz_cyclo:12.5f}'
-                f' {d.pot_ver_vrai:12.5f}\n')
+                f' {ezkvcm:7.3f}     {tpz:6.1f} {d.nuz:12.5f}'
+                f' {d.sorter_voltage_seen:12.5f}\n')
 
-        if d.ficxy != 'no' and 16 in files_dict:
+        if d.xy_output_file != 'no' and 16 in files_dict:
             files_dict[16].write(
-                f' {d.ite:7d}  {d.numtou:3d}  {d.tetnew:5.1f}'
+                f' {d.step:7d}  {d.turn:3d}  {d.theta_deg:5.1f}'
                 f' {xmm:7.1f} {ymm:7.1f} {xc1mm:7.1f} {yc1mm:7.1f}'
                 f'   {d.bz[0]:7.4f} {eskvcm:7.3f} {erkvcm:7.3f}'
                 f'     {rmm:7.1f}  {tpr:6.1f} {wmevpa:9.5f} {dph:15.2f}\n')
 
     # Corrélations (sautees avec les sorties z/xy, comme le goto 800 du Fortran)
-    if ((d.ite % d.ifreq == 0 or d.ite == 1) and d.iflcor != 0
-            and not (d.ficcor == 'no' and d.ficmat == 'no' and d.ficdc == 'no')):
-        for k in range(d.nbrfam):
-            nbr = d.nbrion[k]
-            i1 = d.index[k]
+    if ((d.step % d.output_every == 0 or d.step == 1) and d.correlations != 0
+            and not (d.correlation_file == 'no' and d.matrix_file == 'no' and d.dc_matrix_file == 'no')):
+        for k in range(d.n_families):
+            nbr = d.family_size[k]
+            i1 = d.family_start[k]
             i2 = i1 + nbr
             d.p[i1] = np.sqrt(d.px[i1]**2 + d.py[i1]**2 + d.pz[i1]**2)
-            rc = -d.am0c[k] * d.p[i1] / d.q[i1] / d.bz[i1]
+            rc = -d.mass_c[k] * d.p[i1] / d.charge[i1] / d.bz[i1]
             # Calcul phase space (simplifié, même logique que caldxs)
-            d.dxd[0, :nbr] = d.x[i1:i2] - d.x[i1]
-            d.dxd[4, :nbr] = d.y[i1:i2] - d.y[i1]
+            d.ps_cartesian[0, :nbr] = d.x[i1:i2] - d.x[i1]
+            d.ps_cartesian[4, :nbr] = d.y[i1:i2] - d.y[i1]
             ri1 = np.sqrt(d.x[i1]**2 + d.y[i1]**2)
             tetai1 = np.arccos(np.clip(d.x[i1] / ri1, -1.0, 1.0))
             if d.y[i1] < 0.0:
-                tetai1 = 2.0 * d.pi - tetai1
+                tetai1 = 2.0 * np.pi - tetai1
             pri1 = (d.x[i1] * d.px[i1] + d.y[i1] * d.py[i1]) / ri1
             tpri1 = np.arcsin(pri1 / d.p[i1])
             co = np.cos(tetai1 - tpri1)
             si = np.sin(tetai1 - tpri1)
-            d.vec[:nbr] = d.dxd[0, :nbr] * co + d.dxd[4, :nbr] * si
-            d.dxd[4, :nbr] = -d.dxd[0, :nbr] * si + d.dxd[4, :nbr] * co
-            d.dxd[0, :nbr] = d.vec[:nbr]
+            vec[:nbr] = d.ps_cartesian[0, :nbr] * co + d.ps_cartesian[4, :nbr] * si
+            d.ps_cartesian[4, :nbr] = -d.ps_cartesian[0, :nbr] * si + d.ps_cartesian[4, :nbr] * co
+            d.ps_cartesian[0, :nbr] = vec[:nbr]
             for ii in range(nbr):
-                d.dxs[4, ii] = rc * np.arctan(d.dxd[4, ii] / (rc + d.dxd[0, ii]))
-            d.vec[:nbr] = np.sin(d.dxs[4, :nbr] / 2.0 / rc)**2
-            d.dxs[0, :nbr] = (d.dxd[0, :nbr] + 2.0 * rc * d.vec[:nbr]) / (1.0 - 2.0 * d.vec[:nbr])
-            d.vec1[:nbr] = np.cos(d.dxs[4, :nbr] / rc)
-            d.vec2[:nbr] = np.sin(d.dxs[4, :nbr] / rc)
-            d.dxd[1, :nbr] = d.px[i1:i2] - d.px[i1] * d.vec1[:nbr] + d.py[i1] * d.vec2[:nbr]
-            d.dxd[5, :nbr] = d.py[i1:i2] - d.px[i1] * d.vec2[:nbr] - d.py[i1] * d.vec1[:nbr]
-            d.vec[:nbr] = d.dxd[1, :nbr] * co + d.dxd[5, :nbr] * si
-            d.dxd[5, :nbr] = -d.dxd[1, :nbr] * si + d.dxd[5, :nbr] * co
-            d.dxd[1, :nbr] = d.vec[:nbr]
-            d.dxs[1, :nbr] = d.dxd[1, :nbr] * d.vec1[:nbr] + d.dxd[5, :nbr] * d.vec2[:nbr]
-            d.dxs[5, :nbr] = -d.dxd[1, :nbr] * d.vec2[:nbr] + d.dxd[5, :nbr] * d.vec1[:nbr]
-            d.dxs[2, :nbr] = d.z[i1:i2] - d.z[i1]
-            d.dxs[3, :nbr] = d.pz[i1:i2] - d.pz[i1]
-            d.dxs[5, :nbr] = np.sqrt(
-                (d.p[i1] + d.dxs[5, :nbr])**2 +
-                d.dxs[1, :nbr]**2 + d.dxs[3, :nbr]**2) - d.p[i1]
+                d.ps[4, ii] = rc * np.arctan(d.ps_cartesian[4, ii] / (rc + d.ps_cartesian[0, ii]))
+            vec[:nbr] = np.sin(d.ps[4, :nbr] / 2.0 / rc)**2
+            d.ps[0, :nbr] = (d.ps_cartesian[0, :nbr] + 2.0 * rc * vec[:nbr]) / (1.0 - 2.0 * vec[:nbr])
+            vec1[:nbr] = np.cos(d.ps[4, :nbr] / rc)
+            vec2[:nbr] = np.sin(d.ps[4, :nbr] / rc)
+            d.ps_cartesian[1, :nbr] = d.px[i1:i2] - d.px[i1] * vec1[:nbr] + d.py[i1] * vec2[:nbr]
+            d.ps_cartesian[5, :nbr] = d.py[i1:i2] - d.px[i1] * vec2[:nbr] - d.py[i1] * vec1[:nbr]
+            vec[:nbr] = d.ps_cartesian[1, :nbr] * co + d.ps_cartesian[5, :nbr] * si
+            d.ps_cartesian[5, :nbr] = -d.ps_cartesian[1, :nbr] * si + d.ps_cartesian[5, :nbr] * co
+            d.ps_cartesian[1, :nbr] = vec[:nbr]
+            d.ps[1, :nbr] = d.ps_cartesian[1, :nbr] * vec1[:nbr] + d.ps_cartesian[5, :nbr] * vec2[:nbr]
+            d.ps[5, :nbr] = -d.ps_cartesian[1, :nbr] * vec2[:nbr] + d.ps_cartesian[5, :nbr] * vec1[:nbr]
+            d.ps[2, :nbr] = d.z[i1:i2] - d.z[i1]
+            d.ps[3, :nbr] = d.pz[i1:i2] - d.pz[i1]
+            d.ps[5, :nbr] = np.sqrt(
+                (d.p[i1] + d.ps[5, :nbr])**2 +
+                d.ps[1, :nbr]**2 + d.ps[3, :nbr]**2) - d.p[i1]
 
-            d.cor[:] = 0.0
+            d.sigma[:] = 0.0
             for i in range(6):
                 for j in range(6):
-                    d.cor[i, j] = np.sum(d.dxs[i, :nbr] * d.dxs[j, :nbr] *
-                                         d.ok[:nbr].astype(float)) / d.nbrok
+                    d.sigma[i, j] = np.sum(d.ps[i, :nbr] * d.ps[j, :nbr] *
+                                         d.alive[:nbr].astype(float)) / d.n_alive
 
-            tetai1_deg = tetai1 * 180.0 / d.pi
+            tetai1_deg = tetai1 * 180.0 / np.pi
             ri1mm = ri1 * 1000.0
-            d.t1[:] = 0.0
-            d.t1[0, 0] = -1.0
-            d.t1[1, 1] = -1.0
+            d.dc_transform[:] = 0.0
+            d.dc_transform[0, 0] = -1.0
+            d.dc_transform[1, 1] = -1.0
             for i in range(2, 6):
-                d.t1[i, i] = 1.0
-            d.t1[0, 5] = ri1 / d.p[i1]
-            d.t1[4, 1] = -d.t1[0, 5]
-            d.cordc = d.t1 @ d.cor @ d.t1.T
+                d.dc_transform[i, i] = 1.0
+            d.dc_transform[0, 5] = ri1 / d.p[i1]
+            d.dc_transform[4, 1] = -d.dc_transform[0, 5]
+            d.sigma_dc = d.dc_transform @ d.sigma @ d.dc_transform.T
 
-            if d.ficcor != 'no' and 17 in files_dict:
+            if d.correlation_file != 'no' and 17 in files_dict:
                 gai1 = np.sqrt(1.0 + d.p[i1]**2)
-                dr = np.sqrt(d.cor[0, 0]) * d.rac8
+                dr = np.sqrt(d.sigma[0, 0]) * SQRT8
                 drmm = dr * 1000.0
-                ds = np.sqrt(d.cor[4, 4]) * d.rac8
+                ds = np.sqrt(d.sigma[4, 4]) * SQRT8
                 dsmm = ds * 1000.0
-                dz_val = np.sqrt(d.cor[2, 2]) * d.rac8
+                dz_val = np.sqrt(d.sigma[2, 2]) * SQRT8
                 dzmm = dz_val * 1000.0
-                dphi = ds * d.omhf / d.clum / d.p[i1] * 180.0 / d.pi * gai1
-                dpr = np.sqrt(d.cor[1, 1]) * d.rac8
-                drdpr = 8.0 * np.sqrt(abs(d.cor[0, 0] * d.cor[1, 1] - d.cor[0, 1]**2))
+                dphi = ds * d.omega_rf / C_LIGHT / d.p[i1] * 180.0 / np.pi * gai1
+                dpr = np.sqrt(d.sigma[1, 1]) * SQRT8
+                drdpr = 8.0 * np.sqrt(abs(d.sigma[0, 0] * d.sigma[1, 1] - d.sigma[0, 1]**2))
                 epsr = drdpr * 1e6 / d.p[i1]
-                dzdpz = 8.0 * np.sqrt(abs(d.cor[2, 2] * d.cor[3, 3] - d.cor[2, 3]**2))
+                dzdpz = 8.0 * np.sqrt(abs(d.sigma[2, 2] * d.sigma[3, 3] - d.sigma[2, 3]**2))
                 epsz = dzdpz * 1e6 / d.p[i1]
-                dp = np.sqrt(d.cor[5, 5]) * d.rac8
-                dsdp = 8.0 * np.sqrt(abs(d.cor[4, 4] * d.cor[5, 5] - d.cor[4, 5]**2))
+                dp = np.sqrt(d.sigma[5, 5]) * SQRT8
+                dsdp = 8.0 * np.sqrt(abs(d.sigma[4, 4] * d.sigma[5, 5] - d.sigma[4, 5]**2))
                 dwsw = dp * d.p[i1] / gai1 / (gai1 - 1.0)
-                wmpa = d.am0c2[k] * (gai1 - 1.0) / 1.60217733e-13 / d.a[k]
+                wmpa = d.rest_energy[k] * (gai1 - 1.0) / 1.60217733e-13 / d.mass_number[k]
                 dwmpa = dwsw * wmpa
-                dwdphi = (d.omhf / d.clum / d.p[i1] * 180.0 / d.pi * gai1 *
+                dwdphi = (d.omega_rf / C_LIGHT / d.p[i1] * 180.0 / np.pi * gai1 *
                           d.p[i1] / gai1 / (gai1 - 1.0) * wmpa * dsdp * 1000.0)
                 files_dict[17].write(
-                    f' {d.numtou:3d}  {ri1mm:7.2f}  {tetai1_deg:5.1f}'
+                    f' {d.turn:3d}  {ri1mm:7.2f}  {tetai1_deg:5.1f}'
                     f' {drmm:6.2f} {dsmm:6.2f} {dphi:7.2f}'
                     f' {epsr:6.2f} {dwsw:12.7e} {wmpa:6.3f}'
                     f' {dwmpa:12.7e} {dwdphi:12.7e}'
                     f'  {dzmm:6.2f} {epsz:6.2f}\n')
 
     # Sauvegarde fin de simulation
-    if d.ite == (d.nbdt - 1):
-        d.xf = d.x[0]
-        d.yf = d.y[0]
-        d.zf = d.z[0]
-        d.rf = rr
-        d.tetf = d.tetnew
-        d.phif = phihf
-        if d.ficsto != 'no':
+    if d.step == (d.n_steps - 1):
+        d.end_x = d.x[0]
+        d.end_y = d.y[0]
+        d.end_z = d.z[0]
+        d.end_r = rr
+        d.end_theta_deg = d.theta_deg
+        d.end_phase_deg = phihf
+        if d.bunch_save_file != 'no':
             print('attention : sauvegarde paquet d ions...')
-            with open(d.ficsto, 'wb') as f26:
-                for i in range(d.n):
+            with open(d.bunch_save_file, 'wb') as f26:
+                for i in range(d.n_particles):
                     f26.write(struct.pack('ddd', d.x[i], d.y[i], d.z[i]))
 
-    if d.ite == d.nbdt:
-        d.pxf = d.px[0]
-        d.pyf = d.py[0]
+    if d.step == d.n_steps:
+        pxf = d.px[0]
+        pyf = d.py[0]
         pzf = d.pz[0]
-        d.pf = np.sqrt(d.pxf**2 + d.pyf**2 + pzf**2)
+        pf = np.sqrt(pxf**2 + pyf**2 + pzf**2)
         copzf = np.cos(pzf)
-        alphaf = np.arccos(d.pxf / d.pf / copzf)
-        if d.pyf < 0.0:
-            alphaf = 2.0 * d.pi - alphaf
-        d.tprf = ((d.pi / 2.0 + d.tetf * d.pi / 180.0) - alphaf) * 1000.0
-        d.wf = wmevpa
-        d.tpzf = np.arcsin(pzf / d.pf) * 1000.0
-        if d.ficsto != 'no':
-            with open(d.ficsto, 'ab') as f26:
-                for i in range(d.n):
+        alphaf = np.arccos(pxf / pf / copzf)
+        if pyf < 0.0:
+            alphaf = 2.0 * np.pi - alphaf
+        tprf = ((np.pi / 2.0 + d.end_theta_deg * np.pi / 180.0) - alphaf) * 1000.0
+        wf = wmevpa
+        tpzf = np.arcsin(pzf / pf) * 1000.0
+        if d.bunch_save_file != 'no':
+            with open(d.bunch_save_file, 'ab') as f26:
+                for i in range(d.n_particles):
                     f26.write(struct.pack('ddd', d.px[i], d.py[i], d.pz[i]))
 
-        if d.ficxy != 'no' and 16 in files_dict:
+        if d.xy_output_file != 'no' and 16 in files_dict:
             f16 = files_dict[16]
             f16.write('---------------------------------\n')
             f16.write('info pour le mouvement inverse...\n')
             f16.write(f'r0 teta0 z0 pr0 pz0 w0mev phi0 :\n')
-            f16.write(f'{d.rf} {d.tetf} {d.zf} {d.tprf}\n')
-            f16.write(f'{d.tpzf} {d.wf} {d.phif}\n')
+            f16.write(f'{d.end_r} {d.end_theta_deg} {d.end_z} {tprf}\n')
+            f16.write(f'{tpzf} {wf} {d.end_phase_deg}\n')
             f16.write('info pour continuer le mouvement ...\n')
-            f16.write(f'{rr} {d.tetnew} {d.z[0]} {d.tprf}\n')
-            f16.write(f'{d.tpzf} {d.wf} {phihf}\n')
+            f16.write(f'{rr} {d.theta_deg} {d.z[0]} {tprf}\n')
+            f16.write(f'{tpzf} {wf} {phihf}\n')
             f16.write('info utile pour DEDUCE_SIGMA ...\n')
             f16.write(f'amat a qn w0mev : \n')
-            f16.write(f'{d.amat[0]} {d.a[0]} {d.qn[0]} {d.wf}\n')
+            f16.write(f'{d.atomic_mass[0]} {d.mass_number[0]} {d.charge_state[0]} {wf}\n')
             f16.write(f'champ magnetique (val. absolue) :\n{-d.bz[0]}\n')
-            f16.write(f'fhf harmonique :\n{d.fhf} {d.harm}\n')
+            f16.write(f'fhf harmonique :\n{d.rf_frequency} {d.harmonic}\n')
 
 
 # =============================================================================
@@ -1880,18 +1948,18 @@ def info(d, iprinf_holder):
 # =============================================================================
 def initgra(d, bidim, numbid=None):
     """Initialise les diagnostics graphiques (bidims). numbid=None : demande a l'utilisateur."""
-    d.fenlog[:] = True
-    d.ifreb = 1
+    d.in_window[:] = True
+    d.bidim_every = 1
     if numbid is None:
         numbid = int(read_input('numero premier bidim (0 si aucun bidim) :'))
-    d.numbid = numbid
-    if d.numbid == 0:
+    d.bidim_first = numbid
+    if d.bidim_first == 0:
         return
 
-    d.ifreb = int(read_input('frequence_de_trace par rapport aux pas de temps:'))
-    d.baryc = read_input('trace des centres ou des barycentres (c ou b) :')
-    d.ngravm = abs(d.npaspt // d.ifreb)
-    d.ngrav = 0
+    d.bidim_every = int(read_input('frequence_de_trace par rapport aux pas de temps:'))
+    d.centre_mode = read_input('trace des centres ou des barycentres (c ou b) :')
+    d.bary_size = abs(d.steps_per_turn // d.bidim_every)
+    d.bary_count = 0
 
     vals = parse_floats(read_input(
         'boite des bidims (xmin xmax ymin ymax en metres) :'))
@@ -1911,15 +1979,15 @@ def initgra(d, bidim, numbid=None):
     titre[0] = 'trajectoire ion'
     labelx[0] = 'x'
     labely[0] = 'y'
-    if d.baryc == 'c':
+    if d.centre_mode == 'c':
         titre[1] = 'centres de courbure'
     else:
         titre[1] = 'barycentres'
     labelx[1] = 'x'
     labely[1] = 'y'
 
-    d.itebid = 1
-    if d.n > 1:
+    d.bidim_start_step = 1
+    if d.n_particles > 1:
         titre[2] = 'trajectoires ions'
         titre[3] = 'correlation dphi-dw/w'
         titre[4] = 'correlation r-dpr/p0'
@@ -1932,8 +2000,8 @@ def initgra(d, bidim, numbid=None):
         vals = parse_floats(read_input('bidim dz-dpz/p0 : dz_max dpz/p0_max :'))
         dzmax = vals[0]
         dpzsp0max = vals[1]
-        print(f'itemax : {d.nbdt}')
-        d.itebid = int(read_input('debut_iteration_stockage_bidim (entre 1 et itemax) :'))
+        print(f'itemax : {d.n_steps}')
+        d.bidim_start_step = int(read_input('debut_iteration_stockage_bidim (entre 1 et itemax) :'))
 
     vals = parse_floats(read_input('valeurs de la fenetre des barycentres en metres:'))
     xbamin, xbamax, ybamin, ybamax = vals[:4]
@@ -1947,54 +2015,54 @@ def initgra(d, bidim, numbid=None):
     bornes[0, 1, 1] = ybamin
     bornes[1, 1, 1] = ybamax
 
-    if d.n > 1:
+    if d.n_particles > 1:
         nbr_bid = 17
     else:
         nbr_bid = 5
 
-    ier = bidim.openbi(nbr_bid, d.numbid, nbx, nby, titre, labelx, labely, bornes)
+    ier = bidim.openbi(nbr_bid, d.bidim_first, nbx, nby, titre, labelx, labely, bornes)
     if ier != 0:
         print(f'bidim : openbi : stop erreur : {ier}')
         sys.exit(1)
 
-    d.ax1[0] = 8191.0 / (xbid[0, 1] - xbid[0, 0])
-    d.ax0[0] = -d.ax1[0] * xbid[0, 0]
-    d.ay1[0] = 8191.0 / (xbid[1, 1] - xbid[1, 0])
-    d.ay0[0] = -d.ay1[0] * xbid[1, 0]
-    d.ax1[1] = 8191.0 / (xbamax - xbamin)
-    d.ax0[1] = -d.ax1[1] * xbamin
-    d.ay1[1] = 8191.0 / (ybamax - ybamin)
-    d.ay0[1] = -d.ay1[1] * ybamin
+    d.bidim_ax1[0] = 8191.0 / (xbid[0, 1] - xbid[0, 0])
+    d.bidim_ax0[0] = -d.bidim_ax1[0] * xbid[0, 0]
+    d.bidim_ay1[0] = 8191.0 / (xbid[1, 1] - xbid[1, 0])
+    d.bidim_ay0[0] = -d.bidim_ay1[0] * xbid[1, 0]
+    d.bidim_ax1[1] = 8191.0 / (xbamax - xbamin)
+    d.bidim_ax0[1] = -d.bidim_ax1[1] * xbamin
+    d.bidim_ay1[1] = 8191.0 / (ybamax - ybamin)
+    d.bidim_ay0[1] = -d.bidim_ay1[1] * ybamin
 
-    if d.n > 1:
-        d.ax1[3] = 8191.0 / 2.0 / dphimax
-        d.ax0[3] = d.ax1[3] * dphimax
-        d.ay1[3] = 8191.0 / 2.0 / dwswmax
-        d.ay0[3] = d.ay1[3] * dwswmax
-        d.ax1[4] = 8191.0 / 2.0 / drmax
-        d.ax0[4] = d.ax1[4] * drmax
-        d.ay1[4] = 8191.0 / 2.0 / dprsp0max
-        d.ay0[4] = d.ay1[4] * dprsp0max
-        d.ax1[5] = 8191.0 / 2.0 / drmax
-        d.ax0[5] = d.ax1[5] * drmax
-        d.ay1[5] = 8191.0 / 2.0 / dphimax
-        d.ay0[5] = d.ay1[5] * dphimax
-        d.ax1[6] = 8191.0 * d.ifreb / d.nbdt
-        d.ax0[6] = 0.0
-        d.ay1[6] = 8191.0 / 2.0 / drmax
-        d.ay0[6] = d.ay1[6] * drmax
-        d.ax1[7] = 8191.0 / 2.0 / dzmax
-        d.ax0[7] = d.ax1[7] * dzmax
-        d.ay1[7] = 8191.0 / 2.0 / dpzsp0max
-        d.ay0[7] = d.ay1[7] * dpzsp0max
-        d.ax1[8] = 8191.0 * d.ifreb / d.nbdt
-        d.ax0[8] = 0.0
-        d.ay1[8] = 8191.0 / 2.0 / dzmax
-        d.ay0[8] = d.ay1[8] * dzmax
+    if d.n_particles > 1:
+        d.bidim_ax1[3] = 8191.0 / 2.0 / dphimax
+        d.bidim_ax0[3] = d.bidim_ax1[3] * dphimax
+        d.bidim_ay1[3] = 8191.0 / 2.0 / dwswmax
+        d.bidim_ay0[3] = d.bidim_ay1[3] * dwswmax
+        d.bidim_ax1[4] = 8191.0 / 2.0 / drmax
+        d.bidim_ax0[4] = d.bidim_ax1[4] * drmax
+        d.bidim_ay1[4] = 8191.0 / 2.0 / dprsp0max
+        d.bidim_ay0[4] = d.bidim_ay1[4] * dprsp0max
+        d.bidim_ax1[5] = 8191.0 / 2.0 / drmax
+        d.bidim_ax0[5] = d.bidim_ax1[5] * drmax
+        d.bidim_ay1[5] = 8191.0 / 2.0 / dphimax
+        d.bidim_ay0[5] = d.bidim_ay1[5] * dphimax
+        d.bidim_ax1[6] = 8191.0 * d.bidim_every / d.n_steps
+        d.bidim_ax0[6] = 0.0
+        d.bidim_ay1[6] = 8191.0 / 2.0 / drmax
+        d.bidim_ay0[6] = d.bidim_ay1[6] * drmax
+        d.bidim_ax1[7] = 8191.0 / 2.0 / dzmax
+        d.bidim_ax0[7] = d.bidim_ax1[7] * dzmax
+        d.bidim_ay1[7] = 8191.0 / 2.0 / dpzsp0max
+        d.bidim_ay0[7] = d.bidim_ay1[7] * dpzsp0max
+        d.bidim_ax1[8] = 8191.0 * d.bidim_every / d.n_steps
+        d.bidim_ax0[8] = 0.0
+        d.bidim_ay1[8] = 8191.0 / 2.0 / dzmax
+        d.bidim_ay0[8] = d.bidim_ay1[8] * dzmax
 
     # Lecture repères
     ficrep = read_input('lecture du fichier_des_reperes (lignes, piliers etc...) :')
-    d.nbrpie = 0
+    d.n_traps = 0
     if ficrep != 'no':
         try:
             with open(ficrep, 'r') as f24:
@@ -2017,46 +2085,46 @@ def initgra(d, bidim, numbid=None):
                             for kk in range(nbpo):
                                 xd = xd1 + kk * sxd
                                 yd = yd1 + kk * syd
-                                ix = int(d.ax1[0] * xd / 1000.0 + d.ax0[0])
-                                iy = int(d.ay1[0] * yd / 1000.0 + d.ay0[0])
-                                bidim.incbid(d.numbid, ix, iy)
+                                ix = int(d.bidim_ax1[0] * xd / 1000.0 + d.bidim_ax0[0])
+                                iy = int(d.bidim_ay1[0] * yd / 1000.0 + d.bidim_ay0[0])
+                                bidim.incbid(d.bidim_first, ix, iy)
                     elif typcou == 'cercle':
                         nbrcer = int(f24.readline().split()[0])
                         for num in range(nbrcer):
                             vals = f24.readline().split()
                             xce, yce, rce = fortran_float(vals[0]), fortran_float(vals[1]), fortran_float(vals[2])
-                            tetce1 = fortran_float(vals[3]) * d.pi / 180.0
-                            tetce2 = fortran_float(vals[4]) * d.pi / 180.0
+                            tetce1 = fortran_float(vals[3]) * np.pi / 180.0
+                            tetce2 = fortran_float(vals[4]) * np.pi / 180.0
                             npcer = int(vals[5])
                             flacer = fortran_float(vals[6])
                             dtetce = (tetce2 - tetce1) / (nbpo - 1.0)
                             if flacer < -10.0:
-                                d.nbrpie += 1
-                                d.xpie[d.nbrpie - 1] = xce / 1000.0
-                                d.ypie[d.nbrpie - 1] = yce / 1000.0
-                                d.rpie[d.nbrpie - 1] = rce / 1000.0
+                                d.n_traps += 1
+                                d.trap_x[d.n_traps - 1] = xce / 1000.0
+                                d.trap_y[d.n_traps - 1] = yce / 1000.0
+                                d.trap_r[d.n_traps - 1] = rce / 1000.0
                             if flacer > -9000.0:
                                 for kk in range(nbpo):
                                     tetce = tetce1 + kk * dtetce
                                     xd = xce + rce * np.cos(tetce)
                                     yd = yce + rce * np.sin(tetce)
-                                    ix = int(d.ax1[0] * xd / 1000.0 + d.ax0[0])
-                                    iy = int(d.ay1[0] * yd / 1000.0 + d.ay0[0])
-                                    bidim.incbid(d.numbid, ix, iy)
+                                    ix = int(d.bidim_ax1[0] * xd / 1000.0 + d.bidim_ax0[0])
+                                    iy = int(d.bidim_ay1[0] * yd / 1000.0 + d.bidim_ay0[0])
+                                    bidim.incbid(d.bidim_first, ix, iy)
                     else:
                         print(f'erreur lecture fichier reperes... typcou : {typcou}')
                         sys.exit(1)
         except Exception as e:
             print(f'erreur en lecture du fichier reperes: {e}')
 
-    if d.nbrpie != 0:
+    if d.n_traps != 0:
         print(f'attention : il y a des pieges a ions...')
-        print(f'nombre de pieges : {d.nbrpie}')
-        d.itepiem = int(read_input('iteration max pour les pieges:'))
+        print(f'nombre de pieges : {d.n_traps}')
+        d.trap_last_step = int(read_input('iteration max pour les pieges:'))
         print('flag de choix particules piegees: (0 ou 1)')
         print('0   : reste scotchee dans les pieges')
         print('1   : continue, confondue avec la particule centrale')
-        d.iflpie = int(read_input(''))
+        d.trapped_follow = int(read_input(''))
 
 
 # =============================================================================
@@ -2064,96 +2132,102 @@ def initgra(d, bidim, numbid=None):
 # =============================================================================
 def bid(d, bidim):
     """Enregistre les données dans les bidims."""
-    if d.ite < d.itebid:
+    vec1 = np.zeros(d.n_particles)
+    vec2 = np.zeros(d.n_particles)
+    vec3 = np.zeros(d.n_particles)
+    vec4 = np.zeros(d.n_particles)
+    vec5 = np.zeros(d.n_particles)
+    vec6 = np.zeros(d.n_particles)
+    if d.step < d.bidim_start_step:
         return
 
-    for k in range(d.np_):
-        if not d.fenlog[k]:
+    for k in range(d.n_particles):
+        if not d.in_window[k]:
             continue
-        ix = int(d.ax1[0] * d.x[k] + d.ax0[0])
-        iy = int(d.ay1[0] * d.y[k] + d.ay0[0])
+        ix = int(d.bidim_ax1[0] * d.x[k] + d.bidim_ax0[0])
+        iy = int(d.bidim_ay1[0] * d.y[k] + d.bidim_ay0[0])
         if 0 <= ix <= 8191 and 0 <= iy <= 8191:
             if k == 0:
-                bidim.incbid(d.numbid, ix, iy)
-                if d.np_ > 1:
-                    bidim.incbid(d.numbid + 2, ix, iy)
+                bidim.incbid(d.bidim_first, ix, iy)
+                if d.n_particles > 1:
+                    bidim.incbid(d.bidim_first + 2, ix, iy)
             else:
-                bidim.incbid(d.numbid + 2, ix, iy)
+                bidim.incbid(d.bidim_first + 2, ix, iy)
         if k == 0:
-            xck = d.x[k] + d.py[k] * d.dt / d.qdtsm0c[k] / d.bz[k]
-            yck = d.y[k] - d.px[k] * d.dt / d.qdtsm0c[k] / d.bz[k]
-            if d.baryc == 'c':
-                ix2 = int(d.ax1[0] * xck + d.ax0[0])
-                iy2 = int(d.ay1[0] * yck + d.ay0[0])
+            xck = d.x[k] + d.py[k] * d.dt / d.boris_e_coef[k] / d.bz[k]
+            yck = d.y[k] - d.px[k] * d.dt / d.boris_e_coef[k] / d.bz[k]
+            if d.centre_mode == 'c':
+                ix2 = int(d.bidim_ax1[0] * xck + d.bidim_ax0[0])
+                iy2 = int(d.bidim_ay1[0] * yck + d.bidim_ay0[0])
                 if 0 <= ix2 <= 8191 and 0 <= iy2 <= 8191:
-                    bidim.incbid(d.numbid + 1, ix2, iy2)
-            if d.baryc == 'b':
-                d.ngrav += 1
-                d.xgrav[d.ngrav - 1] = xck
-                d.ygrav[d.ngrav - 1] = yck
-                if d.ngrav == d.ngravm:
-                    d.ngrav = 0
-                    xbary = np.sum(d.xgrav[:d.ngravm]) / d.ngravm
-                    ybary = np.sum(d.ygrav[:d.ngravm]) / d.ngravm
-                    ix2 = int(d.ax1[1] * xbary + d.ax0[1])
-                    iy2 = int(d.ay1[1] * ybary + d.ay0[1])
+                    bidim.incbid(d.bidim_first + 1, ix2, iy2)
+            if d.centre_mode == 'b':
+                d.bary_count += 1
+                d.bary_x[d.bary_count - 1] = xck
+                d.bary_y[d.bary_count - 1] = yck
+                if d.bary_count == d.bary_size:
+                    d.bary_count = 0
+                    xbary = np.sum(d.bary_x[:d.bary_size]) / d.bary_size
+                    ybary = np.sum(d.bary_y[:d.bary_size]) / d.bary_size
+                    ix2 = int(d.bidim_ax1[1] * xbary + d.bidim_ax0[1])
+                    iy2 = int(d.bidim_ay1[1] * ybary + d.bidim_ay0[1])
                     if 0 <= ix2 <= 8191 and 0 <= iy2 <= 8191:
-                        bidim.incbid(d.numbid + 1, ix2, iy2)
+                        bidim.incbid(d.bidim_first + 1, ix2, iy2)
 
-    if d.np_ > 1 and d.nbrfam == 1:
+    if d.n_particles > 1 and d.n_families == 1:
         caldxs(d)
         k = 0
-        nbr = d.nbrion[k]
-        i1 = d.index[k]
+        nbr = d.family_size[k]
+        i1 = d.family_start[k]
         gai1 = np.sqrt(1.0 + d.p[i1]**2)
-        d.vec1[:nbr] = d.dxs[4, :nbr] * d.omhf / d.clum / d.p[i1] * 180.0 / d.pi * gai1
-        d.vec2[:nbr] = d.dxs[5, :nbr] * d.p[i1] / gai1 / (gai1 - 1.0)
-        d.vec3[:nbr] = d.dxs[0, :nbr] * 1000.0
-        d.vec4[:nbr] = d.dxs[1, :nbr] / d.p[i1] * 1000.0
-        d.vec5[:nbr] = d.dxs[2, :nbr] * 1000.0
-        d.vec6[:nbr] = d.dxs[3, :nbr] / d.p[i1] * 1000.0
+        vec1[:nbr] = d.ps[4, :nbr] * d.omega_rf / C_LIGHT / d.p[i1] * 180.0 / np.pi * gai1
+        vec2[:nbr] = d.ps[5, :nbr] * d.p[i1] / gai1 / (gai1 - 1.0)
+        vec3[:nbr] = d.ps[0, :nbr] * 1000.0
+        vec4[:nbr] = d.ps[1, :nbr] / d.p[i1] * 1000.0
+        vec5[:nbr] = d.ps[2, :nbr] * 1000.0
+        vec6[:nbr] = d.ps[3, :nbr] / d.p[i1] * 1000.0
 
         for i in range(nbr):
-            if not d.fenlog[i]:
+            if not d.in_window[i]:
                 continue
-            ix = int(d.ax1[3] * d.vec1[i] + d.ax0[3])
-            iy = int(d.ay1[3] * d.vec2[i] + d.ay0[3])
+            ix = int(d.bidim_ax1[3] * vec1[i] + d.bidim_ax0[3])
+            iy = int(d.bidim_ay1[3] * vec2[i] + d.bidim_ay0[3])
             ix = max(0, min(ix, 8191))
             iy = max(0, min(iy, 8191))
-            bidim.incbid(d.numbid + 3, ix, iy)
+            bidim.incbid(d.bidim_first + 3, ix, iy)
 
-            ix = int(d.ax1[4] * d.vec3[i] + d.ax0[4])
-            iy = int(d.ay1[4] * d.vec4[i] + d.ay0[4])
+            ix = int(d.bidim_ax1[4] * vec3[i] + d.bidim_ax0[4])
+            iy = int(d.bidim_ay1[4] * vec4[i] + d.bidim_ay0[4])
             ix = max(0, min(ix, 8191))
             iy = max(0, min(iy, 8191))
-            bidim.incbid(d.numbid + 4, ix, iy)
+            bidim.incbid(d.bidim_first + 4, ix, iy)
 
-            ix = int(d.ax1[7] * d.vec5[i] + d.ax0[7])
-            iy = int(d.ay1[7] * d.vec6[i] + d.ay0[7])
+            ix = int(d.bidim_ax1[7] * vec5[i] + d.bidim_ax0[7])
+            iy = int(d.bidim_ay1[7] * vec6[i] + d.bidim_ay0[7])
             ix = max(0, min(ix, 8191))
             iy = max(0, min(iy, 8191))
-            bidim.incbid(d.numbid + 7, ix, iy)
+            bidim.incbid(d.bidim_first + 7, ix, iy)
 
         for i in range(nbr):
-            if not d.fenlog[i]:
+            if not d.in_window[i]:
                 continue
-            ix = int(d.ax1[5] * d.vec3[i] + d.ax0[5])
-            iy = int(d.ay1[5] * d.vec1[i] + d.ay0[5])
+            ix = int(d.bidim_ax1[5] * vec3[i] + d.bidim_ax0[5])
+            iy = int(d.bidim_ay1[5] * vec1[i] + d.bidim_ay0[5])
             ix = max(0, min(ix, 8191))
             iy = max(0, min(iy, 8191))
-            bidim.incbid(d.numbid + 5, ix, iy)
+            bidim.incbid(d.bidim_first + 5, ix, iy)
 
-        ix = int(d.ax1[6] * d.ite / d.ifreb + d.ax0[6])
+        ix = int(d.bidim_ax1[6] * d.step / d.bidim_every + d.bidim_ax0[6])
         ix = max(0, min(ix, 8191))
         for i in range(nbr):
-            if not d.fenlog[i]:
+            if not d.in_window[i]:
                 continue
-            iy = int(d.ay1[6] * d.vec3[i] + d.ay0[6])
+            iy = int(d.bidim_ay1[6] * vec3[i] + d.bidim_ay0[6])
             iy = max(0, min(iy, 8191))
-            bidim.incbid(d.numbid + 6, ix, iy)
-            iy = int(d.ay1[8] * d.vec5[i] + d.ay0[8])
+            bidim.incbid(d.bidim_first + 6, ix, iy)
+            iy = int(d.bidim_ay1[8] * vec5[i] + d.bidim_ay0[8])
             iy = max(0, min(iy, 8191))
-            bidim.incbid(d.numbid + 8, ix, iy)
+            bidim.incbid(d.bidim_first + 8, ix, iy)
 
 
 # =============================================================================
@@ -2175,16 +2249,16 @@ def banner():
 def set_vertical_sorter(d, rmin=1000.0, rmax=2000.0, teta1=0.0, teta2=0.0,
                         pot=0.0, h=0.0, phi=0.0, anuz=0.0, coupnuz=0.0, dpotspot=0.0):
     """Parametres du trieur vertical (angles en degres). h=0 : pas de tri vertical."""
-    d.rmin_ver = rmin
-    d.rmax_ver = rmax
-    d.teta1_ver = teta1 * np.pi / 180.0
-    d.teta2_ver = teta2 * np.pi / 180.0
-    d.pot_ver = pot
-    d.h_ver = h
-    d.phi_ver = phi * np.pi / 180.0
-    d.anuz = anuz
-    d.coupnuz = coupnuz
-    d.dpotspot = dpotspot
+    d.sorter_rmin = rmin
+    d.sorter_rmax = rmax
+    d.sorter_theta1 = teta1 * np.pi / 180.0
+    d.sorter_theta2 = teta2 * np.pi / 180.0
+    d.sorter_voltage = pot
+    d.sorter_gap = h
+    d.sorter_phase = phi * np.pi / 180.0
+    d.sorter_nuz = anuz
+    d.nuz_z_cut = coupnuz
+    d.sorter_dv = dpotspot
 
 
 def read_vertical_sorter(d):
@@ -2206,27 +2280,27 @@ def track(d, bidim=None, on_step=None):
 
     on_step(d) est appele apres chaque pas ; s'il renvoie False, le suivi s'arrete.
     """
-    d.ite = 0
+    d.step = 0
     boite(d)
     calcbe(d)
     iprinf_holder = [1]
     info(d, iprinf_holder)
     try:
         if on_step is None or on_step(d) is not False:
-            for ite in range(1, d.nbdt + 1):
-                d.ite = ite
+            for ite in range(1, d.n_steps + 1):
+                d.step = ite
                 piege(d)
                 boite(d)
                 calcbe(d)
                 pousse(d)
                 d.t = ite * d.dt + d.t0
                 info(d, iprinf_holder)
-                if d.numbid != 0 and (ite % d.ifreb == 0 or ite == 1):
+                if d.bidim_first != 0 and (ite % d.bidim_every == 0 or ite == 1):
                     bid(d, bidim)
                 if on_step is not None and on_step(d) is False:
                     break
     finally:
-        if d.numbid != 0:
+        if d.bidim_first != 0:
             bidim.clobid()
         for f in files_dict.values():
             f.close()
@@ -2234,16 +2308,15 @@ def track(d, bidim=None, on_step=None):
 
 
 def run(ficin, swap=False, vertical=None, on_step=None):
-    """Simulation sans interaction ni bidim. Renvoie l'etat final (LionData).
+    """Simulation sans interaction ni bidim. Renvoie l'etat final (State).
 
     - ficin : fichier de donnees ; ses chemins sont relatifs au repertoire courant.
     - swap : inverser les octets du potentiel central (fichiers big-endian).
     - vertical : dict de parametres pour set_vertical_sorter, None = pas de tri.
     - on_step : voir track().
     """
-    d = LionData()
-    d.repswap = 'y' if swap else 'n'
-    d.idebug = 0
+    d = State()
+    d.swap_bytes = 'y' if swap else 'n'
     init(d, ficin)
     set_vertical_sorter(d, **(vertical or {}))
     initgra(d, None, numbid=0)
@@ -2253,8 +2326,8 @@ def run(ficin, swap=False, vertical=None, on_step=None):
 
 def write_trapped(d):
     """Propose d'ecrire les numeros des particules piegees."""
-    if d.nbrpie != 0:
-        nreste = np.count_nonzero(d.ok)
+    if d.n_traps != 0:
+        nreste = np.count_nonzero(d.alive)
         print(f'nombre de particules non piegees : {nreste}')
         print('ecriture fichier des numero particules piegees ? (o/n)')
         reponse = input().strip()
@@ -2263,8 +2336,8 @@ def write_trapped(d):
             ficpie = input().strip()
             with open(ficpie, 'w') as f60:
                 npi = 0
-                for k in range(d.n):
-                    if not d.ok[k]:
+                for k in range(d.n_particles):
+                    if not d.alive[k]:
                         npi += 1
                         f60.write(f' {npi:5d} {k+1:5d}\n')
 
@@ -2272,9 +2345,8 @@ def write_trapped(d):
 def lions():
     """Programme principal LIONS (interactif)."""
     banner()
-    d = LionData()
-    d.repswap = input().strip()
-    d.idebug = 0
+    d = State()
+    d.swap_bytes = input().strip()
     init(d, read_input('fichier_de_donnees de depart :'))
     read_vertical_sorter(d)
     bidim = BidimManager()
