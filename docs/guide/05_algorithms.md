@@ -9,12 +9,12 @@ Formulas below use the state names of the Fortran code where they are shorter; t
 
 | Function | Mask | Condition |
 |---|---|---|
-| `check_box` | `in_box` | `rmin < r < rmax - 0.02 m` (map radii), `zmin < z < zmax`, `alive` |
-| `check_central` | `in_central` | `in_box`, `r < rmax1`, `abs(y) < ymax1 - hy1` |
-| `check_outer` | `in_outer` | (x', y') inside the outer grid, `in_box`, not `in_central` |
+| `check_box` | `bunch.in_box` | `rmin < r < rmax - 0.02 m` (map radii), `zmin < z < zmax`, `bunch.alive` |
+| `check_central` | `bunch.in_central` | `bunch.in_box`, `r < rmax1`, `abs(y) < ymax1 - hy1` |
+| `check_outer` | `bunch.in_outer` | (x', y') inside the outer grid, `bunch.in_box`, not `bunch.in_central` |
 
-`check_box` also updates `r`.
-Each function stores the count of its mask (`n_in_box`, `n_central`, `n_outer`).
+`check_box` also updates `bunch.r`.
+Each function stores the count of its mask (`bunch.n_in_box`, `bunch.n_central`, `bunch.n_outer`).
 
 ## Magnetic field
 
@@ -33,9 +33,9 @@ Bx = z F(dBz/dx)
 By = z F(dBz/dy)
 ```
 
-`hr` (m) and `htet` (rad) are the map steps (`map_dr`, `map_dtheta`).
+`hr` (m) and `htet` (rad) are the map steps (`field.dr`, `field.dtheta`).
 Particles outside the box, and particles in the box where Bz = 0, get Bz = -1e-5 T and Bx = By = 0 (avoids a division by zero in the diagnostics).
-For r <= rmin, Bz = `bz_map[0, 0]` and Bx = By = 0.
+For r <= rmin, Bz = `field.bz[0, 0]` and Bx = By = 0.
 If x / r falls outside [-1, 1] by rounding, the count is printed and theta is clamped.
 
 `lions.fields.compute_bfield` does the same interpolation for B only. `distribute_bunch` calls it to get Bz at the reference particles.
@@ -72,7 +72,7 @@ The d2Bz term is the Laplacian of the added polynomial.
 
 ## Central-region electric field
 
-For particles in `in_central`, on the Cartesian grid of `pot1` (steps hx1, hy1):
+For particles in `bunch.in_central`, on the Cartesian grid of `pot1` (steps hx1, hy1):
 
 ```
 i = int((x - xmin1) / hx1)        j = int((y - ymin1) / hy1)
@@ -87,11 +87,11 @@ Ex1 = [ -(V[i+1,j] - V[i-1,j]) + z^2/2 (d2V[i+1,j] - d2V[i-1,j]) ] / (2 hx1)
 Ey1 = [ -(V[i,j+1] - V[i,j-1]) + z^2/2 (d2V[i,j+1] - d2V[i,j-1]) ] / (2 hy1)
 ```
 
-RF factor, with `v_dee_*` the stored (sign-reversed) voltages and the RF angle reduced modulo 2 pi:
+RF factor, with `rf.v_right`, `rf.v_left` the stored (sign-reversed) voltages and the RF angle reduced modulo 2 pi:
 
 ```
-V_rf = v_dee_right cos(omega_rf t + phase_right)     x >= 0
-V_rf = v_dee_left  cos(omega_rf t + phase_left)      x <  0
+V_rf = rf.v_right cos(omega_rf t + rf.phase_right)     x >= 0
+V_rf = rf.v_left  cos(omega_rf t + rf.phase_left)      x <  0
 ```
 
 Fields:
@@ -106,7 +106,7 @@ The indices i - 1 and j - 1 are not checked: the grid must cover r < `rmax1`.
 
 ## Outer-region electric field
 
-For particles in `in_outer`, in the gap frame (x', y') of [Coordinates](04_coordinates.md#gap-frame-outer-region), on the `pot2` grid (steps hx2, hy2), with a, b, d1, d2, p1..p4 as above and V1..V4, D1..D4 the potential and d2pot at (i,j), (i+1,j), (i+1,j+1), (i,j+1):
+For particles in `bunch.in_outer`, in the gap frame (x', y') of [Coordinates](04_coordinates.md#gap-frame-outer-region), on the `pot2` grid (steps hx2, hy2), with a, b, d1, d2, p1..p4 as above and V1..V4, D1..D4 the potential and d2pot at (i,j), (i+1,j), (i+1,j+1), (i,j+1):
 
 ```
 Ex' = -V_rf [ d2 (V1 - V2 - z^2/2 (D1 - D2)) + b (V3 - V4 + z^2/2 (D3 - D4)) ] / (hx2 hy2)
@@ -121,7 +121,7 @@ Ex = Ex' cos(teta1) - Ey' sin(teta1)
 Ey = Ex' sin(teta1) + Ey' cos(teta1)
 ```
 
-Quadrant symmetries, `heps = harmonic_sign` (+1 odd harmonic, -1 even):
+Quadrant symmetries, `heps = rf.harmonic_sign` (+1 odd harmonic, -1 even):
 
 ```
 x < 0, y > 0 :  Ex = heps Ex,   Ey = -heps Ey
@@ -140,7 +140,7 @@ Ez -= V_ver (1 + dpotspot) / (2 h_ver) cos(2 omega_rf t (1 - nuz / (2 harm)) + 2
 ```
 
 `V_ver` (V) is `pot_ver`, `h_ver` (m) the gap, `nuz` = `anuz` the vertical tune of the drive.
-When particle 0 is in the sorter region, `sorter_voltage_seen = -Ez h_ver` (V), written in the z file.
+When particle 0 is in the sorter region, `sorter.voltage_seen = -Ez h_ver` (V), written in the z file.
 
 ## Extraction elements
 
@@ -148,7 +148,7 @@ When particle 0 is in the sorter region, `sorter_voltage_seen = -Ez h_ver` (V), 
 
 ### Deflectors
 
-`check_deflector(d, i)` uses two half-planes:
+`check_deflector(bunch, extraction, run, i)` uses two half-planes:
 
 ```
 entrance : (x - xdfi) sin(tetdfi) - (y - ydfi) cos(tetdfi) <= 0
@@ -157,11 +157,11 @@ exit     : (x - xdfo) sin(tetdfo) - (y - ydfo) cos(tetdfo) >= 0
 
 First deflector:
 
-- bunch cut (`extraction_start_step = 0`): a live particle with r > `rdf` between the two lines enters it and is flagged `extracted`;
-- whole bunch: every live particle between the two lines enters it from step `extraction_start_step`.
+- bunch cut (`extraction.start_step = 0`): a live particle with r > `rdf` between the two lines enters it and is flagged `bunch.extracted`;
+- whole bunch: every live particle between the two lines enters it from step `extraction.start_step`.
 
-Particles already `extracted` stay in it while between the lines.
-The other deflectors act only on `extracted` particles between their lines.
+Particles already `bunch.extracted` stay in it while between the lines.
+The other deflectors act only on `bunch.extracted` particles between their lines.
 Inside a deflector, the electric field is replaced by a field of magnitude `edf` (V/m) normal to the transverse momentum:
 
 ```
@@ -171,7 +171,7 @@ Ey = -edf px / p_xy
 
 ### Dipoles
 
-`check_dipole(d, i)`: `extracted` and live particles between the entrance and exit lines, both through (`xdm`, `ydm`).
+`check_dipole(bunch, extraction, i)`: `bunch.extracted` and live particles between the entrance and exit lines, both through (`xdm`, `ydm`).
 Inside, with `d = sqrt((x - xdm)^2 + (y - ydm)^2)` (m) and `bdm` (T/m):
 
 ```
@@ -182,15 +182,15 @@ By += z bdm (y - ydm) / d
 
 ### Grids
 
-Tested when `rex < 0`, grids exist and `step >= grid_start_step`.
+Tested when `rex < 0`, grids exist and `run.step >= extraction.grid_start_step`.
 A particle is past grid i when
 
 ```
 (x - xgex) uygex - (y - ygex) uxgex <= 0
 ```
 
-- One grid, no deflector, no dipole: from step `extraction_start_step`, a live particle not yet flagged and past the grid is recorded. Its flag is reset once it is back on the other side, so it is recorded at each turn.
-- Otherwise: an `extracted`, live particle is recorded at grid i when it has already crossed grid i - 1 (`grid_reached`), so the grids are crossed in order.
+- One grid, no deflector, no dipole: from step `extraction.start_step`, a live particle not yet flagged and past the grid is recorded. Its flag is reset once it is back on the other side, so it is recorded at each turn.
+- Otherwise: a `bunch.extracted`, live particle is recorded at grid i when it has already crossed grid i - 1 (`bunch.grid_reached`), so the grids are crossed in order.
 
 Each crossing writes one line to the grid file (see [Outputs](03_outputs.md#extraction-grid-files-ficdebgexn)).
 
@@ -199,17 +199,17 @@ Each crossing writes one line to the grid file (see [Outputs](03_outputs.md#extr
 `lions.pusher.boris_push`. With `p` in beta gamma, B in T, E in V/m, and the per-particle constants of `load`:
 
 ```
-boris_b_coef = q dt / (2 m0)        (1/T)
-boris_e_coef = q dt / (m0 c)        (m/V)
-c_dt         = c dt                 (m)
+bunch.boris_b_coef = q dt / (2 m0)        (1/T)
+bunch.boris_e_coef = q dt / (m0 c)        (m/V)
+run.c_dt           = c dt                 (m)
 ```
 
 One step, with gamma from the previous step:
 
 ```
-t   = boris_b_coef / gamma * B                 (tx, ty, tz)
+t   = bunch.boris_b_coef / gamma * B                 (tx, ty, tz)
 s   = 1 / (1 + tx^2 + ty^2 + tz^2)
-f   = boris_e_coef * E                         full-step electric kick
+f   = bunch.boris_e_coef * E                         full-step electric kick
 v   = s (f + 2 p)
 
          | -(ty^2+tz^2)   tx ty + tz      tx tz - ty    |
@@ -218,23 +218,23 @@ M    =   |  tx ty - tz   -(tx^2+tz^2)     ty tz + tx    |
 
 p_new     = p + M v + f
 gamma_new = sqrt(1 + |p_new|^2)
-x_new     = x + c_dt / gamma_new * p_new
+x_new     = x + run.c_dt / gamma_new * p_new
 ```
 
 This is the standard Boris scheme: half electric kick `f/2`, rotation about B, half electric kick.
 The rotation uses the gamma of the previous step, not the gamma after the first half kick.
 It is second order in dt and conserves |p| exactly when E = 0.
 
-With `trapped_follow = 0`, only live particles are pushed. With `trapped_follow = 1` (the default), all particles are pushed; `apply_traps` has reset the trapped ones onto particle 0.
+With `traps.follow = 0`, only live particles are pushed. With `traps.follow = 1` (the default), all particles are pushed; `apply_traps` has reset the trapped ones onto particle 0.
 
 ## Traps and losses
 
 `lions.apertures.apply_traps`, at the start of each step. It returns at once when no trap is defined.
 With traps:
 
-- a particle with z < zmin or z > zmax is lost (`alive = False`);
-- up to step `trap_last_step`, a particle inside a trap circle, `(x - xp)^2 + (y - yp)^2 <= rp^2`, is lost;
-- with `trapped_follow = 1`, lost particles take the position, momentum and gamma of particle 0.
+- a particle with z < zmin or z > zmax is lost (`bunch.alive = False`);
+- up to step `traps.last_step`, a particle inside a trap circle, `(x - xp)^2 + (y - yp)^2 <= rp^2`, is lost;
+- with `traps.follow = 1`, lost particles take the position, momentum and gamma of particle 0.
 
 Without traps, particles leaving the box are not flagged: they keep moving in Bz = -1e-5 T and E = 0.
 
@@ -281,7 +281,7 @@ dwdphi = omega_rf/(c p) gamma * p/(gamma (gamma-1)) * W
 ```
 
 Indices 1 to 6 are dr, dpr, dz, dpz, ds, dp.
-`write_outputs` also computes `sigma_dc = T sigma T^T`, with T the identity except `T[0,0] = T[1,1] = -1`, `T[0,5] = r / p`, `T[4,1] = -r / p`. It is kept in the state and not written.
+`write_outputs` also computes `bunch.sigma_dc = T sigma T^T`, with T the identity except `T[0,0] = T[1,1] = -1`, `T[0,5] = r / p`, `T[4,1] = -r / p`. It is kept in the state and not written.
 
 `lions.beam.project_on_radial_line` and `projected_phase_space` compute deviations projected on the radial line through the reference particle (Fortran `calgri`, `calgric`). Nothing calls them: they belong to the `ficmat` output, not ported.
 
@@ -291,5 +291,5 @@ Indices 1 to 6 are dr, dpr, dz, dpz, ds, dp.
 |---|---|
 | x / r outside [-1, 1] by rounding | Count and particles printed, theta clamped |
 | Bz = 0 in the box, or particle outside the box | Bz = -1e-5 T, Bx = By = 0 |
-| Particle in a trap | `alive = False`; it stays, or follows particle 0 |
+| Particle in a trap | `bunch.alive = False`; it stays, or follows particle 0 |
 | Particle outside the central potential grid with r < `rmax1` | No check: wrong field (index wraps in NumPy) |

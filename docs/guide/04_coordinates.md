@@ -27,17 +27,17 @@ The map covers one quadrant. The field computed in (x', y') is rotated back by `
 
 ## Units in memory
 
-The `State` holds SI units, angles in rad, momenta normalised, unless the attribute name says otherwise (`theta_deg`, `phi0_deg`, `w0_mev_per_u`, `grid_angle_deg`).
+The `State` holds SI units, angles in rad, momenta normalised, unless the attribute name says otherwise (`run.theta_deg`, `bunch.families[k].phi0_deg`, `bunch.w0_mev_per_u`, `extraction.grids[k].angle_deg`).
 
 | Quantity | Units |
 |---|---|
 | Positions | m |
 | Time | s |
-| Momenta `px`, `py`, `pz`, `p` | beta gamma = p / (m0 c), dimensionless |
+| Momenta `bunch.px`, `bunch.py`, `bunch.pz`, `bunch.p` | beta gamma = p / (m0 c), dimensionless |
 | Magnetic field | T |
 | Electric field | V/m |
 | Mass, charge | kg, C |
-| Energy `w0`, `rest_energy` | J |
+| Energy `bunch.families[k].w0`, `bunch.rest_energy` | J |
 
 Deck inputs and text outputs use other units: see [Inputs](02_inputs.md) and [Outputs](03_outputs.md).
 
@@ -62,7 +62,7 @@ Example: A = 100, q = 22, W = 0.27 MeV/u gives p = 0.024; a spread of 3.16e-6 in
 ## Phase space relative to the reference particle
 
 Correlations, bidims and the bunch distribution use the deviations of each particle from the first particle of its family, in the curvilinear frame of that particle.
-They are stored in `State.ps` (6 x n), computed by `lions.beam.phase_space_coords` and by `write_outputs`.
+They are stored in `bunch.ps` (6 x n), computed by `lions.beam.phase_space_coords` and by `write_outputs`.
 
 | Index | Symbol | Quantity | Units |
 |---|---|---|---|
@@ -86,7 +86,7 @@ rc = -m0 c p / (q Bz)        (m, positive for Bz < 0 and q > 0)
 The RF phase spread is `dphi = ds * omega_rf / (c p) * gamma` (rad), that is `ds / v * omega_rf`.
 Example: at r = 33 mm, ds = 0.1 mm is 0.003 rad (0.17 deg) of azimuth.
 
-`State.ps_cartesian` holds the same deviations in the Cartesian frame rotated by `theta - alpha` (`alpha = asin(pr / p)` of the reference particle), in the index order x 0, px 1, z 2, pz 3, y 4, py 5.
+`bunch.ps_cartesian` holds the same deviations in the Cartesian frame rotated by `theta - alpha` (`alpha = asin(pr / p)` of the reference particle), in the index order x 0, px 1, z 2, pz 3, y 4, py 5.
 
 ## Physical constants
 

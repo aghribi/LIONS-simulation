@@ -2,7 +2,7 @@
 
 ## Principle
 
-The deck field `iflcor` (`State.correlations`) controls the initial bunch.
+The deck field `iflcor` (`bunch.correlations`) controls the initial bunch.
 
 - `iflcor = 0`: all particles of a family start on the family initial conditions (deck line 13).
 - `iflcor != 0`: the particles of each family are spread around its first particle with the 6x6 sigma matrix of that family, read from `ficsig`.
@@ -33,7 +33,7 @@ s(ds,dr)   ...
 s(dp,dr)   ...                                            s(dp,dp)
 ```
 
-The order is that of `State.ps`: dr, dpr, dz, dpz, ds, dp (see [Coordinates](04_coordinates.md)).
+The order is that of `bunch.ps`: dr, dpr, dz, dpz, ds, dp (see [Coordinates](04_coordinates.md)).
 The matrix is the covariance matrix of the deviations: diagonal terms are variances.
 It must be symmetric positive definite (Cholesky factorisation).
 
@@ -150,7 +150,7 @@ It also offers six diagonal spreads, in GUI units:
 | sigma dphi | ds | mm | 0.1 |
 | sigma dp | dp | mrad | 1.0 |
 
-The GUI labels the second coordinate `ds` and the fifth `dphi`; they are dpr and ds of `State.ps`.
+The GUI labels the second coordinate `ds` and the fifth `dphi`; they are dpr and ds of `bunch.ps`.
 **Apply -> sigma file** writes a diagonal 6x6 matrix (one family) from these values; Run does the same when `iflcor != 0`.
 Conversion to the file:
 

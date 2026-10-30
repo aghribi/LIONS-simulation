@@ -14,7 +14,7 @@ The Python package `lions` is a port of the Fortran 90 code by P. Bertrand (GANI
 
 - Magnetic field: median-plane map in (r, theta) with Bz, d2Bz/dr2, dBz/dx, dBz/dy. Bilinear interpolation, first-order expansion off the median plane. Optional first and second field harmonics added to the map.
 - Electric field: two potential maps.
-  - Central region (r < `central_rmax`): potential on a Cartesian (x, y) grid, binary Fortran file, with d2V/dz2 for Ez.
+  - Central region (r < `central.rmax`): potential on a Cartesian (x, y) grid, binary Fortran file, with d2V/dz2 for Ez.
   - Outer region: normalised single-gap potential in a frame rotated by the dee half-angle, text file.
   - Both are scaled by `V_dee cos(omega_rf t + phase)`, with separate voltage and phase for the right (x >= 0) and left (x < 0) dees.
 - Extraction: electrostatic deflectors, magnetic gradient dipoles, extraction grids that record crossing particles.
@@ -49,7 +49,7 @@ The CIME decks in `examples/` name maps and a sigma file that are not in the rep
 
 | Module | Content | Main names |
 |---|---|---|
-| `lions.state` | All data of a run | `State`, `State.allocate`, array size constants |
+| `lions.state` | All data of a run | `State` and its component classes, array size constants |
 | `lions.deck` | Input deck as a dataclass, reader and writer | `Deck`, `Family`, `Deflector`, `Dipole`, `Grid`, `FieldHarmonic`, `read_deck`, `write_deck` |
 | `lions.io` | State from a deck, field map and potential readers | `load`, `read_bfield_map`, `read_central_potential`, `read_outer_potential`, `prompt` |
 | `lions.fortran_text` | Fortran list-directed text reading | `FortranFile`, `fortran_float`, `parse_floats`, `parse_ints` |
@@ -73,16 +73,15 @@ Fixed sizes inherited from the Fortran module, defined in `lions.state`:
 
 | Constant | Value | Limit on |
 |---|---|---|
-| `MAX_FAMILIES` | 100 | Ion families |
 | `CENTRAL_NX`, `CENTRAL_NY` | 500, 300 | Central potential grid |
 | `OUTER_NX`, `OUTER_NY` | 50, 1000 | Outer potential grid |
 | `MAP_NR`, `MAP_NTHETA` | 250, 721 | Magnetic map grid (r, theta) |
-| `MAX_DEFLECTORS`, `MAX_DIPOLES`, `MAX_GRIDS` | 10, 10, 10 | Extraction elements |
-| `MAX_TRAPS` | 100 | Trap circles |
+| `MAX_BIDIMS` | 10 | Bidim histogram scalings |
 | `MAX_BARY` | 10800 | Orbit-centre barycentre buffer |
 
 Each field harmonic takes at most 10 coefficients.
-Per-particle arrays are created by `State.allocate` with length `n_particles`.
+Families, extraction elements and trap circles are lists, with no fixed size.
+`load` creates the per-particle arrays as `Bunch(n_particles)`.
 
 ## Call sequence
 
@@ -93,13 +92,13 @@ Per-particle arrays are created by `State.allocate` with length `n_particles`.
 main()
   banner()                          prints the banner and the byte-swap prompt
   State()
-  swap_bytes  <- stdin              y / n
+  run.swap_bytes  <- stdin          y / n
   load(d, deck)                     deck, field map, harmonics, b_factor, dB/B,
                                     potentials, bunch distribution, output files
   read_vertical_sorter(d)           two lines from stdin
   setup_bidims(d, BidimWriter())    first bidim number, bidim prompts, marker file, traps
   track(d, bidim)
-  write_trapped(d)                  optional list of trapped particles
+  write_trapped(d.bunch, d.traps)   optional list of trapped particles
 
 track(d, bidim, on_step)
   step 0:   check_box -> compute_fields -> write_outputs -> on_step
@@ -111,7 +110,7 @@ track(d, bidim, on_step)
             boris_push              momenta, gamma, positions
             t = step * dt + t0
             write_outputs           turn count, z / xy / correlation files
-            fill_bidims             if bidims on and (step % bidim_every == 0 or step == 1)
+            fill_bidims             if bidims on and (step % bidims.every == 0 or step == 1)
             on_step(d)              stops the loop if it returns False
   finally:  close bidims and output files
 ```

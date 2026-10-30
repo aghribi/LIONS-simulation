@@ -6,8 +6,8 @@ Files named in the deck are opened in write mode and overwritten.
 
 ## Output steps
 
-- The turn counter `turn` is updated at every step: it increases by one when the azimuth of particle 0 decreases (forward tracking), and decreases by one when it increases (backward tracking, `npaspt < 0`).
-- `theta_total_deg = theta_deg + 360 (turn - 1)` (deg).
+- The turn counter `run.turn` is updated at every step: it increases by one when the azimuth of particle 0 decreases (forward tracking), and decreases by one when it increases (backward tracking, `npaspt < 0`).
+- `run.theta_total_deg = run.theta_deg + 360 (run.turn - 1)` (deg).
 - A line is written to the z, xy and correlation files when `step % ifreq == 0` or `step == 1`. Step 0 writes one too.
 - Steps `nbdt - 1` and `nbdt` add the end-of-run values (see below).
 
@@ -63,7 +63,7 @@ yc   = y - px m0 c / (q Bz)
 es   = (Ex px + Ey py) / p_xy / 1e5
 er   = (Ex py - Ey px) / p_xy / 1e5
 w    = m0 c^2 (gamma - 1) / (MEV * A)
-dphi = omega_rf t (deg) - harm * theta_total_deg - 90
+dphi = omega_rf t (deg) - harm * run.theta_total_deg - 90
 ```
 
 ### End-of-run block
@@ -115,7 +115,7 @@ Written when `iflcor != 0` and at least one of the three names is not `no`, at t
 
 The factor 8 converts rms values into the full extent of a uniform 6D ball (`lions.constants.SQRT8`).
 Formulas are in [Algorithms](05_algorithms.md#correlations).
-The sigma matrix used here is the second moment over the live particles of the family, divided by `n_alive`.
+The sigma matrix used here is the second moment over the live particles of the family, divided by `bunch.n_alive`.
 
 `ficmat` and `ficdc` are opened (`ficdc` with a header line) and nothing else is written to them: the matrix outputs of the Fortran are not ported.
 
@@ -173,7 +173,7 @@ Histograms, numbered from the first bidim number `nb`:
 
 With one particle, 5 files are opened and only nb and nb + 1 are filled.
 With more than one particle, 17 files are opened; nb + 3 to nb + 8 are filled only with a single family.
-Events are stored from step `bidim_start_step`, at step 1 and every `bidim_every` steps.
+Events are stored from step `bidims.start_step`, at step 1 and every `bidims.every` steps.
 Out-of-range positions are dropped for nb to nb + 2 and clipped to the edge for the others.
 
 ## Bunch file (`ficsto`)

@@ -361,7 +361,7 @@ def compute_fields(d):
 
 
 def add_vertical_sorter_field(bunch, sorter, rf, run):
-    """Add the vertical sorter Ez; sorter_voltage_seen is its voltage at particle 0."""
+    """Add the vertical sorter Ez; sorter.voltage_seen is its voltage at particle 0."""
     sorter.voltage_seen = 0.0
     if sorter.gap == 0.0:
         return
