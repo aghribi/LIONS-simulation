@@ -319,47 +319,17 @@ class LionsMainWindow(QMainWindow):
         dlg.show()
 
     def on_view_fields(self):
-        """Open the field viewer on the maps named in the data file."""
+        """Open the field viewer on the map files named in the form."""
         ficin = self.input_panel.ficin_edit.text()
         work_dir = os.path.dirname(os.path.abspath(ficin)) if ficin else '.'
         swap = self.input_panel.repswap_combo.currentText()
 
-        ficb, ficv1, ficv2 = '', '', ''
-        if ficin and os.path.exists(ficin):
-            try:
-                from ..io import FortranFile
-                with open(ficin, 'r') as f:
-                    ff = FortranFile(f)
-                    ff.readline()                    # title
-                    ff.readline()                    # n
-                    ff.readline()                    # r0 nr
-                    ff.readline()                    # physical parameters
-                    ff.readline()                    # ncoh
-                    ff.readline()                    # coh
-                    ff.readline()                    # nbrpie
-                    ff.readline()                    # ndef
-                    ff.readline()                    # initial positions
-                    ff.readline()                    # rex etc
-                    nbrfam_line = ff.readline()       # nbrfam
-                    nbrfam = int(nbrfam_line.split()[0])
-                    for _ in range(nbrfam):
-                        ff.readline()                # family
-                    ff.readline()                    # ncoh2 (harmonics)
-                    ff.readline()                    # nbdt ifreq
-                    ff.read_tokens(2)                # ficz ficxy
-                    vals = ff.read_tokens(3)         # ficb ficv1 ficv2
-                    ficb_name = vals[0]
-                    ficv1_name = vals[1]
-                    ficv2_name = vals[2]
-                    if ficb_name and ficb_name != 'no':
-                        ficb = os.path.join(work_dir, ficb_name)
-                    if ficv1_name and ficv1_name != 'no':
-                        ficv1 = os.path.join(work_dir, ficv1_name)
-                    if ficv2_name and ficv2_name != 'no':
-                        ficv2 = os.path.join(work_dir, ficv2_name)
-            except Exception:
-                pass
+        def path(edit):
+            name = edit.text().strip()
+            return os.path.join(work_dir, name) if name and name != 'no' else ''
 
+        panel = self.input_panel
+        ficb, ficv1, ficv2 = path(panel.ficb_edit), path(panel.ficv1_edit), path(panel.ficv2_edit)
         dlg = FieldViewerDialog(self, ficb=ficb, ficv1=ficv1, ficv2=ficv2, swap=swap)
         dlg.show()
 

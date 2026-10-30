@@ -19,7 +19,7 @@ Python port of the Fortran 90 code by P. Bertrand (GANIL, 1998-2004, v2 March 20
 
 ```bash
 uv sync                 # numpy, PyQt5, matplotlib, pyqtgraph
-uv sync --extra gl      # + PyOpenGL for the 3D trajectory view
+uv sync --extra gl      # + PyOpenGL, PyQtWebEngine, plotly for the 3D trajectory view
 ```
 
 ## Run
@@ -94,7 +94,9 @@ From a read of the Python port against the Fortran source (2026-10-30).
 6. **Speed.** Per-particle Python loops in `compute_fields`, `compute_bfield` and `fill_bidims`.
 7. **No bounds check on the central grid.** A particle with r < rmax1 outside the pot1 grid gets a negative index: NumPy wraps it to the far end of the array, the Fortran reads outside it. Both give meaningless fields. The pot1 grid must cover r < rmax1.
 8. **Correlation outputs only partly ported.** With `iflcor != 0`, the Fortran also writes the sigma and grid matrices, the window-filtered matrices (two extra prompts at the end) and the inflector output to `ficmat`, and the dc matrices to `ficdc`. The Python opens these files and leaves them empty.
-9. **Untested paths.** Multiple families, the vertical sorter, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
+9. **`6d` bunch differs from the Fortran.** The Fortran adds the vertical offsets (dz, dpz) of the sampled bunch only when `espace = '3d'` (`lions_2.0_ep.f90` line 498). The Python adds them for `3d` and `6d`. The CIME example deck uses `6d`: the Fortran keeps all particles at z0, the Python spreads them vertically. Which behaviour is intended is open.
+10. **Correlations wrong for families after the first, in both codes.** The orbit radius uses `mass_c[k]` (Fortran `am0c(k)`), the particle array indexed by the family number instead of the family's first particle.
+11. **Untested paths.** Multiple families, the vertical sorter, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
 
 ## Tests
 

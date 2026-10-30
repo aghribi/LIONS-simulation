@@ -11,6 +11,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
+from ..constants import AMU, C_LIGHT, ELECTRON_MASS_U, MEV
+
 
 class CollapsibleSection(QWidget):
     """Collapsible section with a clickable title."""
@@ -722,25 +724,15 @@ class InputFormPanel(QWidget):
             self.ficpie_edit.setText(path)
 
     def _compute_betagamma(self):
-        """Total beta*gamma = sqrt(gamma^2 - 1) from amat, qn, w0mev, or 0.0 on failure.
-
-        Same formula as lions.io.load().
-        """
-        try:
-            amat = self.amat_spin.value()
-            qn = self.qn_spin.value()
-            w0mev = self.w0mev_spin.value()
-            if amat <= 0 or w0mev <= 0:
-                return 0.0
-            clum = 299792458.0
-            am0 = 1.6605402e-27 * (amat - 0.0005486 * qn)
-            am0c2 = am0 * clum ** 2
-            w0_j = w0mev * 1.60217733e-13 * amat
-            gamma = 1.0 + w0_j / am0c2
-            bg = math.sqrt(gamma ** 2 - 1.0)
-            return bg
-        except Exception:
+        """Total beta*gamma of family 1 from the form, as lions.io.load computes it; 0.0 if undefined."""
+        amat = self.amat_spin.value()
+        mass_number = self.a_mass_spin.value()
+        w0mev = self.w0mev_spin.value()
+        if amat <= 0 or w0mev <= 0:
             return 0.0
+        rest_energy = AMU * (amat - ELECTRON_MASS_U * self.qn_spin.value()) * C_LIGHT ** 2
+        gamma = 1.0 + w0mev * MEV * mass_number / rest_energy
+        return math.sqrt(gamma ** 2 - 1.0)
 
     def _load_sigma_diag(self, ficsig, data_path):
         """Load the 6 diagonal values of a sigma file into the spinboxes.

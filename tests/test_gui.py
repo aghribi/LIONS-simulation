@@ -83,3 +83,17 @@ def test_field_viewer_plots_engine_readers(app, workdir, ntheta, theta_max):
         dialog.field_combo.setCurrentIndex(index)
         dialog._replot()
     dialog.close()
+
+
+def test_field_viewer_opens_on_deck_maps(app):
+    from lions.gui.app import LionsMainWindow
+    from lions.gui.field_viewer import FieldViewerDialog
+    window = LionsMainWindow()
+    window.input_panel.load_data_file(str(EXAMPLE))
+    window.input_panel.ficin_edit.setText(str(EXAMPLE))
+    window.on_view_fields()
+    dialog = window.findChildren(FieldViewerDialog)[-1]
+    names = [Path(e.text()).name for e in (dialog.ficb_edit, dialog.ficv1_edit, dialog.ficv2_edit)]
+    assert names == ['cime700rec.1804.pbob1.lio.dat', 'pot3d.impair.30pilbleu30.620.dat', 'newgap612.dat']
+    dialog.close()
+    window.close()
