@@ -11,9 +11,9 @@ import re
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-GUIDE_DIR = os.path.join(SCRIPT_DIR, 'docs', 'guide')
-PDF_FILE = os.path.join(SCRIPT_DIR, 'docs', '_build', 'pdf', 'LIONS.pdf')
+DOCS_DIR = os.path.dirname(os.path.abspath(__file__))
+GUIDE_DIR = os.path.join(DOCS_DIR, 'guide')
+PDF_FILE = os.path.join(DOCS_DIR, '_build', 'pdf', 'LIONS.pdf')
 TITLE = 'LIONS technical guide'
 
 

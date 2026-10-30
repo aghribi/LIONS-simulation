@@ -86,7 +86,8 @@ The GUI always writes `b_factor`.
 | `src/lions/gui/` | Main window, parameter form, worker thread, plots, field and bidim viewers |
 | `fortran/` | Fortran reference. `lions_2.0_ep_windows.f90` reads the central potential and writes saved bunches as big-endian |
 | `examples/` | CIME decks. Their maps and sigma file are not in the repository |
-| `generate_pdf.py` | PDF of the guide pages `docs/guide/*.md` (needs `fpdf2`) |
+| `docs/` | Sphinx sources, guide pages, `generate_pdf.py` (PDF of the guide) |
+| `scripts/lions-gui.bat` | Windows launcher for `uv run lions-gui` |
 
 ## Units
 
@@ -136,7 +137,7 @@ uv run sphinx-build -b html docs docs/_build/html
 PDF of the guide, written to `docs/_build/pdf/LIONS.pdf`:
 
 ```bash
-uv run --with fpdf2 python generate_pdf.py
+uv run --with fpdf2 python docs/generate_pdf.py
 ```
 
 ## Credits

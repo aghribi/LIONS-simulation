@@ -4,7 +4,7 @@
 uv run lions-gui
 ```
 
-On Windows, `lions.bat` runs the same command from the repository folder.
+On Windows, `scripts/lions-gui.bat` runs the same command from the repository folder.
 
 ## Modules
 
