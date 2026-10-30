@@ -20,44 +20,44 @@ Each field fills the `State` attribute given in the tables below.
 
 | Line | Fields | Units | State attribute | Condition | Example |
 |---|---|---|---|---|---|
-| 1 | `corps` | text | `title` | | `"don.forw.H3 i700 posbmax "` |
-| 2 | `npaspt` | - | `steps_per_turn` | | `1080` |
-| 3 | `r1th ntours` | m, - | `design_r_final`, `design_turns` | | `1.50d0 250` |
-| 4 | `fhf pothf teta1 harm dbsb` | Hz, V, deg, -, - | `rf_frequency`, (unused), `dee_half_angle`, `harmonic`, `db_over_b` | | `14400000.d0 -51890.d0 20.d0 3.d0 +1.0d-4` |
-| 5 | `dphid dphig` | deg | `phase_right`, `phase_left` | | `0 0` |
-| 6 | `pothfd pothfg` | V | `v_dee_right`, `v_dee_left` (sign reversed) | | `51890.d0 51890.d0` |
-| 7 | `ncoh(1)` | - | `harmonic_n_coef[0]` | | `0` |
-| 7b | `coh(1..ncoh(1), 1)` | see below | `harmonic_coef[:, 0]` | `ncoh(1) != 0` | |
-| 7c | `phihar(1)` | deg | `harmonic_phase[0]` (kept in deg) | `ncoh(1) != 0` | |
-| 8 | `ncoh(2)` | - | `harmonic_n_coef[1]` | | `0` |
-| 8b | `coh(1..ncoh(2), 2)` | see below | `harmonic_coef[:, 1]` | `ncoh(2) != 0` | |
-| 8c | `phihar(2)` | deg | `harmonic_phase[1]` (kept in deg) | `ncoh(2) != 0` | |
-| 8d | `yomega` | m | `gap_offset` | `teta1 < 0` | `0.01d0` |
-| 9 | `zmin zmax rmax1` | m | `zmin`, `zmax`, `central_rmax` | | `-.5d0 .5d0 .164d0` |
-| 10 | `rex tet1ex tet2ex eex` | -, -, -, - | `extraction`, `cut_bunch`, `grids_on`, `grid_start` | | `-1. -1. -1. -1.` |
-| 10b | `ndf` | - | `n_deflectors` | `rex < 0` | `1` |
+| 1 | `corps` | text | `run.title` | | `"don.forw.H3 i700 posbmax "` |
+| 2 | `npaspt` | - | `run.steps_per_turn` | | `1080` |
+| 3 | `r1th ntours` | m, - | `run.design_r_final`, `run.design_turns` | | `1.50d0 250` |
+| 4 | `fhf pothf teta1 harm dbsb` | Hz, V, deg, -, - | `rf.frequency`, (unused), `rf.dee_half_angle`, `rf.harmonic`, `field.db_over_b` | | `14400000.d0 -51890.d0 20.d0 3.d0 +1.0d-4` |
+| 5 | `dphid dphig` | deg | `rf.phase_right`, `rf.phase_left` | | `0 0` |
+| 6 | `pothfd pothfg` | V | `rf.v_right`, `rf.v_left` (sign reversed) | | `51890.d0 51890.d0` |
+| 7 | `ncoh(1)` | - | `field.harmonic_n_coef[0]` | | `0` |
+| 7b | `coh(1..ncoh(1), 1)` | see below | `field.harmonic_coef[:, 0]` | `ncoh(1) != 0` | |
+| 7c | `phihar(1)` | deg | `field.harmonic_phase[0]` (kept in deg) | `ncoh(1) != 0` | |
+| 8 | `ncoh(2)` | - | `field.harmonic_n_coef[1]` | | `0` |
+| 8b | `coh(1..ncoh(2), 2)` | see below | `field.harmonic_coef[:, 1]` | `ncoh(2) != 0` | |
+| 8c | `phihar(2)` | deg | `field.harmonic_phase[1]` (kept in deg) | `ncoh(2) != 0` | |
+| 8d | `yomega` | m | `rf.gap_offset` | `teta1 < 0` | `0.01d0` |
+| 9 | `zmin zmax rmax1` | m | `box.zmin`, `box.zmax`, `central.rmax` | | `-.5d0 .5d0 .164d0` |
+| 10 | `rex tet1ex tet2ex eex` | -, -, -, - | `extraction.mode`, `extraction.cut_bunch`, `extraction.grids_on`, `extraction.grid_start` | | `-1. -1. -1. -1.` |
+| 10b | `ndf` | - | `len(extraction.deflectors)` | `rex < 0` | `1` |
 | 10c | `rdf edf xdfi ydfi xdfo ydfo tetdfi tetdfo` | m, V/m, m, m, m, m, deg, deg | `deflector_*` | `ndf` lines | `1.513 6990000 0 0 0 0 250 267` |
-| 10d | `ndm` | - | `n_dipoles` | `rex < 0` | `0` |
+| 10d | `ndm` | - | `len(extraction.dipoles)` | `rex < 0` | `0` |
 | 10e | `rdm bdm xdm ydm tetdmi tetdmo` | m, T/m, m, m, deg, deg | `dipole_*` | `ndm` lines | |
-| 10f | `ngex` | - | `n_grids` | `rex < 0` and `tet2ex > 0` | `2` |
-| 10g | `tetagex xgex ygex xgexc ygexc` | deg, mm, mm, mm, mm | `grid_angle_deg`, `grid_x`, `grid_y`, `grid_xc`, `grid_yc` (m) | `ngex` lines | |
-| 10h | `ficdebgex` | text | `grid_file_prefix` | `rex < 0` and `tet2ex > 0` | `grid_ext` |
-| 11 | `nbrfam` | - | `n_families` | | `1` |
-| 11b | `n` | - | `n_particles` | `nbrfam > 1` | |
-| 12 | `nbrion amat a qn` | -, u, -, e | `family_size`, `atomic_mass`, `mass_number`, `charge_state` | once per family, before line 13 | `100 100.36496d0 100.36496d0 22.d0` |
-| 13 | `r0 teta0 z0 pr0 pz0 w0mev phi0` | m, deg, m, mrad, mrad, MeV/u, deg | `r0`, `theta0`, `z0`, `pr0`, `pz0`, `w0`, `phi0_deg` | once per family | `0.0331618 266.8973517 0.d0 426.2811142 0.d0 5.6650d-3 -250.00d0` |
-| 14 | `iflcor` | - | `correlations` | | `1` |
-| 14b | `ficsig` | text | `sigma_file` | `iflcor != 0` | `sigma6d_no_corr.dat` |
-| 14c | `espace` | text | `phase_space` | `iflcor != 0` | `6d` |
-| 14d | `ficcor ficmat ficdc` | text | `correlation_file`, `matrix_file`, `dc_matrix_file` | `iflcor != 0` | `no no no` |
-| 15 | `nbdt ifreq` | - | `n_steps`, `output_every` | | `350000 30` |
-| 16 | `ficz` | text | `z_output_file` | | `exp.for.z.ref_phi10_mars_2017` |
-| 17 | `ficxy` | text | `xy_output_file` | | `exp.for.ref_phi10_mars_2017` |
-| 18 | `ficb` | text | `bfield_file` | | `'cime700rec.1804.pbob1.lio.dat'` |
-| 19 | `ficv1` | text | `central_potential_file` | | `'pot3d.impair.30pilbleu30.620.dat'` |
-| 20 | `ficv2` | text | `outer_potential_file` | | `'newgap612.dat'` |
-| 21 | `b_factor` | T | `b_factor` | optional | `1.56d0` |
-| 22 | `ficloa ficsto` | text | `bunch_load_file`, `bunch_save_file` | optional, default `no no` | `no bunch.bin` |
+| 10f | `ngex` | - | `len(extraction.grids)` | `rex < 0` and `tet2ex > 0` | `2` |
+| 10g | `tetagex xgex ygex xgexc ygexc` | deg, mm, mm, mm, mm | `extraction.grids[k].angle_deg`, `extraction.grids[k].x`, `extraction.grids[k].y`, `extraction.grids[k].xc`, `extraction.grids[k].yc` (m) | `ngex` lines | |
+| 10h | `ficdebgex` | text | `extraction.grid_file_prefix` | `rex < 0` and `tet2ex > 0` | `grid_ext` |
+| 11 | `nbrfam` | - | `len(bunch.families)` | | `1` |
+| 11b | `n` | - | `bunch.n_particles` | `nbrfam > 1` | |
+| 12 | `nbrion amat a qn` | -, u, -, e | `bunch.families[k].size`, `bunch.families[k].atomic_mass`, `bunch.families[k].mass_number`, `bunch.families[k].charge_state` | once per family, before line 13 | `100 100.36496d0 100.36496d0 22.d0` |
+| 13 | `r0 teta0 z0 pr0 pz0 w0mev phi0` | m, deg, m, mrad, mrad, MeV/u, deg | `bunch.families[k].r0`, `bunch.families[k].theta0`, `bunch.families[k].z0`, `bunch.families[k].pr0`, `bunch.families[k].pz0`, `bunch.families[k].w0`, `bunch.families[k].phi0_deg` | once per family | `0.0331618 266.8973517 0.d0 426.2811142 0.d0 5.6650d-3 -250.00d0` |
+| 14 | `iflcor` | - | `bunch.correlations` | | `1` |
+| 14b | `ficsig` | text | `files.sigma` | `iflcor != 0` | `sigma6d_no_corr.dat` |
+| 14c | `espace` | text | `bunch.phase_space` | `iflcor != 0` | `6d` |
+| 14d | `ficcor ficmat ficdc` | text | `files.correlation`, `files.matrix`, `files.dc_matrix` | `iflcor != 0` | `no no no` |
+| 15 | `nbdt ifreq` | - | `run.n_steps`, `run.output_every` | | `350000 30` |
+| 16 | `ficz` | text | `files.z_output` | | `exp.for.z.ref_phi10_mars_2017` |
+| 17 | `ficxy` | text | `files.xy_output` | | `exp.for.ref_phi10_mars_2017` |
+| 18 | `ficb` | text | `files.bfield` | | `'cime700rec.1804.pbob1.lio.dat'` |
+| 19 | `ficv1` | text | `files.central_potential` | | `'pot3d.impair.30pilbleu30.620.dat'` |
+| 20 | `ficv2` | text | `files.outer_potential` | | `'newgap612.dat'` |
+| 21 | `b_factor` | T | `field.b_factor` | optional | `1.56d0` |
+| 22 | `ficloa ficsto` | text | `files.bunch_load`, `files.bunch_save` | optional, default `no no` | `no bunch.bin` |
 
 Lines 12 and 13 repeat for each family, in the order 12, 13, 12, 13, ...
 Lines 14b and 14c are read as whole lines: quotes are kept as part of the name.
@@ -274,23 +274,23 @@ Any other keyword stops the program.
 
 | # | Answer | Units | State attribute | Condition |
 |---|---|---|---|---|
-| 1 | byte swap of the central potential, `y` or `n` | | `swap_bytes` | |
-| 2 | input deck path | | `deck_file` | |
+| 1 | byte swap of the central potential, `y` or `n` | | `run.swap_bytes` | |
+| 2 | input deck path | | `run.deck_file` | |
 | 3 | `xmin1 xmax1 ymin1 ymax1 nx1 ny1` | m, -, - | `central_*` | `ficv1 = no` |
-| 4 | `rmin_ver rmax_ver teta1_ver teta2_ver` | m, m, deg, deg | `sorter_rmin`, `sorter_rmax`, `sorter_theta1`, `sorter_theta2` | |
-| 5 | `pot_ver h_ver phi_ver anuz coupnuz dpotspot` | V, m, deg, -, m, - | `sorter_voltage`, `sorter_gap`, `sorter_phase`, `sorter_nuz`, `nuz_z_cut`, `sorter_dv` | |
-| 6 | first bidim number, `0` for none | | `bidim_first` | |
-| 7 | bidim period (steps) | | `bidim_every` | bidims on |
-| 8 | `c` (orbit centres) or `b` (barycentres) | | `centre_mode` | bidims on |
+| 4 | `rmin_ver rmax_ver teta1_ver teta2_ver` | m, m, deg, deg | `sorter.rmin`, `sorter.rmax`, `sorter.theta1`, `sorter.theta2` | |
+| 5 | `pot_ver h_ver phi_ver anuz coupnuz dpotspot` | V, m, deg, -, m, - | `sorter.voltage`, `sorter.gap`, `sorter.phase`, `sorter.nuz`, `sorter.nuz_z_cut`, `sorter.dv` | |
+| 6 | first bidim number, `0` for none | | `bidims.first` | |
+| 7 | bidim period (steps) | | `bidims.every` | bidims on |
+| 8 | `c` (orbit centres) or `b` (barycentres) | | `bidims.centre_mode` | bidims on |
 | 9 | bidim box `xmin xmax ymin ymax` | m | `bidim_ax*`, `bidim_ay*` | bidims on |
 | 10 | `dphi_max dw/w_max` | deg, - | | bidims on, n > 1 |
 | 11 | `dr_max dpr/p0_max` | mm, mrad | | bidims on, n > 1 |
 | 12 | `dz_max dpz/p0_max` | mm, mrad | | bidims on, n > 1 |
-| 13 | first step stored in the bidims | | `bidim_start_step` | bidims on, n > 1 |
+| 13 | first step stored in the bidims | | `bidims.start_step` | bidims on, n > 1 |
 | 14 | barycentre window `xmin xmax ymin ymax` | m | | bidims on |
 | 15 | marker file, `no` for none | | | bidims on |
-| 16 | last step with traps active | | `trap_last_step` | traps defined |
-| 17 | `0`: trapped particles stay; `1`: they follow particle 0 | | `trapped_follow` | traps defined |
+| 16 | last step with traps active | | `traps.last_step` | traps defined |
+| 17 | `0`: trapped particles stay; `1`: they follow particle 0 | | `traps.follow` | traps defined |
 | 18 | write the list of trapped particles, `o` or `n` | | | after the run, traps defined |
 | 19 | file name for the list | | | answer 18 is `o` |
 

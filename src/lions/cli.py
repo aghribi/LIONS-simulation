@@ -33,16 +33,16 @@ def set_vertical_sorter(d, rmin=1000.0, rmax=2000.0, theta1=0.0, theta2=0.0,
     gap = 0: no vertical sorting. Prompt order of the Fortran: rmin rmax theta1 theta2,
     then voltage gap phase nuz nuz_z_cut dv (pot_ver h_ver phi_ver anuz coupnuz dpotspot).
     """
-    d.sorter_rmin = rmin
-    d.sorter_rmax = rmax
-    d.sorter_theta1 = theta1 * np.pi / 180.0
-    d.sorter_theta2 = theta2 * np.pi / 180.0
-    d.sorter_voltage = voltage
-    d.sorter_gap = gap
-    d.sorter_phase = phase * np.pi / 180.0
-    d.sorter_nuz = nuz
-    d.nuz_z_cut = nuz_z_cut
-    d.sorter_dv = dv
+    d.sorter.rmin = rmin
+    d.sorter.rmax = rmax
+    d.sorter.theta1 = theta1 * np.pi / 180.0
+    d.sorter.theta2 = theta2 * np.pi / 180.0
+    d.sorter.voltage = voltage
+    d.sorter.gap = gap
+    d.sorter.phase = phase * np.pi / 180.0
+    d.sorter.nuz = nuz
+    d.sorter.nuz_z_cut = nuz_z_cut
+    d.sorter.dv = dv
 
 
 def read_vertical_sorter(d):
@@ -64,30 +64,30 @@ def track(d, bidim=None, on_step=None):
 
     on_step(d) is called after each step; tracking stops if it returns False.
     """
-    d.step = 0
-    check_box(d)
+    d.run.step = 0
+    check_box(d.bunch, d.field, d.box)
     compute_fields(d)
     write_outputs(d)
     try:
         if on_step is None or on_step(d) is not False:
-            for step in range(1, d.n_steps + 1):
-                d.step = step
-                apply_traps(d)
-                check_box(d)
+            for step in range(1, d.run.n_steps + 1):
+                d.run.step = step
+                apply_traps(d.bunch, d.box, d.traps, d.run)
+                check_box(d.bunch, d.field, d.box)
                 compute_fields(d)
-                boris_push(d)
-                d.t = step * d.dt + d.t0
+                boris_push(d.bunch, d.run, d.traps)
+                d.run.t = step * d.run.dt + d.run.t0
                 write_outputs(d)
-                if d.bidim_first != 0 and (step % d.bidim_every == 0 or step == 1):
+                if d.bidims.first != 0 and (step % d.bidims.every == 0 or step == 1):
                     fill_bidims(d, bidim)
                 if on_step is not None and on_step(d) is False:
                     break
     finally:
-        if d.bidim_first != 0:
+        if d.bidims.first != 0:
             bidim.close()
-        for f in d.outputs.values():
+        for f in d.outputs.open.values():
             f.close()
-        d.outputs.clear()
+        d.outputs.open.clear()
 
 
 def run(deck, swap=False, vertical=None, on_step=None):
@@ -99,7 +99,7 @@ def run(deck, swap=False, vertical=None, on_step=None):
     - on_step: see track().
     """
     d = State()
-    d.swap_bytes = 'y' if swap else 'n'
+    d.run.swap_bytes = 'y' if swap else 'n'
     load(d, deck)
     set_vertical_sorter(d, **(vertical or {}))
     setup_bidims(d, None, numbid=0)
@@ -107,10 +107,10 @@ def run(deck, swap=False, vertical=None, on_step=None):
     return d
 
 
-def write_trapped(d):
+def write_trapped(bunch, traps):
     """Offer to write the indices of the trapped particles."""
-    if d.n_traps != 0:
-        n_free = np.count_nonzero(d.alive)
+    if len(traps.circles) != 0:
+        n_free = np.count_nonzero(bunch.alive)
         print(f'particles not trapped: {n_free}')
         print("write the trapped particle numbers to a file? ('o' for yes, 'n' for no)")
         answer = input().strip()
@@ -119,8 +119,8 @@ def write_trapped(d):
             path = input().strip()
             with open(path, 'w') as f:
                 n_trapped = 0
-                for k in range(d.n_particles):
-                    if not d.alive[k]:
+                for k in range(bunch.n_particles):
+                    if not bunch.alive[k]:
                         n_trapped += 1
                         f.write(f' {n_trapped:5d} {k+1:5d}\n')
 
@@ -129,10 +129,10 @@ def main():
     """Interactive LIONS program."""
     banner()
     d = State()
-    d.swap_bytes = input().strip()
+    d.run.swap_bytes = input().strip()
     load(d, prompt('input deck file:'))
     read_vertical_sorter(d)
     bidim = BidimWriter()
     setup_bidims(d, bidim)
     track(d, bidim)
-    write_trapped(d)
+    write_trapped(d.bunch, d.traps)

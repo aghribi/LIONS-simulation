@@ -38,15 +38,18 @@ printf 'n\ndon.120.ref_phi10_mars_2017\n1000 2000 0 0\n0 0 0 0 0 0\n0\n' | uv ru
 ```
 
 Python, no prompt, no bidims. `run` returns the final `State`; output files named in the deck are written as usual.
+The state is grouped in components (`run`, `rf`, `field`, `bunch`, `extraction`, ...), see `docs/glossary.md`.
 
 ```python
 import lions
 
 d = lions.run('don.120.ref_phi10_mars_2017', swap=False)
-d.x, d.y, d.z, d.px, d.py, d.pz, d.alive   # per particle, SI, p = beta gamma
+b = d.bunch
+b.x, b.y, b.z, b.px, b.py, b.pz, b.alive   # per particle, SI, p = beta gamma
+d.rf.v_right, d.field.bz, d.extraction.deflectors   # other components
 
 # on_step is called after every step; returning False stops the run
-d = lions.run('don.120.ref_phi10_mars_2017', on_step=lambda d: d.step < 1000)
+d = lions.run('don.120.ref_phi10_mars_2017', on_step=lambda d: d.run.step < 1000)
 ```
 
 Decks as data: `read_deck` returns a `Deck` dataclass (file units, English names), `write_deck` writes one that the Fortran also reads. `run` and `load` take a `Deck` or a path.
@@ -72,7 +75,7 @@ The GUI always writes `b_factor`.
 
 | Path | Content |
 |---|---|
-| `src/lions/state.py` | `State`: all data of a run |
+| `src/lions/state.py` | `State` and its components (`Run`, `RF`, `FieldMap`, `Region`, `Bunch`, element lists, ...) |
 | `src/lions/deck.py` | `Deck` dataclass, `read_deck`, `write_deck` (engine and GUI) |
 | `src/lions/io.py` | `load`: State from a deck; field map and potential readers |
 | `src/lions/fortran_text.py` | Fortran list-directed text reading |

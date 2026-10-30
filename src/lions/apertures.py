@@ -5,100 +5,100 @@ import numpy as np
 
 
 
-def check_box(d):
+def check_box(bunch, field, box):
     """Mask of live particles inside the field map and the z limits."""
-    d.r = np.sqrt(d.x * d.x + d.y * d.y)
-    d.in_box = ((d.r > d.map_rmin) & (d.r < (d.map_rmax - 0.02)) &
-             (d.z > d.zmin) & (d.z < d.zmax))
-    d.in_box = d.in_box & d.alive
-    d.n_in_box = np.count_nonzero(d.in_box)
+    bunch.r = np.sqrt(bunch.x * bunch.x + bunch.y * bunch.y)
+    bunch.in_box = ((bunch.r > field.rmin) & (bunch.r < (field.rmax - 0.02)) &
+             (bunch.z > box.zmin) & (bunch.z < box.zmax))
+    bunch.in_box = bunch.in_box & bunch.alive
+    bunch.n_in_box = np.count_nonzero(bunch.in_box)
 
 
-def check_central(d):
+def check_central(bunch, central):
     """Mask of particles in the central region."""
-    d.in_central = d.in_box & (d.r < d.central_rmax) & (np.abs(d.y) < (d.central_ymax - d.central_dy))
-    d.n_central = np.count_nonzero(d.in_central)
+    bunch.in_central = bunch.in_box & (bunch.r < central.rmax) & (np.abs(bunch.y) < (central.ymax - central.dy))
+    bunch.n_central = np.count_nonzero(bunch.in_central)
 
 
-def check_outer(d, vecx, vecy):
+def check_outer(bunch, outer, vecx, vecy):
     """Mask of particles in the outer region (vecx, vecy: gap frame)."""
-    d.in_outer = ((vecx > d.outer_xmin) & (vecx < d.outer_xmax) &
-                (vecy > d.outer_ymin) & (vecy < d.outer_ymax) &
-                d.in_box & ~d.in_central)
-    d.n_outer = np.count_nonzero(d.in_outer)
+    bunch.in_outer = ((vecx > outer.xmin) & (vecx < outer.xmax) &
+                (vecy > outer.ymin) & (vecy < outer.ymax) &
+                bunch.in_box & ~bunch.in_central)
+    bunch.n_outer = np.count_nonzero(bunch.in_outer)
 
 
-def check_deflector(d, i):
+def check_deflector(bunch, extraction, run, i):
     """Mask of particles inside electrostatic deflector i (0-based)."""
-    cond_in = (((d.x - d.deflector_in_x[i]) * d.deflector_in_uy[i] - (d.y - d.deflector_in_y[i]) * d.deflector_in_ux[i]) <= 0.0)
-    cond_out = (((d.x - d.deflector_out_x[i]) * d.deflector_out_uy[i] - (d.y - d.deflector_out_y[i]) * d.deflector_out_ux[i]) >= 0.0)
+    cond_in = (((bunch.x - extraction.deflectors[i].in_x) * extraction.deflectors[i].in_uy - (bunch.y - extraction.deflectors[i].in_y) * extraction.deflectors[i].in_ux) <= 0.0)
+    cond_out = (((bunch.x - extraction.deflectors[i].out_x) * extraction.deflectors[i].out_uy - (bunch.y - extraction.deflectors[i].out_y) * extraction.deflectors[i].out_ux) >= 0.0)
 
     if i > 0:
-        d.in_element = d.extracted & cond_in & cond_out & d.alive
-        d.n_in_element = np.count_nonzero(d.in_element)
+        bunch.in_element = bunch.extracted & cond_in & cond_out & bunch.alive
+        bunch.n_in_element = np.count_nonzero(bunch.in_element)
         return
 
-    if d.extraction_start_step == 0:
-        d.in_element = (d.r > d.deflector_r[i]) & cond_in & cond_out
-        d.in_element = d.in_element | (d.extracted & cond_in & cond_out)
-        d.extracted = d.extracted | d.in_element
+    if extraction.start_step == 0:
+        bunch.in_element = (bunch.r > extraction.deflectors[i].r) & cond_in & cond_out
+        bunch.in_element = bunch.in_element | (bunch.extracted & cond_in & cond_out)
+        bunch.extracted = bunch.extracted | bunch.in_element
     else:
-        d.in_element = (d.step >= d.extraction_start_step) & cond_in & cond_out
-        d.in_element = d.in_element | (d.extracted & cond_in & cond_out)
-        d.extracted = d.extracted | d.in_element
+        bunch.in_element = (run.step >= extraction.start_step) & cond_in & cond_out
+        bunch.in_element = bunch.in_element | (bunch.extracted & cond_in & cond_out)
+        bunch.extracted = bunch.extracted | bunch.in_element
 
-    d.extracted = d.extracted & d.alive
-    d.in_element = d.in_element & d.alive
-    d.n_in_element = np.count_nonzero(d.in_element)
+    bunch.extracted = bunch.extracted & bunch.alive
+    bunch.in_element = bunch.in_element & bunch.alive
+    bunch.n_in_element = np.count_nonzero(bunch.in_element)
 
 
-def check_dipole(d, i):
+def check_dipole(bunch, extraction, i):
     """Mask of particles inside magnetic dipole i (0-based)."""
-    cond_in = (((d.x - d.dipole_x[i]) * d.dipole_in_uy[i] - (d.y - d.dipole_y[i]) * d.dipole_in_ux[i]) <= 0.0)
-    cond_out = (((d.x - d.dipole_x[i]) * d.dipole_out_uy[i] - (d.y - d.dipole_y[i]) * d.dipole_out_ux[i]) >= 0.0)
-    d.in_element = d.extracted & cond_in & cond_out & d.alive
-    d.n_in_element = np.count_nonzero(d.in_element)
+    cond_in = (((bunch.x - extraction.dipoles[i].x) * extraction.dipoles[i].in_uy - (bunch.y - extraction.dipoles[i].y) * extraction.dipoles[i].in_ux) <= 0.0)
+    cond_out = (((bunch.x - extraction.dipoles[i].x) * extraction.dipoles[i].out_uy - (bunch.y - extraction.dipoles[i].y) * extraction.dipoles[i].out_ux) >= 0.0)
+    bunch.in_element = bunch.extracted & cond_in & cond_out & bunch.alive
+    bunch.n_in_element = np.count_nonzero(bunch.in_element)
 
 
-def check_grid(d, i):
+def check_grid(bunch, extraction, run, i):
     """Mask of particles crossing extraction grid i (0-based)."""
-    cond_cross = (((d.x - d.grid_x[i]) * d.grid_uy[i] -
-                   (d.y - d.grid_y[i]) * d.grid_ux[i]) <= 0.0)
+    cond_cross = (((bunch.x - extraction.grids[i].x) * extraction.grids[i].uy -
+                   (bunch.y - extraction.grids[i].y) * extraction.grids[i].ux) <= 0.0)
 
-    if d.n_deflectors == 0 and d.n_dipoles == 0 and d.n_grids == 1:
-        if d.step < d.extraction_start_step:
-            d.crossed_grid[:] = False
+    if len(extraction.deflectors) == 0 and len(extraction.dipoles) == 0 and len(extraction.grids) == 1:
+        if run.step < extraction.start_step:
+            bunch.crossed_grid[:] = False
             return
-        d.crossed_grid = (d.grid_reached == 0) & d.alive & cond_cross
-        reset_mask = (d.grid_reached == 1) & (
-            ((d.x - d.grid_x[i]) * d.grid_uy[i] -
-             (d.y - d.grid_y[i]) * d.grid_ux[i]) > 0.0)
-        d.grid_reached[reset_mask] = 0
+        bunch.crossed_grid = (bunch.grid_reached == 0) & bunch.alive & cond_cross
+        reset_mask = (bunch.grid_reached == 1) & (
+            ((bunch.x - extraction.grids[i].x) * extraction.grids[i].uy -
+             (bunch.y - extraction.grids[i].y) * extraction.grids[i].ux) > 0.0)
+        bunch.grid_reached[reset_mask] = 0
         return
 
-    d.crossed_grid = d.extracted & d.alive & (d.grid_reached == i) & cond_cross
+    bunch.crossed_grid = bunch.extracted & bunch.alive & (bunch.grid_reached == i) & cond_cross
 
 
-def apply_traps(d):
+def apply_traps(bunch, box, traps, run):
     """Remove particles outside the z limits or inside a trap circle."""
-    if d.n_traps == 0:
+    if len(traps.circles) == 0:
         return
-    mask_z = (d.z < d.zmin) | (d.z > d.zmax)
-    d.alive[mask_z] = False
+    mask_z = (bunch.z < box.zmin) | (bunch.z > box.zmax)
+    bunch.alive[mask_z] = False
 
-    if d.step <= d.trap_last_step:
-        for k in range(d.n_traps):
-            r2 = d.trap_r[k]**2
-            inside = ((d.x - d.trap_x[k])**2 + (d.y - d.trap_y[k])**2) <= r2
-            d.alive[inside] = False
+    if run.step <= traps.last_step:
+        for k in range(len(traps.circles)):
+            r2 = traps.circles[k].r**2
+            inside = ((bunch.x - traps.circles[k].x)**2 + (bunch.y - traps.circles[k].y)**2) <= r2
+            bunch.alive[inside] = False
 
-    d.n_alive = np.count_nonzero(d.alive)
-    if d.trapped_follow == 1:
-        not_ok = ~d.alive
-        d.x[not_ok] = d.x[0]
-        d.y[not_ok] = d.y[0]
-        d.z[not_ok] = d.z[0]
-        d.px[not_ok] = d.px[0]
-        d.py[not_ok] = d.py[0]
-        d.pz[not_ok] = d.pz[0]
-        d.gamma[not_ok] = d.gamma[0]
+    bunch.n_alive = np.count_nonzero(bunch.alive)
+    if traps.follow == 1:
+        not_ok = ~bunch.alive
+        bunch.x[not_ok] = bunch.x[0]
+        bunch.y[not_ok] = bunch.y[0]
+        bunch.z[not_ok] = bunch.z[0]
+        bunch.px[not_ok] = bunch.px[0]
+        bunch.py[not_ok] = bunch.py[0]
+        bunch.pz[not_ok] = bunch.pz[0]
+        bunch.gamma[not_ok] = bunch.gamma[0]

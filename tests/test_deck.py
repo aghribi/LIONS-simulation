@@ -53,7 +53,7 @@ def test_example_values():
     deck = read_deck(EXAMPLES[0])
     assert (deck.steps_per_turn, deck.rf_frequency, deck.harmonic) == (1080, 14.4e6, 3.0)
     assert deck.families[0].size == 100 and deck.families[0].charge_state == 22.0
-    assert [d.r for d in deck.deflectors] == [1.513]
+    assert [e.r for e in deck.deflectors] == [1.513]
     assert deck.bfield_file == 'cime700rec.1804.pbob1.lio.dat'
     assert deck.b_factor is None and deck.bunch_save_file == 'no'
 
@@ -65,4 +65,4 @@ def test_run_from_deck_object(workdir):
     from_file = syn.quiet_run('deck.dat')
     from_object = syn.quiet_run(read_deck('deck.dat'))
     for name in ('x', 'y', 'z', 'px', 'py', 'pz'):
-        np.testing.assert_array_equal(getattr(from_object, name), getattr(from_file, name))
+        np.testing.assert_array_equal(getattr(from_object.bunch, name), getattr(from_file.bunch, name))

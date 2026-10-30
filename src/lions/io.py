@@ -5,7 +5,8 @@ import numpy as np
 
 from .fortran_text import FortranFile, fortran_float, parse_floats
 from .deck import Deck, read_deck
-from .state import CENTRAL_NX, CENTRAL_NY, MAP_NR, MAP_NTHETA, OUTER_NX, OUTER_NY
+from .state import (Bunch, DeflectorElement, DipoleElement, GridElement, IonFamily,
+                    CENTRAL_NX, CENTRAL_NY, MAP_NR, MAP_NTHETA, OUTER_NX, OUTER_NY)
 from .constants import AMU, C_LIGHT, ELECTRON_MASS_U, E_CHARGE, MEV
 from .beam import distribute_bunch
 from .fields import add_harmonics
@@ -137,277 +138,239 @@ def read_outer_potential(path):
 
 def load(d, deck):
     """Set up d from a deck (Deck or path): field maps, potentials, bunch and output files."""
-    d.outputs.clear()
+    d.outputs.open.clear()
     if isinstance(deck, Deck):
-        d.deck_file = ''
+        d.run.deck_file = ''
     else:
-        d.deck_file = str(deck)
+        d.run.deck_file = str(deck)
         deck = read_deck(deck)
 
-    d.title = deck.title
-    d.steps_per_turn = deck.steps_per_turn
-    d.design_r_final = deck.design_r_final
-    d.design_turns = deck.design_turns
-    d.rf_frequency = deck.rf_frequency
-    d.dee_half_angle = deck.dee_half_angle_deg
-    d.harmonic = deck.harmonic
-    d.db_over_b = deck.db_over_b
-    d.phase_right = deck.phase_right_deg * np.pi / 180.0
-    d.phase_left = deck.phase_left_deg * np.pi / 180.0
-    d.v_dee_right = -deck.v_dee_right
-    d.v_dee_left = -deck.v_dee_left
+    run, rf, field, ext = d.run, d.rf, d.field, d.extraction
+    run.title = deck.title
+    run.steps_per_turn = deck.steps_per_turn
+    run.design_r_final = deck.design_r_final
+    run.design_turns = deck.design_turns
+    rf.frequency = deck.rf_frequency
+    rf.harmonic = deck.harmonic
+    rf.phase_right = deck.phase_right_deg * np.pi / 180.0
+    rf.phase_left = deck.phase_left_deg * np.pi / 180.0
+    rf.v_right = -deck.v_dee_right
+    rf.v_left = -deck.v_dee_left
+    field.db_over_b = deck.db_over_b
     for order, h in enumerate((deck.harmonic1, deck.harmonic2)):
-        d.harmonic_n_coef[order] = 0 if h is None else len(h.coefs)
+        field.harmonic_n_coef[order] = 0 if h is None else len(h.coefs)
         if h is not None:
-            d.harmonic_coef[:len(h.coefs), order] = h.coefs
-            d.harmonic_phase[order] = h.phase_deg
-    d.gap_offset = 0.0
+            field.harmonic_coef[:len(h.coefs), order] = h.coefs
+            field.harmonic_phase[order] = h.phase_deg
+    rf.gap_offset = 0.0
     if deck.gap_offset is not None:
         print(f'skewed gap, offset yomega: {deck.gap_offset}')
-        d.gap_offset = deck.gap_offset
+        rf.gap_offset = deck.gap_offset
 
-    d.zmin, d.zmax, d.central_rmax = deck.zmin, deck.zmax, deck.central_rmax
-    d.extraction = deck.extraction
-    d.cut_bunch = deck.cut_bunch
-    d.grids_on = deck.grids_on
-    d.grid_start = deck.grid_start
-    d.n_deflectors = 0
-    d.n_dipoles = 0
+    d.box.zmin, d.box.zmax = deck.zmin, deck.zmax
+    d.central.rmax = deck.central_rmax
+    ext.mode = deck.extraction
+    ext.cut_bunch = deck.cut_bunch
+    ext.grids_on = deck.grids_on
+    ext.grid_start = deck.grid_start
+    ext.deflectors, ext.dipoles, ext.grids = [], [], []
 
-    if d.extraction < 0.0:
-        if d.cut_bunch <= 0.0:
-            d.extraction_start_step = 0
+    if ext.mode < 0.0:
+        if ext.cut_bunch <= 0.0:
+            ext.start_step = 0
             print('extraction: the bunch will be cut')
         else:
-            d.extraction_start_step = int(d.cut_bunch + 0.5)
+            ext.start_step = int(ext.cut_bunch + 0.5)
             print('extraction: the bunch will be kept whole')
-        d.n_deflectors = len(deck.deflectors)
-        for i, e in enumerate(deck.deflectors):
-            d.deflector_r[i] = e.r
-            d.deflector_e[i] = e.e
-            d.deflector_in_x[i], d.deflector_in_y[i] = e.in_x, e.in_y
-            d.deflector_out_x[i], d.deflector_out_y[i] = e.out_x, e.out_y
-            d.deflector_in_angle[i] = e.in_angle_deg * np.pi / 180.0
-            d.deflector_out_angle[i] = e.out_angle_deg * np.pi / 180.0
-            d.deflector_in_ux[i] = np.cos(d.deflector_in_angle[i])
-            d.deflector_in_uy[i] = np.sin(d.deflector_in_angle[i])
-            d.deflector_out_ux[i] = np.cos(d.deflector_out_angle[i])
-            d.deflector_out_uy[i] = np.sin(d.deflector_out_angle[i])
-        d.n_dipoles = len(deck.dipoles)
-        for i, m in enumerate(deck.dipoles):
-            d.dipole_r[i] = m.r
-            d.dipole_gradient[i] = m.gradient
-            d.dipole_x[i], d.dipole_y[i] = m.x, m.y
-            d.dipole_in_angle[i] = m.in_angle_deg * np.pi / 180.0
-            d.dipole_out_angle[i] = m.out_angle_deg * np.pi / 180.0
-            d.dipole_in_ux[i] = np.cos(d.dipole_in_angle[i])
-            d.dipole_in_uy[i] = np.sin(d.dipole_in_angle[i])
-            d.dipole_out_ux[i] = np.cos(d.dipole_out_angle[i])
-            d.dipole_out_uy[i] = np.sin(d.dipole_out_angle[i])
-        if d.grids_on > 0.0:
+        ext.deflectors = [DeflectorElement(e.r, e.e, e.in_x, e.in_y, e.in_angle_deg * np.pi / 180.0,
+                                           e.out_x, e.out_y, e.out_angle_deg * np.pi / 180.0)
+                          for e in deck.deflectors]
+        ext.dipoles = [DipoleElement(m.r, m.gradient, m.x, m.y, m.in_angle_deg * np.pi / 180.0,
+                                     m.out_angle_deg * np.pi / 180.0) for m in deck.dipoles]
+        if ext.grids_on > 0.0:
             print('extraction grids')
-            d.grid_start_step = int(d.grid_start + 0.5)
-            d.n_grids = len(deck.grids)
-            for kg, g in enumerate(deck.grids):
-                d.grid_angle_deg[kg] = g.angle_deg
-                d.grid_x[kg] = g.x_mm / 1000.0
-                d.grid_y[kg] = g.y_mm / 1000.0
-                d.grid_xc[kg] = g.xc_mm / 1000.0
-                d.grid_yc[kg] = g.yc_mm / 1000.0
-                d.grid_length[kg] = np.sqrt((d.grid_x[kg] - d.grid_xc[kg])**2 +
-                                            (d.grid_y[kg] - d.grid_yc[kg])**2)
-                d.grid_ux[kg] = (d.grid_x[kg] - d.grid_xc[kg]) / d.grid_length[kg]
-                d.grid_uy[kg] = (d.grid_y[kg] - d.grid_yc[kg]) / d.grid_length[kg]
-            d.grid_file_prefix = deck.grid_file_prefix
-            for kg in range(d.n_grids):
-                d.grid_files[kg] = d.grid_file_prefix + '.' + str(kg + 1)
-                fgrid = open(d.grid_files[kg], 'w')
-                d.outputs[f'grid{kg}'] = fgrid
+            ext.grid_start_step = int(ext.grid_start + 0.5)
+            ext.grid_file_prefix = deck.grid_file_prefix
+            ext.grids = [GridElement(g.angle_deg, g.x_mm / 1000.0, g.y_mm / 1000.0,
+                                     g.xc_mm / 1000.0, g.yc_mm / 1000.0,
+                                     f'{deck.grid_file_prefix}.{kg + 1}')
+                         for kg, g in enumerate(deck.grids)]
+            for kg, grid in enumerate(ext.grids):
+                fgrid = open(grid.file, 'w')
+                d.outputs.open[f'grid{kg}'] = fgrid
                 fgrid.write('theta x y xc yc : \n')
-                fgrid.write(f'{d.grid_angle_deg[kg]} {d.grid_x[kg]} {d.grid_y[kg]}'
-                            f' {d.grid_xc[kg]} {d.grid_yc[kg]}\n')
+                fgrid.write(f'{grid.angle_deg} {grid.x} {grid.y} {grid.xc} {grid.yc}\n')
 
-    d.dt = d.harmonic / d.rf_frequency / d.steps_per_turn
-    d.omega_rf = 2.0 * np.pi * d.rf_frequency
-    d.omega_rev = d.omega_rf / d.harmonic
-    d.c_dt = C_LIGHT * d.dt
-    d.dee_half_angle = d.dee_half_angle * np.pi / 180.0
-    d.cut_bunch = d.cut_bunch * np.pi / 180.0
-    d.grids_on = d.grids_on * np.pi / 180.0
-    harm = int(d.harmonic + 0.5)
-    d.harmonic_sign = 1.0
-    if (harm // 2) * 2 == harm:
-        d.harmonic_sign = -1.0
+    run.dt = rf.harmonic / rf.frequency / run.steps_per_turn
+    rf.omega = 2.0 * np.pi * rf.frequency
+    rf.omega_rev = rf.omega / rf.harmonic
+    run.c_dt = C_LIGHT * run.dt
+    rf.dee_half_angle = deck.dee_half_angle_deg * np.pi / 180.0
+    ext.cut_bunch = ext.cut_bunch * np.pi / 180.0
+    ext.grids_on = ext.grids_on * np.pi / 180.0
+    harm = int(rf.harmonic + 0.5)
+    rf.harmonic_sign = -1.0 if (harm // 2) * 2 == harm else 1.0
 
-    d.n_families = len(deck.families)
-    d.n_particles = deck.total_particles
-    if sum(fam.size for fam in deck.families) != d.n_particles:
-        raise ValueError(f'{d.deck_file}: family sizes add up to '
-                         f'{sum(fam.size for fam in deck.families)}, n = {d.n_particles}')
-    d.allocate()
-    d.extracted[:] = False
-    d.grid_reached[:] = 0
-    d.alive[:] = True
-    d.n_alive = d.n_particles
-    d.n_traps = 0
-    d.trapped_follow = 1
-    d.family_start[0] = 0
-    d.w0_mev_per_u = deck.families[0].w0_mev_per_u
-    for k, fam in enumerate(deck.families):
-        d.family_size[k] = fam.size
-        d.atomic_mass[k] = fam.atomic_mass
-        d.mass_number[k] = fam.mass_number
-        d.charge_state[k] = fam.charge_state
-        d.r0[k] = fam.r0
-        d.z0[k] = fam.z0
-        d.phi0_deg[k] = fam.phi0_deg
-        d.theta0[k] = fam.theta0_deg * (np.pi / 180.0)
-        d.pr0[k] = fam.pr0_mrad * 0.001
-        d.pz0[k] = fam.pz0_mrad * 0.001
-        d.family_start[k + 1] = d.family_start[k] + d.family_size[k]
-        i1 = d.family_start[k]
-        i2 = d.family_start[k] + d.family_size[k]
-        d.x[i1:i2] = d.r0[k] * np.cos(d.theta0[k])
-        d.y[i1:i2] = d.r0[k] * np.sin(d.theta0[k])
-        d.z[i1:i2] = d.z0[k]
-        d.w0[k] = fam.w0_mev_per_u * MEV * d.mass_number[k]
-        ion_mass = AMU * (d.atomic_mass[k] - ELECTRON_MASS_U * d.charge_state[k])
-        d.mass[i1:i2] = ion_mass
-        d.mass_c[i1:i2] = d.mass[i1:i2] * C_LIGHT
-        d.rest_energy[i1:i2] = d.mass[i1:i2] * C_LIGHT**2
-        d.gamma[i1:i2] = 1.0 + d.w0[k] / d.rest_energy[i1:i2]
-        alpha = (np.pi / 2.0 + d.theta0[k]) - d.pr0[k]
-        d.p[i1:i2] = np.sqrt((d.gamma[i1:i2] - 1.0) * (d.gamma[i1:i2] + 1.0))
-        d.px[i1:i2] = d.p[i1:i2] * np.cos(alpha) * np.cos(d.pz0[k])
-        d.py[i1:i2] = d.p[i1:i2] * np.sin(alpha) * np.cos(d.pz0[k])
-        d.pz[i1:i2] = d.p[i1:i2] * np.sin(d.pz0[k])
-        d.charge[i1:i2] = d.charge_state[k] * E_CHARGE
-        d.boris_b_coef[i1:i2] = d.charge[i1:i2] * d.dt / 2.0 / d.mass[i1:i2]
-        d.boris_e_coef[i1:i2] = d.charge[i1:i2] * d.dt / d.mass_c[i1:i2]
+    n_particles = deck.total_particles
+    if sum(fam.size for fam in deck.families) != n_particles:
+        raise ValueError(f'{run.deck_file}: family sizes add up to '
+                         f'{sum(fam.size for fam in deck.families)}, n = {n_particles}')
+    b = d.bunch = Bunch(n_particles)
+    b.alive[:] = True
+    b.n_alive = n_particles
+    d.traps.circles = []
+    d.traps.follow = 1
+    b.w0_mev_per_u = deck.families[0].w0_mev_per_u
+    start = 0
+    for fam in deck.families:
+        f = IonFamily(start=start, size=fam.size, atomic_mass=fam.atomic_mass,
+                      mass_number=fam.mass_number, charge_state=fam.charge_state,
+                      r0=fam.r0, theta0=fam.theta0_deg * (np.pi / 180.0), z0=fam.z0,
+                      pr0=fam.pr0_mrad * 0.001, pz0=fam.pz0_mrad * 0.001, phi0_deg=fam.phi0_deg)
+        f.w0 = fam.w0_mev_per_u * MEV * f.mass_number
+        b.families.append(f)
+        i1, i2 = start, start + fam.size
+        start = i2
+        b.x[i1:i2] = f.r0 * np.cos(f.theta0)
+        b.y[i1:i2] = f.r0 * np.sin(f.theta0)
+        b.z[i1:i2] = f.z0
+        b.mass[i1:i2] = AMU * (f.atomic_mass - ELECTRON_MASS_U * f.charge_state)
+        b.mass_c[i1:i2] = b.mass[i1:i2] * C_LIGHT
+        b.rest_energy[i1:i2] = b.mass[i1:i2] * C_LIGHT**2
+        b.gamma[i1:i2] = 1.0 + f.w0 / b.rest_energy[i1:i2]
+        alpha = (np.pi / 2.0 + f.theta0) - f.pr0
+        b.p[i1:i2] = np.sqrt((b.gamma[i1:i2] - 1.0) * (b.gamma[i1:i2] + 1.0))
+        b.px[i1:i2] = b.p[i1:i2] * np.cos(alpha) * np.cos(f.pz0)
+        b.py[i1:i2] = b.p[i1:i2] * np.sin(alpha) * np.cos(f.pz0)
+        b.pz[i1:i2] = b.p[i1:i2] * np.sin(f.pz0)
+        b.charge[i1:i2] = f.charge_state * E_CHARGE
+        b.boris_b_coef[i1:i2] = b.charge[i1:i2] * run.dt / 2.0 / b.mass[i1:i2]
+        b.boris_e_coef[i1:i2] = b.charge[i1:i2] * run.dt / b.mass_c[i1:i2]
 
-    if d.grids_on > 0.0 and d.n_grids > 0:
-        for kg in range(d.n_grids):
-            f = d.outputs[f'grid{kg}']
-            f.write('particles (n A amat q):\n')
-            f.write(f'{d.n_particles} {d.mass_number[0]} {d.atomic_mass[0]} {d.charge_state[0]}\n')
-            f.write('RF (steps per turn, frequency, harmonic):\n')
-            f.write(f'{d.steps_per_turn} {d.rf_frequency} {d.harmonic}\n')
+    f0 = b.families[0]
+    for kg in range(len(ext.grids)):
+        fgrid = d.outputs.open[f'grid{kg}']
+        fgrid.write('particles (n A amat q):\n')
+        fgrid.write(f'{n_particles} {f0.mass_number} {f0.atomic_mass} {f0.charge_state}\n')
+        fgrid.write('RF (steps per turn, frequency, harmonic):\n')
+        fgrid.write(f'{run.steps_per_turn} {rf.frequency} {rf.harmonic}\n')
 
-    d.correlations = deck.correlations
-    d.sigma_file = "no correlation file"
+    files = d.files
+    b.correlations = deck.correlations
+    files.sigma = "no correlation file"
     sigma_matrices = []
-    if d.correlations != 0:
-        d.sigma_file = deck.sigma_file
-        d.phase_space = deck.phase_space
-        d.correlation_file = deck.correlation_file
-        d.matrix_file = deck.matrix_file
-        d.dc_matrix_file = deck.dc_matrix_file
-        if d.correlation_file != 'no':
-            d.outputs['correlation'] = open(d.correlation_file, 'w')
-            d.outputs['correlation'].write(
+    if b.correlations != 0:
+        files.sigma = deck.sigma_file
+        b.phase_space = deck.phase_space
+        files.correlation = deck.correlation_file
+        files.matrix = deck.matrix_file
+        files.dc_matrix = deck.dc_matrix_file
+        if files.correlation != 'no':
+            d.outputs.open['correlation'] = open(files.correlation, 'w')
+            d.outputs.open['correlation'].write(
                 'turn     r     theta    dr    ds      dphi'
                 '   epsr    dwsw        wmpa     dw          dwdphi'
                 '       dz     epsz\n')
-        if d.matrix_file != 'no':
-            d.outputs['matrix'] = open(d.matrix_file, 'w')
-        if d.dc_matrix_file != 'no':
-            d.outputs['dc_matrix'] = open(d.dc_matrix_file, 'w')
-            d.outputs['dc_matrix'].write(
+        if files.matrix != 'no':
+            d.outputs.open['matrix'] = open(files.matrix, 'w')
+        if files.dc_matrix != 'no':
+            d.outputs.open['dc_matrix'] = open(files.dc_matrix, 'w')
+            d.outputs.open['dc_matrix'].write(
                 'turn     r     theta   drdc  dsdc  dphidc'
                 ' epsrdc  dwswdc        wmpa   dwdc        dwdphidc\n')
         # Sigma matrices are read now, the bunch is built after the field map is loaded
-        with open(d.sigma_file) as fsigma:
-            for k in range(d.n_families):
+        with open(files.sigma) as fsigma:
+            for _ in b.families:
                 sigma_matrices.append(np.array([[fortran_float(v) for v in fsigma.readline().split()[:6]]
                                                 for _ in range(6)]))
 
-    d.t0 = d.phi0_deg[0] * np.pi / 180.0 / d.omega_rf
-    d.t = d.t0
-    d.n_steps = deck.n_steps
-    d.output_every = deck.output_every
-    d.z_output_file = deck.z_output_file
-    d.xy_output_file = deck.xy_output_file
-    d.bfield_file = deck.bfield_file
-    d.central_potential_file = deck.central_potential_file
-    d.outer_potential_file = deck.outer_potential_file
-    d.b_factor = deck.b_factor
-    d.bunch_load_file = deck.bunch_load_file
-    d.bunch_save_file = deck.bunch_save_file
+    run.t0 = f0.phi0_deg * np.pi / 180.0 / rf.omega
+    run.t = run.t0
+    run.n_steps = deck.n_steps
+    run.output_every = deck.output_every
+    files.z_output = deck.z_output_file
+    files.xy_output = deck.xy_output_file
+    files.bfield = deck.bfield_file
+    files.central_potential = deck.central_potential_file
+    files.outer_potential = deck.outer_potential_file
+    field.b_factor = deck.b_factor
+    files.bunch_load = deck.bunch_load_file
+    files.bunch_save = deck.bunch_save_file
 
-    bmap = read_bfield_map(d.bfield_file)
-    d.map_rmin, d.map_rmax = bmap['rmin'], bmap['rmax']
-    d.map_nr, d.map_ntheta = bmap['nr'], bmap['ntheta']
-    d.map_dtheta = bmap['dtheta']
+    bmap = read_bfield_map(d.files.bfield)
+    d.field.rmin, d.field.rmax = bmap['rmin'], bmap['rmax']
+    d.field.nr, d.field.ntheta = bmap['nr'], bmap['ntheta']
+    d.field.dtheta = bmap['dtheta']
     ntheta_all = bmap['ntheta_all']
-    d.bz_map[:] = bmap['bz']
-    d.d2bz_map[:] = bmap['d2bz']
-    d.dbzdx_map[:] = bmap['dbzdx']
-    d.dbzdy_map[:] = bmap['dbzdy']
+    d.field.bz[:] = bmap['bz']
+    d.field.d2bz[:] = bmap['d2bz']
+    d.field.dbzdx[:] = bmap['dbzdx']
+    d.field.dbzdy[:] = bmap['dbzdy']
 
-    if d.harmonic_n_coef[0] != 0 or d.harmonic_n_coef[1] != 0:
+    if d.field.harmonic_n_coef[0] != 0 or d.field.harmonic_n_coef[1] != 0:
         print('field map plus first and/or second harmonic')
-        add_harmonics(d.map_rmin, d.map_rmax, d.map_nr, ntheta_all, d.bz_map, d.d2bz_map,
-             d.dbzdx_map, d.dbzdy_map, d.harmonic_n_coef, d.harmonic_coef, d.harmonic_phase)
+        add_harmonics(d.field.rmin, d.field.rmax, d.field.nr, ntheta_all, d.field.bz, d.field.d2bz,
+             d.field.dbzdx, d.field.dbzdy, d.field.harmonic_n_coef, d.field.harmonic_coef, d.field.harmonic_phase)
 
-    d.map_dr = (d.map_rmax - d.map_rmin) / (d.map_nr - 1.0)
+    d.field.dr = (d.field.rmax - d.field.rmin) / (d.field.nr - 1.0)
 
     # Without b_factor the map is used as read (as in the Fortran).
     # With b_factor it is scaled to max|Bz| = b_factor (T).
-    if d.b_factor is not None:
-        bz_max = np.max(np.abs(d.bz_map[:d.map_nr, :ntheta_all]))
+    if d.field.b_factor is not None:
+        bz_max = np.max(np.abs(d.field.bz[:d.field.nr, :ntheta_all]))
         if bz_max == 0.0:
-            raise ValueError(f'magnetic field map is zero ({d.bfield_file}): b_factor cannot be applied')
-        scale = d.b_factor / bz_max
-        d.bz_map *= scale
-        d.d2bz_map *= scale
-        d.dbzdx_map *= scale
-        d.dbzdy_map *= scale
-        print(f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.b_factor:.6f} T')
+            raise ValueError(f'magnetic field map is zero ({d.files.bfield}): b_factor cannot be applied')
+        scale = d.field.b_factor / bz_max
+        d.field.bz *= scale
+        d.field.d2bz *= scale
+        d.field.dbzdx *= scale
+        d.field.dbzdy *= scale
+        print(f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.field.b_factor:.6f} T')
 
-    d.bz_map *= (1.0 + d.db_over_b)
-    d.d2bz_map *= (1.0 + d.db_over_b)
+    d.field.bz *= (1.0 + d.field.db_over_b)
+    d.field.d2bz *= (1.0 + d.field.db_over_b)
 
-    if d.central_potential_file != 'no':
-        pot = read_central_potential(d.central_potential_file, d.swap_bytes == 'y')
-        d.central_xmin, d.central_xmax = pot['xmin'], pot['xmax']
-        d.central_ymin, d.central_ymax = pot['ymin'], pot['ymax']
+    if d.files.central_potential != 'no':
+        pot = read_central_potential(d.files.central_potential, d.run.swap_bytes == 'y')
+        d.central.xmin, d.central.xmax = pot['xmin'], pot['xmax']
+        d.central.ymin, d.central.ymax = pot['ymin'], pot['ymax']
         nx1, ny1 = pot['nx'], pot['ny']
-        d.central_pot[:nx1, :ny1] = pot['pot']
-        d.central_d2pot[:nx1, :ny1] = pot['d2pot']
+        d.central.pot[:nx1, :ny1] = pot['pot']
+        d.central.d2pot[:nx1, :ny1] = pot['d2pot']
     else:
         print('no central region potential file')
         vals = parse_floats(prompt('central grid: xmin1 xmax1 ymin1 ymax1 nx1 ny1:'))
-        d.central_xmin, d.central_xmax, d.central_ymin, d.central_ymax = vals[:4]
+        d.central.xmin, d.central.xmax, d.central.ymin, d.central.ymax = vals[:4]
         nx1 = int(vals[4])
         ny1 = int(vals[5])
-        d.central_pot[:] = 0.0
-        d.central_d2pot[:] = 0.0
+        d.central.pot[:] = 0.0
+        d.central.d2pot[:] = 0.0
 
-    d.central_dx = (d.central_xmax - d.central_xmin) / (nx1 - 1.0)
-    d.central_dy = (d.central_ymax - d.central_ymin) / (ny1 - 1.0)
+    d.central.dx = (d.central.xmax - d.central.xmin) / (nx1 - 1.0)
+    d.central.dy = (d.central.ymax - d.central.ymin) / (ny1 - 1.0)
 
-    pot = read_outer_potential(d.outer_potential_file)
-    d.outer_xmin, d.outer_xmax = pot['xmin'], pot['xmax']
-    d.outer_ymin, d.outer_ymax = pot['ymin'], pot['ymax']
+    pot = read_outer_potential(d.files.outer_potential)
+    d.outer.xmin, d.outer.xmax = pot['xmin'], pot['xmax']
+    d.outer.ymin, d.outer.ymax = pot['ymin'], pot['ymax']
     nx2, ny2 = pot['nx'], pot['ny']
-    d.outer_pot[:nx2, :ny2] = pot['pot']
-    d.outer_d2pot[:nx2, :ny2] = pot['d2pot']
+    d.outer.pot[:nx2, :ny2] = pot['pot']
+    d.outer.d2pot[:nx2, :ny2] = pot['d2pot']
 
-    d.outer_dx = (d.outer_xmax - d.outer_xmin) / (nx2 - 1.0)
-    d.outer_dy = (d.outer_ymax - d.outer_ymin) / (ny2 - 1.0)
+    d.outer.dx = (d.outer.xmax - d.outer.xmin) / (nx2 - 1.0)
+    d.outer.dy = (d.outer.ymax - d.outer.ymin) / (ny2 - 1.0)
 
     distribute_bunch(d, sigma_matrices)
 
-    r = np.sqrt(d.x[0]**2 + d.y[0]**2)
-    d.theta_deg = np.arccos(d.x[0] / r)
-    if d.y[0] < 0.0:
-        d.theta_deg = 2.0 * np.pi - d.theta_deg
-    d.theta_deg = 180.0 / np.pi * d.theta_deg
-    d.turn = 0
-    if d.steps_per_turn < 0:
-        d.turn = -d.n_steps // d.steps_per_turn
+    r = np.sqrt(d.bunch.x[0]**2 + d.bunch.y[0]**2)
+    d.run.theta_deg = np.arccos(d.bunch.x[0] / r)
+    if d.bunch.y[0] < 0.0:
+        d.run.theta_deg = 2.0 * np.pi - d.run.theta_deg
+    d.run.theta_deg = 180.0 / np.pi * d.run.theta_deg
+    d.run.turn = 0
+    if d.run.steps_per_turn < 0:
+        d.run.turn = -d.run.n_steps // d.run.steps_per_turn
 
-    if d.z_output_file != 'no':
-        d.outputs['z'] = open(d.z_output_file, 'w')
-    if d.xy_output_file != 'no':
-        d.outputs['xy'] = open(d.xy_output_file, 'w')
+    if d.files.z_output != 'no':
+        d.outputs.open['z'] = open(d.files.z_output, 'w')
+    if d.files.xy_output != 'no':
+        d.outputs.open['xy'] = open(d.files.xy_output, 'w')
