@@ -36,15 +36,33 @@ Command line. The engine reads its answers from stdin, in this order: byte swap 
 printf 'n\ndon.120.ref_phi10_mars_2017\n1000 2000 0 0\n0 0 0 0 0 0\n0\n' | uv run python lions.py
 ```
 
+Python, no prompt, no bidims. `run` returns the final state (`LionData`); output files named in the deck are written as usual.
+
+```python
+import lions
+
+d = lions.run('don.120.ref_phi10_mars_2017', swap=False)
+d.x, d.y, d.z, d.px, d.py, d.pz, d.ok   # per particle, SI, p = beta gamma
+
+# on_step is called after every step; returning False stops the run
+d = lions.run('don.120.ref_phi10_mars_2017', on_step=lambda d: d.ite < 1000)
+```
+
+`vertical` takes the keyword arguments of `lions.set_vertical_sorter` (lengths in m, angles in deg); the default is no vertical sorter.
+
 The input deck format is described line by line in section 4 of `DOCUMENTATION_LIONS.md`.
+The deck ends with two optional entries, `[b_factor] [ficloa ficsto]`.
+Without `b_factor`, the magnetic map is used as read, as in the Fortran.
+With it, the map is scaled so that max|Bz| = `b_factor` (T).
+The GUI always writes `b_factor`.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `lions.py` | Engine: deck and map readers, field interpolation (`calcbe`), Boris pusher (`pousse`), losses (`piege`), outputs (`info`), bidims, main loop (`lions`) |
+| `lions.py` | Engine: deck and map readers (`init`), field interpolation (`calcbe`), Boris pusher (`pousse`), losses (`piege`), outputs (`info`), bidims, tracking loop (`track`), scripted run (`run`), interactive program (`lions`) |
 | `lion_m.py` | `LionData`: all state (scalars, per-particle arrays, field maps), port of the Fortran module |
-| `lions_worker.py` | QThread that runs the engine for the GUI, feeds `input()` from the form, captures `print()` |
+| `lions_worker.py` | QThread that runs `lions.track` for the GUI, feeds `input()` from the form, captures `print()` |
 | `lions_gui.py`, `lions_input_form.py` | Main window and parameter form (reads and writes decks) |
 | `lions_plots.py`, `lions_field_viewer.py`, `lions_bidim_viewer.py` | 2D/3D plots, field map viewer, bidim viewer |
 | `lions_2.0_ep.f90`, `lion_m.f90` | Fortran reference (`gfortran -o lions_2.0_ep lion_m.f90 lions_2.0_ep.f90`) |
@@ -60,13 +78,13 @@ Text outputs are in mm, mrad, kV/cm and MeV/u.
 
 ## Known issues
 
-From a full read of `lions.py` against the Fortran source (2026-10-30). None fixed yet.
+From a full read of `lions.py` against the Fortran source (2026-10-30).
 
-1. **B-map scaling differs from the Fortran.** The Python engine divides the map by max|Bz| and multiplies by `b_factor` (T), read from an optional line after the three map files. If the line is missing, `b_factor = 1.0` and the field peaks at 1 T. The Fortran uses the map as read. The GUI hides this: it auto-detects Bmax when the deck has no `b_factor`. The example deck has no such line, so a command-line run of it changes the physics.
-2. **Random bunch differs from the Fortran.** Python seeds the legacy global RNG with 42 inside `remp`. The Fortran seeds the gfortran generator (its seed loop sets all 12 entries to 12). Bunches cannot match particle by particle. Python vs Fortran checks have to be statistical, or start from a single particle or a loaded bunch.
-3. **Saved bunch files are not Fortran-compatible.** The Fortran writes `ficsto` with record markers and reads `ficloa` with them, honouring the byte swap. Python writes and reads raw native doubles and ignores the swap.
+1. **Random bunch differs from the Fortran.** Python seeds the legacy global RNG with 42 inside `remp`. The Fortran seeds the gfortran generator (its seed loop sets all 12 entries to 12). Bunches cannot match particle by particle. Python vs Fortran checks have to be statistical, or start from a single particle or a loaded bunch.
+2. **Saved bunch files are not Fortran-compatible.** The Fortran writes `ficsto` with record markers and reads `ficloa` with them, honouring the byte swap. Python writes and reads raw native doubles and ignores the swap.
+3. **The GUI drops the bunch files.** The form does not read `ficloa ficsto` and does not write them back, so a deck saved from the GUI loses them.
 4. **Losses are counted only when traps are defined.** As in the Fortran, `piege` returns at once without a marker file, so particles beyond zmin/zmax are never flagged lost. The marker file is read only when bidims are on.
-5. **Interactive I/O in the engine.** `init`, `initgra` and `lions` call `input()`. `lions_worker.run` repeats the main loop of `lions`. Output files sit in a module-level dict (`files_dict`). There is no function that takes parameters and returns results.
+5. **`ficv1 = 'no'` still prompts** for the central grid (`xmin1 xmax1 ymin1 ymax1 nx1 ny1`), so `run` waits on stdin in that case.
 6. **Speed.** Per-particle Python loops in `calcbe`, `calcb` and `bid`.
 7. **Duplicated readers.** `lions_field_viewer.py` has its own field-map readers, separate from `init`.
 8. **No tests**, and no Python vs Fortran comparison on a reference case.

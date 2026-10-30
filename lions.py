@@ -1042,15 +1042,15 @@ files_dict = {}
 # =============================================================================
 # init - Initialisation du programme
 # =============================================================================
-def init(d):
-    """Initialisation : lecture des données, cartes de champ, etc."""
-    global files_dict
+def init(d, ficin):
+    """Initialisation : lecture du fichier de données ficin, cartes de champ, etc."""
+    files_dict.clear()
 
     d.pi = np.pi
     d.clum = 299792458.0
     d.rac8 = np.sqrt(8.0)
 
-    d.ficin = read_input('fichier_de_donnees de depart :')
+    d.ficin = ficin
     with open(d.ficin, 'r') as f20_raw:
       f20 = FortranFile(f20_raw)
       with f20:  # dummy context for indentation
@@ -1312,22 +1312,22 @@ def init(d):
         d.ficb = vals[0]
         d.ficv1 = vals[1]
         d.ficv2 = vals[2]
-        # Lecture b_factor (retro-compatible)
-        d.b_factor = 1.0
-        try:
-            bf_vals = f20.read_tokens(1)
-            d.b_factor = fortran_float(bf_vals[0])
-        except Exception:
-            pass
-        d.ficloa = 'no'
-        d.ficsto = 'no'
-        try:
-            vals = f20.read_tokens(2)
-            if len(vals) >= 2:
-                d.ficloa = vals[0]
-                d.ficsto = vals[1]
-        except Exception:
-            pass
+        # Fin optionnelle : [b_factor] [ficloa ficsto]. Le Fortran ne lit que
+        # ficloa ficsto ; b_factor n'est reconnu que s'il est numerique.
+        tail = []
+        while True:
+            tok = f20.read_tokens(1)
+            if not tok:
+                break
+            tail += tok
+        d.b_factor = None
+        if tail:
+            try:
+                d.b_factor = fortran_float(tail[0])
+                tail = tail[1:]
+            except ValueError:
+                pass
+        d.ficloa, d.ficsto = (tail + ['no', 'no'])[:2]
 
     # Lecture carte magnétique
     with open(d.ficb, 'r') as f21_raw:
@@ -1419,19 +1419,18 @@ def init(d):
     d.hrhtet = d.hr * d.htet
     d.hrhtetm1 = 1.0 / d.hrhtet
 
-    # Normalisation de la carte magnetique a 1, puis application du facteur B
-    bz_max = np.max(np.abs(d.tbz[:d.nr, :ntetall]))
-    if bz_max > 0:
-        d.tbz /= bz_max
-        d.d2bz /= bz_max
-        d.dbzx /= bz_max
-        d.dbzy /= bz_max
-        print(f'carte magnetique normalisee : Bmax_lu = {bz_max:.6e} T')
-    print(f'facteur B applique : {d.b_factor:.6f} T')
-    d.tbz *= d.b_factor
-    d.d2bz *= d.b_factor
-    d.dbzx *= d.b_factor
-    d.dbzy *= d.b_factor
+    # Sans b_factor, la carte est utilisee telle quelle (comme le Fortran).
+    # Avec b_factor, elle est ramenee a max|Bz| = b_factor (T).
+    if d.b_factor is not None:
+        bz_max = np.max(np.abs(d.tbz[:d.nr, :ntetall]))
+        if bz_max == 0.0:
+            raise ValueError(f'carte magnetique nulle ({d.ficb}) : b_factor inapplicable')
+        scale = d.b_factor / bz_max
+        d.tbz *= scale
+        d.d2bz *= scale
+        d.dbzx *= scale
+        d.dbzy *= scale
+        print(f'carte magnetique : Bmax_lu = {bz_max:.6e} T, facteur B = {d.b_factor:.6f} T')
 
     # Correction relative dB/B
     d.tbz *= (1.0 + d.dbsb)
@@ -1621,7 +1620,6 @@ def init(d):
 # =============================================================================
 def info(d, iprinf_holder):
     """Affiche les informations de suivi."""
-    global files_dict
 
     if iprinf_holder[0] == 1:
         iprinf_holder[0] = 0
@@ -1667,7 +1665,8 @@ def info(d, iprinf_holder):
             f16.write(f' pot_d  : {-d.pothfd:9.1f}\n')
             f16.write(f' pot_g  : {-d.pothfg:9.1f}\n')
             f16.write(f' db/b   : {d.dbsb:9.6f}\n')
-            f16.write(f' B fact : {d.b_factor:9.6f} T\n')
+            if d.b_factor is not None:
+                f16.write(f' B fact : {d.b_factor:9.6f} T\n')
             dtnano = d.dt * 1e9
             f16.write(f' nb part: {d.n:14d}\n')
             f16.write(f' nb iter: {d.nbdt:14d}\n')
@@ -1878,11 +1877,13 @@ def info(d, iprinf_holder):
 # =============================================================================
 # initgra - Initialisation graphique (bidims)
 # =============================================================================
-def initgra(d, bidim):
-    """Initialise les diagnostics graphiques (bidims)."""
+def initgra(d, bidim, numbid=None):
+    """Initialise les diagnostics graphiques (bidims). numbid=None : demande a l'utilisateur."""
     d.fenlog[:] = True
     d.ifreb = 1
-    d.numbid = int(read_input('numero premier bidim (0 si aucun bidim) :'))
+    if numbid is None:
+        numbid = int(read_input('numero premier bidim (0 si aucun bidim) :'))
+    d.numbid = numbid
     if d.numbid == 0:
         return
 
@@ -2157,10 +2158,7 @@ def bid(d, bidim):
 # =============================================================================
 # Programme principal
 # =============================================================================
-def lions():
-    """Programme principal LIONS."""
-    global files_dict
-
+def banner():
     print('----------------------------------------------------')
     print('LIONS       : Python (converti de Fortran 90)')
     print('auteur      : Patrick Bertrand - GANIL')
@@ -2172,64 +2170,88 @@ def lions():
     print('modif swap de mars 2017 :')
     print('on swap les octets ? (y/n) (y si anciens fichiers data unformatted...)')
 
-    d = LionData()
-    d.repswap = input().strip()
-    d.idebug = 0
 
-    init(d)
+def set_vertical_sorter(d, rmin=1000.0, rmax=2000.0, teta1=0.0, teta2=0.0,
+                        pot=0.0, h=0.0, phi=0.0, anuz=0.0, coupnuz=0.0, dpotspot=0.0):
+    """Parametres du trieur vertical (angles en degres). h=0 : pas de tri vertical."""
+    d.rmin_ver = rmin
+    d.rmax_ver = rmax
+    d.teta1_ver = teta1 * np.pi / 180.0
+    d.teta2_ver = teta2 * np.pi / 180.0
+    d.pot_ver = pot
+    d.h_ver = h
+    d.phi_ver = phi * np.pi / 180.0
+    d.anuz = anuz
+    d.coupnuz = coupnuz
+    d.dpotspot = dpotspot
 
+
+def read_vertical_sorter(d):
+    """Lit les parametres du trieur vertical sur l'entree standard."""
     print('--------------------')
     print('test trieur vertical :')
     print('--------------------')
     print('rmin_ver rmax_ver teta1_ver teta2_ver :')
     print('1000 2000 0 0 si pas de tri vertical ...')
-    vals = parse_floats(input())
-    d.rmin_ver = vals[0]
-    d.rmax_ver = vals[1]
-    d.teta1_ver = vals[2] * d.pi / 180.0
-    d.teta2_ver = vals[3] * d.pi / 180.0
-    print(d.teta1_ver, d.teta2_ver)
+    geom = parse_floats(input())
     print('pot_ver,h_ver,phi_ver anuz coupnuz dpotspot :')
     print('0 0 0 0 0 0 si pas de tri vertical...')
-    vals = parse_floats(input())
-    d.pot_ver = vals[0]
-    d.h_ver = vals[1]
-    d.phi_ver = vals[2] * d.pi / 180.0
-    d.anuz = vals[3]
-    d.coupnuz = vals[4]
-    d.dpotspot = vals[5]
+    set_vertical_sorter(d, *geom[:4], *parse_floats(input())[:6])
     print('-------------------')
 
-    bidim = BidimManager()
-    initgra(d, bidim)
 
+def track(d, bidim=None, on_step=None):
+    """Boucle de suivi : pas initial puis nbdt pas. Ferme les fichiers de sortie.
+
+    on_step(d) est appele apres chaque pas ; s'il renvoie False, le suivi s'arrete.
+    """
     d.ite = 0
     boite(d)
     calcbe(d)
     iprinf_holder = [1]
     info(d, iprinf_holder)
+    try:
+        if on_step is None or on_step(d) is not False:
+            for ite in range(1, d.nbdt + 1):
+                d.ite = ite
+                piege(d)
+                boite(d)
+                calcbe(d)
+                pousse(d)
+                d.t = ite * d.dt + d.t0
+                info(d, iprinf_holder)
+                if d.numbid != 0 and (ite % d.ifreb == 0 or ite == 1):
+                    bid(d, bidim)
+                if on_step is not None and on_step(d) is False:
+                    break
+    finally:
+        if d.numbid != 0:
+            bidim.clobid()
+        for f in files_dict.values():
+            f.close()
+        files_dict.clear()
 
-    for ite in range(1, d.nbdt + 1):
-        d.ite = ite
-        piege(d)
-        boite(d)
-        calcbe(d)
-        pousse(d)
-        d.t = ite * d.dt + d.t0
-        info(d, iprinf_holder)
-        if d.numbid != 0 and (ite % d.ifreb == 0 or ite == 1):
-            bid(d, bidim)
 
-    # Fermetures
-    if d.numbid != 0:
-        bidim.clobid()
-    for unit_num in [15, 16, 17, 18, 19]:
-        if unit_num in files_dict:
-            files_dict[unit_num].close()
-    for kg in range(10):
-        if (70 + kg + 1) in files_dict:
-            files_dict[70 + kg + 1].close()
+def run(ficin, swap=False, vertical=None, on_step=None):
+    """Simulation sans interaction ni bidim. Renvoie l'etat final (LionData).
 
+    - ficin : fichier de donnees ; ses chemins sont relatifs au repertoire courant.
+    - swap : inverser les octets du potentiel central (fichiers big-endian).
+    - vertical : dict de parametres pour set_vertical_sorter, None = pas de tri.
+    - on_step : voir track().
+    """
+    d = LionData()
+    d.repswap = 'y' if swap else 'n'
+    d.idebug = 0
+    init(d, ficin)
+    set_vertical_sorter(d, **(vertical or {}))
+    initgra(d, None, numbid=0)
+    track(d, on_step=on_step)
+    return d
+
+
+def write_trapped(d):
+    """Propose d'ecrire les numeros des particules piegees."""
     if d.nbrpie != 0:
         nreste = np.count_nonzero(d.ok)
         print(f'nombre de particules non piegees : {nreste}')
@@ -2244,6 +2266,20 @@ def lions():
                     if not d.ok[k]:
                         npi += 1
                         f60.write(f' {npi:5d} {k+1:5d}\n')
+
+
+def lions():
+    """Programme principal LIONS (interactif)."""
+    banner()
+    d = LionData()
+    d.repswap = input().strip()
+    d.idebug = 0
+    init(d, read_input('fichier_de_donnees de depart :'))
+    read_vertical_sorter(d)
+    bidim = BidimManager()
+    initgra(d, bidim)
+    track(d, bidim)
+    write_trapped(d)
 
 
 if __name__ == '__main__':

@@ -209,7 +209,8 @@ Le fichier de donnees est un fichier texte lu par `init()` en mode "list-directe
 | 18 | `ficb` | string (quote) | Carte de champ magnetique | | `'cime700rec.1804.pbob1.lio.dat'` |
 | 19 | `ficv1` | string (quote) | Potentiel region centrale | | `'pot3d.impair.30pilbleu30.620.dat'` |
 | 20 | `ficv2` | string (quote) | Potentiel region peripherique | | `'newgap612.dat'` |
-| 21 | `b_factor` | float | Facteur B en Tesla (optionnel, defaut 1.0) | | `1.56d0` |
+| 21 | `b_factor` | float | Facteur B en Tesla (optionnel ; absent = carte utilisee telle quelle) | | `1.56d0` |
+| 22 | `ficloa`, `ficsto` | 2 strings | Fichiers de chargement/sauvegarde du paquet (optionnel, defaut `no no`) | | `no paquet.bin` |
 
 #### Detail des lignes conditionnelles
 
@@ -339,7 +340,7 @@ Deux formats sont geres :
 - **Carte complete** (`ntet != 91`) : 360 degres complets
 - **Carte 1/8eme** (`ntet == 91`) : 0 a 45 degres, etendue par symetrie a 360 degres
 
-La carte est normalisee a 1 a la lecture, puis multipliee par `b_factor` (Tesla), puis corrigee par `(1 + dB/B)`.
+Sans `b_factor`, la carte est utilisee telle quelle (comme le Fortran). Avec `b_factor`, elle est ramenee a max|Bz| = `b_factor` (Tesla). Elle est ensuite corrigee par `(1 + dB/B)`.
 
 ### 4.3 Potentiel region centrale (ficv1)
 
@@ -407,7 +408,7 @@ Lors de l'execution, le programme pose des questions via `input()`. Dans la GUI,
 | `pothfg` | float64 | V | Potentiel dee gauche (signe inverse a la lecture) |
 | `teta1` | float64 | rad | Demi-ouverture du dee |
 | `dbsb` | float64 | - | Correction relative de champ dB/B |
-| `b_factor` | float64 | T | Facteur multiplicatif du champ magnetique normalise |
+| `b_factor` | float64 ou None | T | max\|Bz\| impose a la carte ; None = carte telle quelle |
 | `dt` | float64 | s | Pas de temps (harm / fhf / npaspt) |
 | `cdt` | float64 | m | c * dt |
 | `clum` | float64 | m/s | Vitesse de la lumiere (299792458) |
@@ -516,10 +517,10 @@ Lit une ligne d'entree utilisateur (wrappeur autour de `input()`).
 
 ### 6.2 Fonctions de simulation (lions.py)
 
-#### `init(d)`
+#### `init(d, ficin)`
 **Fonction d'initialisation principale.** Lit le fichier de donnees, les cartes de champ magnetique et electrique, initialise les particules.
 
-- **Parametre** : `d` (LionData) - objet contenant toutes les donnees de simulation
+- **Parametres** : `d` (LionData) - objet contenant toutes les donnees de simulation ; `ficin` (str) - fichier de donnees
 - **Retour** : aucun (modifie `d` en place)
 - **Actions** :
   1. Lit le fichier de donnees (`ficin`) avec `FortranFile`
@@ -528,7 +529,7 @@ Lit une ligne d'entree utilisateur (wrappeur autour de `input()`).
   4. Initialise les positions et impulsions des particules
   5. Lit la carte magnetique (`ficb`) et applique les symetries si carte 1/8eme
   6. Ajoute les harmoniques si `ncoh != 0` (appel a `addh()`)
-  7. Normalise la carte magnetique a 1, puis applique `b_factor` et `dB/B`
+  7. Si `b_factor` est donne, ramene la carte a max|Bz| = `b_factor` ; applique `dB/B`
   8. Lit le potentiel central (`ficv1`, binaire Fortran) et peripherique (`ficv2`, texte)
   9. Si `iflcor != 0` : genere la distribution en espace de phase via Cholesky
   10. Ouvre les fichiers de sortie (ficz, ficxy)
@@ -1256,11 +1257,10 @@ Utilisateur clique "Run"
     |
     |-- Phase 1 : Banniere + swap
     |
-    |-- Phase 2 : init(d)
+    |-- Phase 2 : init(d, ficin)
     |   |-- Lecture fichier de donnees
     |   |-- Lecture carte magnetique
-    |   |   |-- Normalisation a 1
-    |   |   |-- Multiplication par b_factor
+    |   |   |-- Mise a l'echelle max|Bz| = b_factor (si donne)
     |   |   |-- Correction dB/B
     |   |   |-- Ajout harmoniques si ncoh != 0
     |   |-- Lecture potentiel central (binaire)
@@ -1638,8 +1638,7 @@ allocations effectuees...
 nombre de particules : 1
 extraction : le paquet sera entier
 carte tosca.small (1/8eme) ...
-carte magnetique normalisee : Bmax_lu = 1.560000e+00 T
-facteur B applique : 1.560000 T
+carte magnetique : Bmax_lu = 1.560000e+00 T, facteur B = 1.560000 T
 [lecture potentiel centre : 164 x 300 points]
 [lecture potentiel peripherie : 50 x 1000 points]
 --------------------

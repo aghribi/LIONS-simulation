@@ -277,7 +277,7 @@ class LionData:
         self.hx2hy2m1 = 0.0
 
         self.dbsb = 0.0
-        self.b_factor = 1.0   # Facteur B (T) applique a la carte normalisee
+        self.b_factor = None  # Facteur B (T) : max|Bz| impose a la carte ; None = carte telle quelle
         self.t0 = 0.0
         self.t = 0.0
         self.dt = 0.0

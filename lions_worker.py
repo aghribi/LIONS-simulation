@@ -102,121 +102,17 @@ class SimulationWorker(QThread):
             import lions
             from lion_m import LionData
 
-            # Reset etat global
-            lions.files_dict = {}
-
+            # Reponses fournies par la file d'entree (meme sequence que le CLI)
+            lions.banner()
             d = LionData()
-
-            # === Phase 1 : Banniere ===
-            print('----------------------------------------------------')
-            print('LIONS       : Python (converti de Fortran 90)')
-            print('auteur      : Patrick Bertrand - GANIL')
-            print('version  1  : decembre 1998...decembre 2004')
-            print('version  2  : mars 2017, modif seed, swap etc...')
-            print('conversion Python : 2026')
-            print('----------------------------------------------------')
-            print()
-            print('modif swap de mars 2017 :')
-            print('on swap les octets ? (y/n)')
-
-            # === Phase 2 : Setup (via input queue) ===
             d.repswap = input().strip()
             d.idebug = 0
-
-            lions.init(d)
-
-            # === Phase 3 : Trieur vertical ===
-            print('--------------------')
-            print('test trieur vertical :')
-            print('--------------------')
-            print('rmin_ver rmax_ver teta1_ver teta2_ver :')
-            print('1000 2000 0 0 si pas de tri vertical ...')
-            vals = lions.parse_floats(input())
-            d.rmin_ver = vals[0]
-            d.rmax_ver = vals[1]
-            d.teta1_ver = vals[2] * d.pi / 180.0
-            d.teta2_ver = vals[3] * d.pi / 180.0
-            print(d.teta1_ver, d.teta2_ver)
-            print('pot_ver,h_ver,phi_ver anuz coupnuz dpotspot :')
-            print('0 0 0 0 0 0 si pas de tri vertical...')
-            vals = lions.parse_floats(input())
-            d.pot_ver = vals[0]
-            d.h_ver = vals[1]
-            d.phi_ver = vals[2] * d.pi / 180.0
-            d.anuz = vals[3]
-            d.coupnuz = vals[4]
-            d.dpotspot = vals[5]
-            print('-------------------')
-
-            # === Phase 4 : Bidim ===
+            lions.init(d, input().strip())
+            lions.read_vertical_sorter(d)
             bidim = lions.BidimManager()
             lions.initgra(d, bidim)
-
-            # === Phase 5 : Pas initial ===
-            d.ite = 0
-            lions.boite(d)
-            lions.calcbe(d)
-            iprinf_holder = [1]
-            lions.info(d, iprinf_holder)
-
-            # Emettre donnees initiales
-            self._emit_data(d)
-            self.progress.emit(0, d.nbdt)
-
-            # === Phase 6 : Boucle principale ===
-            # Throttle progress : emettre au max toutes les N iterations
-            prog_step = max(1, d.nbdt // 200)
-
-            for ite in range(1, d.nbdt + 1):
-                if self.stop_flag:
-                    print(f'\n--- Simulation arretee a l iteration {ite} ---')
-                    break
-
-                d.ite = ite
-                lions.piege(d)
-                lions.boite(d)
-                lions.calcbe(d)
-                lions.pousse(d)
-                d.t = ite * d.dt + d.t0
-                lions.info(d, iprinf_holder)
-
-                if d.numbid != 0 and (ite % d.ifreb == 0 or ite == 1):
-                    lions.bid(d, bidim)
-
-                # Hooks GUI (throttle pour ne pas noyer la boucle d'evenements)
-                if ite % prog_step == 0 or ite == 1 or ite == d.nbdt:
-                    self.progress.emit(ite, d.nbdt)
-
-                # Emettre donnees de plot selon la frequence d'info
-                if (d.ifreq > 0 and
-                    (ite % d.ifreq == 0 or ite == 1 or ite == d.nbdt)):
-                    self._emit_data(d)
-
-            # === Phase 7 : Nettoyage ===
-            if d.numbid != 0:
-                bidim.clobid()
-            for unit_num in [15, 16, 17, 18, 19]:
-                if unit_num in lions.files_dict:
-                    lions.files_dict[unit_num].close()
-            for kg in range(10):
-                if (70 + kg + 1) in lions.files_dict:
-                    lions.files_dict[70 + kg + 1].close()
-
-            # === Phase 8 : Post-simulation (pieges) ===
-            if d.nbrpie != 0:
-                nreste = np.count_nonzero(d.ok)
-                print(f'nombre de particules non piegees : {nreste}')
-                print('ecriture fichier des numero particules piegees ? (o/n)')
-                reponse = input().strip()
-                if reponse == 'o':
-                    print('choisissez nom du fichier : ')
-                    ficpie = input().strip()
-                    with open(ficpie, 'w') as f60:
-                        npi = 0
-                        for k in range(d.n):
-                            if not d.ok[k]:
-                                npi += 1
-                                f60.write(f' {npi:5d} {k+1:5d}\n')
+            lions.track(d, bidim, on_step=self._on_step)
+            lions.write_trapped(d)
 
             if not self.stop_flag:
                 print('\n=== Simulation terminee ===')
@@ -231,6 +127,20 @@ class SimulationWorker(QThread):
             builtins.input = original_input
             sys.stdout = original_stdout
             os.chdir(original_dir)
+
+    def _on_step(self, d):
+        """Hook de lions.track : progression, donnees de plot, arret."""
+        ite = d.ite
+        # Progression limitee a ~200 emissions pour ne pas noyer la boucle Qt
+        if ite % max(1, d.nbdt // 200) == 0 or ite == 1 or ite == d.nbdt:
+            self.progress.emit(ite, d.nbdt)
+        if ite == 0 or (d.ifreq > 0 and
+                        (ite % d.ifreq == 0 or ite == 1 or ite == d.nbdt)):
+            self._emit_data(d)
+        if self.stop_flag:
+            print(f'\n--- Simulation arretee a l iteration {ite + 1} ---')
+            return False
+        return True
 
     def _emit_data(self, d):
         """Extrait les donnees de la simulation pour les plots (par famille)."""
