@@ -87,7 +87,9 @@ From a full read of `lions.py` against the Fortran source (2026-10-30).
 5. **`ficv1 = 'no'` still prompts** for the central grid (`xmin1 xmax1 ymin1 ymax1 nx1 ny1`), so `run` waits on stdin in that case.
 6. **Speed.** Per-particle Python loops in `calcbe`, `calcb` and `bid`.
 7. **Duplicated readers.** `lions_field_viewer.py` has its own field-map readers, separate from `init`.
-8. **Untested paths.** The tests do not cover the central region (`pot1`), extraction (deflectors, dipoles, grids), correlations, multiple families, traps or bidims. No comparison on CIME maps yet.
+8. **No bounds check on the central grid.** A particle with r < rmax1 outside the pot1 grid gets a negative index: NumPy wraps it to the far end of the array, the Fortran reads outside it. Both give meaningless fields. The pot1 grid must cover r < rmax1.
+9. **Correlation outputs only partly ported.** With `iflcor != 0`, the Fortran also writes the sigma and grid matrices, the window-filtered matrices (two extra prompts at the end) and the inflector output to `ficmat`, and the dc matrices to `ficdc`. The Python opens these files and leaves them empty.
+10. **Untested paths.** Multiple families, the vertical sorter, the 1/8 field map, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
 
 ## Tests
 
@@ -98,7 +100,8 @@ uv run pytest
 Inputs are synthetic, written per test into a temporary directory (`tests/synthetic.py`).
 
 - `tests/test_run.py`: 1 MeV proton in a uniform Bz, zero E. Orbit radius p/(qB) within 1e-4, energy constant within 1e-12, Boris phase lag 2 atan(w dt/2) per step within 1 %, `b_factor` scaling, deck tail parsing, `on_step` stop.
-- `tests/test_fortran.py`: same synthetic inputs through `lions_2.0_ep.f90` (built with gfortran, `-ffp-contract=off`) and `lions.run`, single proton, 10 turns in a 4-sector Bz with off-plane terms, vertical offset and accelerating dees. Final coordinates agree within 1e-12 (m, and relative for momenta); on macOS arm64 they are bit-identical. Skipped without gfortran.
+- `tests/test_fortran.py`: the same inputs through `lions_2.0_ep.f90` (gfortran, `-ffp-contract=off`) and `lions.py`, both run as programs with the same stdin. Five cases: outer-region dees with a 4-sector field and off-plane terms; central-region potential with Ez; deflector, magnetic dipole and two extraction grids; 20-particle loaded bunch with correlations; the same bunch with bidims and a trap. Final bunches agree within 1e-12 (bit-identical on macOS arm64); text outputs (z, xy, correlations, grid crossings, trapped list) agree within their printed precision. Skipped without gfortran.
+- `tests/test_gui.py`: headless main window, deck round trip through the input form, worker run.
 
 <!-- docs-end -->
 

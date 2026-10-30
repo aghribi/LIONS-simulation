@@ -46,16 +46,43 @@ def write_bmap(path, bz, d2bz=0.0, dbzx=0.0, dbzy=0.0,
                 f.write(' '.join(f'{v:.15e}' for v in row) + '\n')
 
 
-def write_pot_central(path, nx=5, ny=5):
-    """Zero central potential, Fortran unformatted sequential, native byte order."""
-    def record(payload):
-        return struct.pack('<i', len(payload)) + payload + struct.pack('<i', len(payload))
+def fortran_record(payload):
+    """Fortran unformatted sequential record, little-endian 4-byte markers."""
+    return struct.pack('<i', len(payload)) + payload + struct.pack('<i', len(payload))
 
+
+def write_pot_central(path, pot=None, d2pot=None, half_width_mm=10.0, nx=5, ny=5):
+    """Central-region potential pot(x, y) and d2pot(x, y), x and y in m. Zero by default."""
+    h = half_width_mm
+    x = np.linspace(-h, h, nx)[:, None] / 1000.0
+    y = np.linspace(-h, h, ny)[None, :] / 1000.0
     with open(path, 'wb') as f:
-        f.write(record(struct.pack('<4d2i', -10.0, 10.0, -10.0, 10.0, nx, ny)))
-        row = np.zeros(ny).astype('<f8').tobytes()
-        for _ in range(2 * nx):
-            f.write(record(row))
+        f.write(fortran_record(struct.pack('<4d2i', -h, h, -h, h, nx, ny)))
+        for field in (pot, d2pot):
+            values = np.broadcast_to(field(x, y) if field is not None else 0.0, (nx, ny))
+            for row in values:
+                f.write(fortran_record(np.ascontiguousarray(row, '<f8').tobytes()))
+
+
+def write_bunch(python_path, fortran_path, pos, mom):
+    """Same bunch in the Python (raw doubles) and Fortran (records) formats. pos, mom: (n, 3)."""
+    pos = np.ascontiguousarray(pos, '<f8')
+    mom = np.ascontiguousarray(mom, '<f8')
+    with open(python_path, 'wb') as f:
+        f.write(pos.tobytes() + mom.tobytes())
+    with open(fortran_path, 'wb') as f:
+        f.write(fortran_record(pos.tobytes()) + fortran_record(mom.tobytes()))
+
+
+def write_markers(path, traps):
+    """Marker file with trap circles (x, y, r in mm)."""
+    with open(path, 'w') as f:
+        f.write('0 0 0 0\n0 0\n0 0\n')
+        f.write('cercle\n')
+        f.write(f'{len(traps)}\n')
+        for x, y, r in traps:
+            f.write(f'{x} {y} {r} 0 360 360 -100\n')
+        f.write('fintyp\n')
 
 
 def write_pot_outer(path, pot=None, xmin=-1.0, xmax=1.0, ymin=-1.0, ymax=1.0, nx=41, ny=201):
@@ -72,14 +99,18 @@ def write_pot_outer(path, pot=None, xmin=-1.0, xmax=1.0, ymin=-1.0, ymax=1.0, nx
 
 
 def write_deck(path, *, fhf, r0, w0, npaspt=360, turns=10, v_dee=0.0, teta1=20.0,
-               harm=1.0, z0=0.0, pr0=0.0, pz0=0.0, phi0=0.0, tail=()):
-    """Single-proton deck, no extraction, no correlations. Outputs z.out, xy.out."""
+               harm=1.0, z0=0.0, pr0=0.0, pz0=0.0, phi0=0.0, rmax1=0.0001, nbrion=1,
+               extraction=('1 0 0 0',), correlations=('0',), tail=()):
+    """Proton deck, one family. Outputs z.out, xy.out.
+
+    extraction, correlations: raw deck lines from 'rex tet1ex tet2ex eex' and from 'iflcor'.
+    """
     lines = [
         "'synthetic'", f'{npaspt}', f'0.25 {turns}',
         f'{fhf:.17g} {-v_dee:.17g} {teta1} {harm} 0.0', '0 0', f'{v_dee:.17g} {v_dee:.17g}',
-        '0', '0', '-0.1 0.1 0.0001', '1 0 0 0', '1',
-        f'1 {HYDROGEN} 1 1', f'{r0:.17g} 0 {z0:.17g} {pr0:.17g} {pz0:.17g} {w0:.17g} {phi0:.17g}',
-        '0', f'{turns * npaspt} {npaspt}', 'z.out xy.out',
+        '0', '0', f'-0.1 0.1 {rmax1}', *extraction, '1',
+        f'{nbrion} {HYDROGEN} 1 1', f'{r0:.17g} 0 {z0:.17g} {pr0:.17g} {pz0:.17g} {w0:.17g} {phi0:.17g}',
+        *correlations, f'{turns * npaspt} {npaspt}', 'z.out xy.out',
         "'bmap.dat' 'pot1.bin' 'pot2.dat'",
         *tail,
     ]
@@ -90,6 +121,17 @@ def write_deck(path, *, fhf, r0, w0, npaspt=360, turns=10, v_dee=0.0, teta1=20.0
 def quiet_run(deck, **kwargs):
     with contextlib.redirect_stdout(io.StringIO()):
         return lions.run(deck, **kwargs)
+
+
+def numeric_rows(path):
+    """Rows of a text output that hold only numbers (headers and labels dropped)."""
+    rows = []
+    for line in open(path):
+        try:
+            rows.append([float(t.replace('D', 'E')) for t in line.split()])
+        except ValueError:
+            continue
+    return [r for r in rows if r]
 
 
 def read_fortran_bunch(path, n=1):

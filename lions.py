@@ -1740,8 +1740,9 @@ def info(d, iprinf_holder):
                 f'   {d.bz[0]:7.4f} {eskvcm:7.3f} {erkvcm:7.3f}'
                 f'     {rmm:7.1f}  {tpr:6.1f} {wmevpa:9.5f} {dph:15.2f}\n')
 
-    # Corrélations
-    if d.iflcor != 0 and not (d.ficcor == 'no' and d.ficmat == 'no' and d.ficdc == 'no'):
+    # Corrélations (sautees avec les sorties z/xy, comme le goto 800 du Fortran)
+    if ((d.ite % d.ifreq == 0 or d.ite == 1) and d.iflcor != 0
+            and not (d.ficcor == 'no' and d.ficmat == 'no' and d.ficdc == 'no')):
         for k in range(d.nbrfam):
             nbr = d.nbrion[k]
             i1 = d.index[k]
@@ -1870,8 +1871,8 @@ def info(d, iprinf_holder):
             f16.write('info utile pour DEDUCE_SIGMA ...\n')
             f16.write(f'amat a qn w0mev : \n')
             f16.write(f'{d.amat[0]} {d.a[0]} {d.qn[0]} {d.wf}\n')
-            f16.write(f'champ magnetique : {-d.bz[0]}\n')
-            f16.write(f'fhf harmonique : {d.fhf} {d.harm}\n')
+            f16.write(f'champ magnetique (val. absolue) :\n{-d.bz[0]}\n')
+            f16.write(f'fhf harmonique :\n{d.fhf} {d.harm}\n')
 
 
 # =============================================================================
