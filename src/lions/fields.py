@@ -160,27 +160,15 @@ def compute_fields(d):
     vecd2[:] = vecb - d.field.dtheta
     vecz[:] = d.bunch.z * d.bunch.z * 0.5
 
-    for k in range(n):
-        ik = ivec[k]
-        jk = jvec[k]
-        d.bunch.bz[k] = (vecd1[k] * vecd2[k] * (d.field.bz[ik, jk] -
-                   vecz[k] * d.field.d2bz[ik, jk]) -
-                   veca[k] * vecd2[k] * (d.field.bz[ik+1, jk] -
-                   vecz[k] * d.field.d2bz[ik+1, jk]) +
-                   veca[k] * vecb[k] * (d.field.bz[ik+1, jk+1] -
-                   vecz[k] * d.field.d2bz[ik+1, jk+1]) -
-                   vecd1[k] * vecb[k] * (d.field.bz[ik, jk+1] -
-                   vecz[k] * d.field.d2bz[ik, jk+1])) * hrhtetm1
-        d.bunch.bx[k] = (vecd1[k] * vecd2[k] * d.field.dbzdx[ik, jk] -
-                   veca[k] * vecd2[k] * d.field.dbzdx[ik+1, jk] +
-                   veca[k] * vecb[k] * d.field.dbzdx[ik+1, jk+1] -
-                   vecd1[k] * vecb[k] * d.field.dbzdx[ik, jk+1]
-                   ) * d.bunch.z[k] * hrhtetm1
-        d.bunch.by[k] = (vecd1[k] * vecd2[k] * d.field.dbzdy[ik, jk] -
-                   veca[k] * vecd2[k] * d.field.dbzdy[ik+1, jk] +
-                   veca[k] * vecb[k] * d.field.dbzdy[ik+1, jk+1] -
-                   vecd1[k] * vecb[k] * d.field.dbzdy[ik, jk+1]
-                   ) * d.bunch.z[k] * hrhtetm1
+    # 2x2 cell: M[a, b] = map[i + a, j + b]
+    ik = ivec + np.arange(2)[:, None, None]
+    jk = jvec + np.arange(2)[None, :, None]
+    c1, c2, c3, c4 = vecd1 * vecd2, veca * vecd2, veca * vecb, vecd1 * vecb
+    B, D = d.field.bz[ik, jk], d.field.d2bz[ik, jk]
+    d.bunch.bz[:] = (c1 * (B[0, 0] - vecz * D[0, 0]) - c2 * (B[1, 0] - vecz * D[1, 0]) +
+                     c3 * (B[1, 1] - vecz * D[1, 1]) - c4 * (B[0, 1] - vecz * D[0, 1])) * hrhtetm1
+    for out, g in ((d.bunch.bx, d.field.dbzdx[ik, jk]), (d.bunch.by, d.field.dbzdy[ik, jk])):
+        out[:] = (c1 * g[0, 0] - c2 * g[1, 0] + c3 * g[1, 1] - c4 * g[0, 1]) * d.bunch.z * hrhtetm1
 
     mask_bz0 = (d.bunch.in_box & (d.bunch.bz == 0.0)) | (~d.bunch.in_box)
     d.bunch.bx[mask_bz0] = 0.0
@@ -212,39 +200,21 @@ def compute_fields(d):
         vecp4[m_c] = -vecd1[m_c] * vecb[m_c]
         vecz[m_c] = d.bunch.z[m_c]**2 * 0.5
 
-        for k in range(n):
-            if d.bunch.in_central[k]:
-                ik = ivec[k]
-                jk = jvec[k]
-                vecb1[k] = d.central.d2pot[ik, jk]
-                vecb2[k] = d.central.d2pot[ik+1, jk]
-                vecb3[k] = d.central.d2pot[ik+1, jk+1]
-                vecb4[k] = d.central.d2pot[ik, jk+1]
-                vz = vecz[k]
-                vex1[k] = (-(d.central.pot[ik+1, jk] - d.central.pot[ik-1, jk]) +
-                             vz * (d.central.d2pot[ik+1, jk] - d.central.d2pot[ik-1, jk])
-                             ) * 0.5 / d.central.dx
-                vex2[k] = (-(d.central.pot[ik+2, jk] - d.central.pot[ik, jk]) +
-                             vz * (d.central.d2pot[ik+2, jk] - d.central.d2pot[ik, jk])
-                             ) * 0.5 / d.central.dx
-                vex3[k] = (-(d.central.pot[ik+2, jk+1] - d.central.pot[ik, jk+1]) +
-                             vz * (d.central.d2pot[ik+2, jk+1] - d.central.d2pot[ik, jk+1])
-                             ) * 0.5 / d.central.dx
-                vex4[k] = (-(d.central.pot[ik+1, jk+1] - d.central.pot[ik-1, jk+1]) +
-                             vz * (d.central.d2pot[ik+1, jk+1] - d.central.d2pot[ik-1, jk+1])
-                             ) * 0.5 / d.central.dx
-                vey1[k] = (-(d.central.pot[ik, jk+1] - d.central.pot[ik, jk-1]) +
-                             vz * (d.central.d2pot[ik, jk+1] - d.central.d2pot[ik, jk-1])
-                             ) * 0.5 / d.central.dy
-                vey2[k] = (-(d.central.pot[ik+1, jk+1] - d.central.pot[ik+1, jk-1]) +
-                             vz * (d.central.d2pot[ik+1, jk+1] - d.central.d2pot[ik+1, jk-1])
-                             ) * 0.5 / d.central.dy
-                vey3[k] = (-(d.central.pot[ik+1, jk+2] - d.central.pot[ik+1, jk]) +
-                             vz * (d.central.d2pot[ik+1, jk+2] - d.central.d2pot[ik+1, jk])
-                             ) * 0.5 / d.central.dy
-                vey4[k] = (-(d.central.pot[ik, jk+2] - d.central.pot[ik, jk]) +
-                             vz * (d.central.d2pot[ik, jk+2] - d.central.d2pot[ik, jk])
-                             ) * 0.5 / d.central.dy
+        # 4x4 stencil around (i, j): P[a, b] = pot[i + a - 1, j + b - 1]
+        ik = ivec[m_c] + np.arange(-1, 3)[:, None, None]
+        jk = jvec[m_c] + np.arange(-1, 3)[None, :, None]
+        P, D = d.central.pot[ik, jk], d.central.d2pot[ik, jk]
+        vz, dx, dy = vecz[m_c], d.central.dx, d.central.dy
+        vecb1[m_c], vecb2[m_c], vecb3[m_c], vecb4[m_c] = D[1, 1], D[2, 1], D[2, 2], D[1, 2]
+        # Centred differences at the four corners, in the same operation order as the Fortran
+        vex1[m_c] = (-(P[2, 1] - P[0, 1]) + vz * (D[2, 1] - D[0, 1])) * 0.5 / dx
+        vex2[m_c] = (-(P[3, 1] - P[1, 1]) + vz * (D[3, 1] - D[1, 1])) * 0.5 / dx
+        vex3[m_c] = (-(P[3, 2] - P[1, 2]) + vz * (D[3, 2] - D[1, 2])) * 0.5 / dx
+        vex4[m_c] = (-(P[2, 2] - P[0, 2]) + vz * (D[2, 2] - D[0, 2])) * 0.5 / dx
+        vey1[m_c] = (-(P[1, 2] - P[1, 0]) + vz * (D[1, 2] - D[1, 0])) * 0.5 / dy
+        vey2[m_c] = (-(P[2, 2] - P[2, 0]) + vz * (D[2, 2] - D[2, 0])) * 0.5 / dy
+        vey3[m_c] = (-(P[2, 3] - P[2, 1]) + vz * (D[2, 3] - D[2, 1])) * 0.5 / dy
+        vey4[m_c] = (-(P[1, 3] - P[1, 1]) + vz * (D[1, 3] - D[1, 1])) * 0.5 / dy
 
         n_periods = int(d.rf.omega * d.run.t / (2.0 * np.pi))
         rf_phase = d.rf.omega * d.run.t - n_periods * 2.0 * np.pi
@@ -305,18 +275,11 @@ def compute_fields(d):
             vecp4[m_p] = -vecd1[m_p] * vecb[m_p]
             vecz[m_p] = d.bunch.z[m_p]**2 * 0.5
 
-            for k in range(n):
-                if d.bunch.in_outer[k]:
-                    ik = ivec[k]
-                    jk = jvec[k]
-                    vec1[k] = d.outer.pot[ik, jk]
-                    vec2[k] = d.outer.pot[ik+1, jk]
-                    vec3[k] = d.outer.pot[ik+1, jk+1]
-                    vec4[k] = d.outer.pot[ik, jk+1]
-                    vecb1[k] = d.outer.d2pot[ik, jk]
-                    vecb2[k] = d.outer.d2pot[ik+1, jk]
-                    vecb3[k] = d.outer.d2pot[ik+1, jk+1]
-                    vecb4[k] = d.outer.d2pot[ik, jk+1]
+            ik = ivec[m_p] + np.arange(2)[:, None, None]
+            jk = jvec[m_p] + np.arange(2)[None, :, None]
+            P, D = d.outer.pot[ik, jk], d.outer.d2pot[ik, jk]
+            vec1[m_p], vec2[m_p], vec3[m_p], vec4[m_p] = P[0, 0], P[1, 0], P[1, 1], P[0, 1]
+            vecb1[m_p], vecb2[m_p], vecb3[m_p], vecb4[m_p] = D[0, 0], D[1, 0], D[1, 1], D[0, 1]
 
             d.bunch.ex[m_p] = -vecpc[m_p] * (
                 vecd2[m_p] * (vec1[m_p] - vec2[m_p] -
@@ -460,27 +423,14 @@ def compute_bfield(bunch, field):
     vecp4[mask] = -vecd1[mask] * vecb[mask]
     vecz[mask] = bunch.z[mask]**2 / 2.0
 
-    for k in range(bunch.n_particles):
-        if bunch.in_box[k]:
-            ik = ivec[k]
-            jk = jvec[k]
-            vk = vecz[k]
-            vecb1[k] = field.bz[ik, jk]
-            vecb2[k] = field.bz[ik+1, jk]
-            vecb3[k] = field.bz[ik+1, jk+1]
-            vecb4[k] = field.bz[ik, jk+1]
-            vec1[k] = -vk * field.d2bz[ik, jk]
-            vec2[k] = -vk * field.d2bz[ik+1, jk]
-            vec3[k] = -vk * field.d2bz[ik+1, jk+1]
-            vec4[k] = -vk * field.d2bz[ik, jk+1]
-            vecx1[k] = field.dbzdx[ik, jk]
-            vecx2[k] = field.dbzdx[ik+1, jk]
-            vecx3[k] = field.dbzdx[ik+1, jk+1]
-            vecx4[k] = field.dbzdx[ik, jk+1]
-            vecy1[k] = field.dbzdy[ik, jk]
-            vecy2[k] = field.dbzdy[ik+1, jk]
-            vecy3[k] = field.dbzdy[ik+1, jk+1]
-            vecy4[k] = field.dbzdy[ik, jk+1]
+    ik = ivec[mask] + np.arange(2)[:, None, None]
+    jk = jvec[mask] + np.arange(2)[None, :, None]
+    B, D = field.bz[ik, jk], -vecz[mask] * field.d2bz[ik, jk]
+    X, Y = field.dbzdx[ik, jk], field.dbzdy[ik, jk]
+    vecb1[mask], vecb2[mask], vecb3[mask], vecb4[mask] = B[0, 0], B[1, 0], B[1, 1], B[0, 1]
+    vec1[mask], vec2[mask], vec3[mask], vec4[mask] = D[0, 0], D[1, 0], D[1, 1], D[0, 1]
+    vecx1[mask], vecx2[mask], vecx3[mask], vecx4[mask] = X[0, 0], X[1, 0], X[1, 1], X[0, 1]
+    vecy1[mask], vecy2[mask], vecy3[mask], vecy4[mask] = Y[0, 0], Y[1, 0], Y[1, 1], Y[0, 1]
 
     vec1[mask] += vecb1[mask]
     vec2[mask] += vecb2[mask]

@@ -106,19 +106,29 @@ class BidimWriter:
 
     def add(self, n, ix, iy):
         """Add one event (ix, iy) to bidim number n. Returns 0 or 1 if n is out of range."""
+        return self.add_many(n, [ix], [iy])
+
+    def add_many(self, n, ix, iy):
+        """Add events (ix[i], iy[i]) in order to bidim number n. Returns 0 or 1 if n is out of range."""
+        if len(ix) == 0:
+            return 0
         if n < self.first or n > self.last:
             print(f'bidim add: wrong bidim number: {n}')
             print(f'...outside: {self.first} {self.last}')
             return 1
         num = n - self.first
-        ix = max(0, min(ix, self.x_max[num]))
-        iy = max(0, min(iy, self.y_max[num]))
-        if self.fill[num] == 4097:
-            self._flush(num)
-            self.fill[num] = 1
-        idx = self.fill[num] - 1
-        self.buffer[idx, num] = ix * 65536 + iy
-        self.fill[num] += 1
+        events = np.clip(ix, 0, self.x_max[num]) * 65536 + np.clip(iy, 0, self.y_max[num])
+        pos = 0
+        while pos < len(events):
+            # A full buffer is written only when the next event arrives, as in the Fortran
+            if self.fill[num] == 4097:
+                self._flush(num)
+                self.fill[num] = 1
+            idx = self.fill[num] - 1
+            take = min(4096 - idx, len(events) - pos)
+            self.buffer[idx:idx + take, num] = events[pos:pos + take]
+            self.fill[num] += take
+            pos += take
         return 0
 
     def close(self):
@@ -318,101 +328,64 @@ def setup_bidims(d, bidim, numbid=None):
         d.traps.follow = int(prompt(''))
 
 
+def _channel(v):
+    """int() of each value, clipped to [-1, 8192] first so that the cast cannot overflow."""
+    return np.clip(v, -1.0, 8192.0).astype(np.int64)
+
+
 def fill_bidims(d, bidim):
     """Add the current step to the bidims."""
-    vec1 = np.zeros(d.bunch.n_particles)
-    vec2 = np.zeros(d.bunch.n_particles)
-    vec3 = np.zeros(d.bunch.n_particles)
-    vec4 = np.zeros(d.bunch.n_particles)
-    vec5 = np.zeros(d.bunch.n_particles)
-    vec6 = np.zeros(d.bunch.n_particles)
-    if d.run.step < d.bidims.start_step:
+    b, bd = d.bunch, d.bidims
+    if d.run.step < bd.start_step:
         return
 
-    for k in range(d.bunch.n_particles):
-        if not d.bunch.in_window[k]:
-            continue
-        ix = int(d.bidims.ax1[0] * d.bunch.x[k] + d.bidims.ax0[0])
-        iy = int(d.bidims.ay1[0] * d.bunch.y[k] + d.bidims.ay0[0])
-        if 0 <= ix <= 8191 and 0 <= iy <= 8191:
-            if k == 0:
-                bidim.add(d.bidims.first, ix, iy)
-                if d.bunch.n_particles > 1:
-                    bidim.add(d.bidims.first + 2, ix, iy)
-            else:
-                bidim.add(d.bidims.first + 2, ix, iy)
-        if k == 0:
-            xc = d.bunch.x[k] + d.bunch.py[k] * d.run.dt / d.bunch.boris_e_coef[k] / d.bunch.bz[k]
-            yc = d.bunch.y[k] - d.bunch.px[k] * d.run.dt / d.bunch.boris_e_coef[k] / d.bunch.bz[k]
-            if d.bidims.centre_mode == 'c':
-                ix2 = int(d.bidims.ax1[0] * xc + d.bidims.ax0[0])
-                iy2 = int(d.bidims.ay1[0] * yc + d.bidims.ay0[0])
+    ix = _channel(bd.ax1[0] * b.x + bd.ax0[0])
+    iy = _channel(bd.ay1[0] * b.y + bd.ay0[0])
+    seen = b.in_window & (ix >= 0) & (ix <= 8191) & (iy >= 0) & (iy <= 8191)
+    if b.n_particles > 1:
+        bidim.add_many(bd.first + 2, ix[seen], iy[seen])
+    if seen[0]:
+        bidim.add(bd.first, ix[0], iy[0])
+    if b.in_window[0]:
+        xc = b.x[0] + b.py[0] * d.run.dt / b.boris_e_coef[0] / b.bz[0]
+        yc = b.y[0] - b.px[0] * d.run.dt / b.boris_e_coef[0] / b.bz[0]
+        if bd.centre_mode == 'c':
+            ix2 = int(bd.ax1[0] * xc + bd.ax0[0])
+            iy2 = int(bd.ay1[0] * yc + bd.ay0[0])
+            if 0 <= ix2 <= 8191 and 0 <= iy2 <= 8191:
+                bidim.add(bd.first + 1, ix2, iy2)
+        if bd.centre_mode == 'b':
+            bd.bary_count += 1
+            bd.bary_x[bd.bary_count - 1] = xc
+            bd.bary_y[bd.bary_count - 1] = yc
+            if bd.bary_count == bd.bary_size:
+                bd.bary_count = 0
+                xbary = np.sum(bd.bary_x[:bd.bary_size]) / bd.bary_size
+                ybary = np.sum(bd.bary_y[:bd.bary_size]) / bd.bary_size
+                ix2 = int(bd.ax1[1] * xbary + bd.ax0[1])
+                iy2 = int(bd.ay1[1] * ybary + bd.ay0[1])
                 if 0 <= ix2 <= 8191 and 0 <= iy2 <= 8191:
-                    bidim.add(d.bidims.first + 1, ix2, iy2)
-            if d.bidims.centre_mode == 'b':
-                d.bidims.bary_count += 1
-                d.bidims.bary_x[d.bidims.bary_count - 1] = xc
-                d.bidims.bary_y[d.bidims.bary_count - 1] = yc
-                if d.bidims.bary_count == d.bidims.bary_size:
-                    d.bidims.bary_count = 0
-                    xbary = np.sum(d.bidims.bary_x[:d.bidims.bary_size]) / d.bidims.bary_size
-                    ybary = np.sum(d.bidims.bary_y[:d.bidims.bary_size]) / d.bidims.bary_size
-                    ix2 = int(d.bidims.ax1[1] * xbary + d.bidims.ax0[1])
-                    iy2 = int(d.bidims.ay1[1] * ybary + d.bidims.ay0[1])
-                    if 0 <= ix2 <= 8191 and 0 <= iy2 <= 8191:
-                        bidim.add(d.bidims.first + 1, ix2, iy2)
+                    bidim.add(bd.first + 1, ix2, iy2)
 
-    if d.bunch.n_particles > 1 and len(d.bunch.families) == 1:
-        phase_space_coords(d.bunch)
-        k = 0
-        nbr = d.bunch.families[k].size
-        i1 = d.bunch.families[k].start
-        gamma_ref = np.sqrt(1.0 + d.bunch.p[i1]**2)
-        vec1[:nbr] = d.bunch.ps[4, :nbr] * d.rf.omega / C_LIGHT / d.bunch.p[i1] * 180.0 / np.pi * gamma_ref
-        vec2[:nbr] = d.bunch.ps[5, :nbr] * d.bunch.p[i1] / gamma_ref / (gamma_ref - 1.0)
-        vec3[:nbr] = d.bunch.ps[0, :nbr] * 1000.0
-        vec4[:nbr] = d.bunch.ps[1, :nbr] / d.bunch.p[i1] * 1000.0
-        vec5[:nbr] = d.bunch.ps[2, :nbr] * 1000.0
-        vec6[:nbr] = d.bunch.ps[3, :nbr] / d.bunch.p[i1] * 1000.0
+    if b.n_particles > 1 and len(b.families) == 1:
+        phase_space_coords(b)
+        nbr = b.families[0].size
+        i1 = b.families[0].start
+        gamma_ref = np.sqrt(1.0 + b.p[i1]**2)
+        w = b.in_window[:nbr]
+        dphi = (b.ps[4, :nbr] * d.rf.omega / C_LIGHT / b.p[i1] * 180.0 / np.pi * gamma_ref)[w]
+        dw = (b.ps[5, :nbr] * b.p[i1] / gamma_ref / (gamma_ref - 1.0))[w]
+        dr = (b.ps[0, :nbr] * 1000.0)[w]
+        dpr = (b.ps[1, :nbr] / b.p[i1] * 1000.0)[w]
+        dz = (b.ps[2, :nbr] * 1000.0)[w]
+        dpz = (b.ps[3, :nbr] / b.p[i1] * 1000.0)[w]
 
-        for i in range(nbr):
-            if not d.bunch.in_window[i]:
-                continue
-            ix = int(d.bidims.ax1[3] * vec1[i] + d.bidims.ax0[3])
-            iy = int(d.bidims.ay1[3] * vec2[i] + d.bidims.ay0[3])
-            ix = max(0, min(ix, 8191))
-            iy = max(0, min(iy, 8191))
-            bidim.add(d.bidims.first + 3, ix, iy)
+        for h, u, v in ((3, dphi, dw), (4, dr, dpr), (7, dz, dpz), (5, dr, dphi)):
+            bidim.add_many(bd.first + h, np.clip(_channel(bd.ax1[h] * u + bd.ax0[h]), 0, 8191),
+                           np.clip(_channel(bd.ay1[h] * v + bd.ay0[h]), 0, 8191))
 
-            ix = int(d.bidims.ax1[4] * vec3[i] + d.bidims.ax0[4])
-            iy = int(d.bidims.ay1[4] * vec4[i] + d.bidims.ay0[4])
-            ix = max(0, min(ix, 8191))
-            iy = max(0, min(iy, 8191))
-            bidim.add(d.bidims.first + 4, ix, iy)
-
-            ix = int(d.bidims.ax1[7] * vec5[i] + d.bidims.ax0[7])
-            iy = int(d.bidims.ay1[7] * vec6[i] + d.bidims.ay0[7])
-            ix = max(0, min(ix, 8191))
-            iy = max(0, min(iy, 8191))
-            bidim.add(d.bidims.first + 7, ix, iy)
-
-        for i in range(nbr):
-            if not d.bunch.in_window[i]:
-                continue
-            ix = int(d.bidims.ax1[5] * vec3[i] + d.bidims.ax0[5])
-            iy = int(d.bidims.ay1[5] * vec1[i] + d.bidims.ay0[5])
-            ix = max(0, min(ix, 8191))
-            iy = max(0, min(iy, 8191))
-            bidim.add(d.bidims.first + 5, ix, iy)
-
-        ix = int(d.bidims.ax1[6] * d.run.step / d.bidims.every + d.bidims.ax0[6])
-        ix = max(0, min(ix, 8191))
-        for i in range(nbr):
-            if not d.bunch.in_window[i]:
-                continue
-            iy = int(d.bidims.ay1[6] * vec3[i] + d.bidims.ay0[6])
-            iy = max(0, min(iy, 8191))
-            bidim.add(d.bidims.first + 6, ix, iy)
-            iy = int(d.bidims.ay1[8] * vec5[i] + d.bidims.ay0[8])
-            iy = max(0, min(iy, 8191))
-            bidim.add(d.bidims.first + 8, ix, iy)
+        # Time axis: the same x channel for bidims 6 and 8
+        ix = max(0, min(int(bd.ax1[6] * d.run.step / bd.every + bd.ax0[6]), 8191))
+        for h, v in ((6, dr), (8, dz)):
+            bidim.add_many(bd.first + h, np.full(len(v), ix),
+                           np.clip(_channel(bd.ay1[h] * v + bd.ay0[h]), 0, 8191))
