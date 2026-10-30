@@ -1,0 +1,27 @@
+[project]
+name = "lions"
+version = "2.0.0"
+description = "Ion tracking in separated-sector cyclotrons (Python port of LIONS, P. Bertrand, GANIL)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.20",
+    "PyQt5>=5.15",
+    "matplotlib>=3.5",
+    "pyqtgraph>=0.13",
+]
+
+[project.optional-dependencies]
+gl = ["PyOpenGL>=3.1"]
+
+[dependency-groups]
+docs = [
+    "sphinx>=7",
+    "myst-parser>=3",
+    "furo>=2024.1.29",
+]
+
+[tool.uv]
+package = false

@@ -24,3 +24,7 @@ oui
 
 # PDF genere
 lions_programme.pdf
+
+# Environnement et documentation
+.venv/
+docs/_build/
