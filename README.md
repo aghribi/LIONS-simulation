@@ -87,7 +87,18 @@ From a full read of `lions.py` against the Fortran source (2026-10-30).
 5. **`ficv1 = 'no'` still prompts** for the central grid (`xmin1 xmax1 ymin1 ymax1 nx1 ny1`), so `run` waits on stdin in that case.
 6. **Speed.** Per-particle Python loops in `calcbe`, `calcb` and `bid`.
 7. **Duplicated readers.** `lions_field_viewer.py` has its own field-map readers, separate from `init`.
-8. **No tests**, and no Python vs Fortran comparison on a reference case.
+8. **Untested paths.** The tests do not cover the central region (`pot1`), extraction (deflectors, dipoles, grids), correlations, multiple families, traps or bidims. No comparison on CIME maps yet.
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+Inputs are synthetic, written per test into a temporary directory (`tests/synthetic.py`).
+
+- `tests/test_run.py`: 1 MeV proton in a uniform Bz, zero E. Orbit radius p/(qB) within 1e-4, energy constant within 1e-12, Boris phase lag 2 atan(w dt/2) per step within 1 %, `b_factor` scaling, deck tail parsing, `on_step` stop.
+- `tests/test_fortran.py`: same synthetic inputs through `lions_2.0_ep.f90` (built with gfortran, `-ffp-contract=off`) and `lions.run`, single proton, 10 turns in a 4-sector Bz with off-plane terms, vertical offset and accelerating dees. Final coordinates agree within 1e-12 (m, and relative for momenta); on macOS arm64 they are bit-identical. Skipped without gfortran.
 
 <!-- docs-end -->
 
