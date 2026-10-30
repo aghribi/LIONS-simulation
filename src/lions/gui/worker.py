@@ -12,6 +12,12 @@ import traceback
 import numpy as np
 from PyQt5.QtCore import QThread, pyqtSignal
 
+from .. import cli
+from ..bidim import BidimWriter, setup_bidims
+from ..constants import MEV
+from ..io import load
+from ..state import State
+
 
 class InputQueue:
     """Remplace builtins.input : fournit les reponses pre-chargees."""
@@ -99,19 +105,17 @@ class SimulationWorker(QThread):
             sys.stdout = interceptor
 
             # Import du moteur de simulation
-            import lions
-            from lion_m import State
 
             # Reponses fournies par la file d'entree (meme sequence que le CLI)
-            lions.banner()
+            cli.banner()
             d = State()
             d.swap_bytes = input().strip()
-            lions.init(d, input().strip())
-            lions.read_vertical_sorter(d)
-            bidim = lions.BidimManager()
-            lions.initgra(d, bidim)
-            lions.track(d, bidim, on_step=self._on_step)
-            lions.write_trapped(d)
+            load(d, input().strip())
+            cli.read_vertical_sorter(d)
+            bidim = BidimWriter()
+            setup_bidims(d, bidim)
+            cli.track(d, bidim, on_step=self._on_step)
+            cli.write_trapped(d)
 
             if not self.stop_flag:
                 print('\n=== Simulation terminee ===')
@@ -128,7 +132,7 @@ class SimulationWorker(QThread):
             os.chdir(original_dir)
 
     def _on_step(self, d):
-        """Hook de lions.track : progression, donnees de plot, arret."""
+        """Hook de lions.cli.track : progression, donnees de plot, arret."""
         ite = d.step
         # Progression limitee a ~200 emissions pour ne pas noyer la boucle Qt
         if ite % max(1, d.n_steps // 200) == 0 or ite == 1 or ite == d.n_steps:
@@ -148,7 +152,7 @@ class SimulationWorker(QThread):
             for k in range(nbrfam):
                 i1 = d.family_start[k]
                 rr = np.sqrt(d.x[i1]**2 + d.y[i1]**2)
-                wmevpa = d.rest_energy[i1] * (d.gamma[i1] - 1.0) / 1.60217733e-13 / d.mass_number[k]
+                wmevpa = d.rest_energy[i1] * (d.gamma[i1] - 1.0) / MEV / d.mass_number[k]
                 ppp = np.sqrt(d.px[i1]**2 + d.py[i1]**2 + d.pz[i1]**2)
                 tpz = 0.0
                 if ppp > 0:
@@ -215,7 +219,7 @@ class SimulationWorker(QThread):
                     # Energie (MeV/A)
                     ga_a = d.gamma[idx_s:idx_e][ok_k]
                     am0c2_a = d.rest_energy[idx_s:idx_e][ok_k]
-                    wmevpa_a = am0c2_a * (ga_a - 1.0) / 1.60217733e-13 / d.mass_number[k]
+                    wmevpa_a = am0c2_a * (ga_a - 1.0) / MEV / d.mass_number[k]
 
                     # dphi (deg)
                     tetall_a = theta_a + 360.0 * (d.turn - 1)

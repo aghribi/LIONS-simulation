@@ -734,7 +734,7 @@ class InputFormPanel(QWidget):
         """Calcule beta*gamma total a partir des parametres ion (amat, qn, w0mev).
 
         Retourne bg_total = sqrt(gamma^2 - 1), ou 0.0 si le calcul echoue.
-        Meme formule que lions.py init() lignes 1237-1245.
+        Meme formule que lions.io.load().
         """
         try:
             amat = self.amat_spin.value()
@@ -911,10 +911,10 @@ class InputFormPanel(QWidget):
             self._loading = False
 
     def _do_load_data_file(self, path):
-        """Logique de parsing du fichier de donnees (meme structure que lions.init())."""
+        """Logique de parsing du fichier de donnees (meme structure que lions.io.load())."""
         # Import du parser Fortran
         sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
-        from lions import FortranFile, fortran_float
+        from ..io import FortranFile, fortran_float
 
         with open(path, 'r') as f_raw:
             f = FortranFile(f_raw)
@@ -981,7 +981,7 @@ class InputFormPanel(QWidget):
             # Pour simplifier, on ne gere pas yomega dans la GUI pour l'instant
             # (cas tres rare)
             if teta1_val < 0:
-                _yomega_line = f.readline()  # consommer la ligne yomega
+                f.readline()  # consommer la ligne yomega
 
             # 9. zmin, zmax, rmax1
             vals = f.readline().split()
@@ -1396,7 +1396,7 @@ class InputFormPanel(QWidget):
         if not text:
             return []
 
-        from lions import fortran_float
+        from ..io import fortran_float
         result = []
         for line in text.splitlines():
             line = line.strip()

@@ -11,13 +11,13 @@ from PyQt5.QtWidgets import (
     QInputDialog, QStatusBar, QFileDialog
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QTextCursor, QIcon
+from PyQt5.QtGui import QFont, QTextCursor
 
-from lions_input_form import InputFormPanel
-from lions_plots import PlotWidget, Plot3DWindow, HAS_GL
-from lions_worker import SimulationWorker
-from lions_bidim_viewer import BidimViewerDialog
-from lions_field_viewer import FieldViewerDialog
+from .bidim_viewer import BidimViewerDialog
+from .field_viewer import FieldViewerDialog
+from .input_form import InputFormPanel
+from .plots import HAS_GL, Plot3DWindow, PlotWidget
+from .worker import SimulationWorker
 
 # Style clair-bleu
 APP_STYLE = """
@@ -354,7 +354,7 @@ class LionsMainWindow(QMainWindow):
         ficb, ficv1, ficv2 = '', '', ''
         if ficin and os.path.exists(ficin):
             try:
-                from lions import FortranFile
+                from ..io import FortranFile
                 with open(ficin, 'r') as f:
                     ff = FortranFile(f)
                     ff.readline()                    # titre
@@ -487,6 +487,3 @@ def main():
 
     sys.exit(app.exec_())
 
-
-if __name__ == '__main__':
-    main()

@@ -33,10 +33,13 @@ def revolution_frequency(w_mev, b):
 
 
 def write_bmap(path, bz, d2bz=0.0, dbzx=0.0, dbzy=0.0,
-               rmin=0.05, rmax=0.5, nr=46, ntet=361):
-    """Full 360 deg map. Each field is a constant or a function f(r, teta)."""
+               rmin=0.05, rmax=0.5, nr=46, ntet=361, theta_max=2 * np.pi):
+    """Field map over 0..theta_max (360 deg, or 45 deg with ntet = 91 for a 1/8 map).
+
+    Each field is a constant or a function f(r, theta).
+    """
     r = np.linspace(rmin, rmax, nr)[:, None]
-    teta = np.linspace(0.0, 2 * np.pi, ntet)[None, :]
+    teta = np.linspace(0.0, theta_max, ntet)[None, :]
     with open(path, 'w') as f:
         f.write('synthetic\n')
         f.write(f'{rmin} {rmax} {nr} {ntet}\n')

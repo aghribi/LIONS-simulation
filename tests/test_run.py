@@ -4,7 +4,6 @@ import os
 import numpy as np
 import pytest
 
-import lions
 import synthetic as syn
 
 W0 = 1.0  # MeV/u
@@ -68,4 +67,4 @@ def test_on_step_stops_and_closes_files(workdir):
                    r0=syn.larmor_radius(W0, -1.0), w0=W0)
     d = syn.quiet_run('deck.dat', on_step=lambda d: d.step < 100)
     assert d.step == 100
-    assert not lions.files_dict
+    assert not d.outputs

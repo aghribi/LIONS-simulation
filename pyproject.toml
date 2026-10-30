@@ -26,8 +26,16 @@ docs = [
     "furo>=2024.1.29",
 ]
 
-[tool.uv]
-package = false
+[project.scripts]
+lions = "lions.cli:main"
+lions-gui = "lions.gui.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv]
+default-groups = ["dev", "docs"]

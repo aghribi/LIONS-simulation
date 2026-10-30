@@ -45,6 +45,8 @@ class State:
         self.dc_matrix_file = ''
         self.bunch_load_file = 'no'
         self.bunch_save_file = 'no'
+        self.outputs = {}  # open output files, closed by cli.track
+        self.headers_written = False
         self.grid_file_prefix = ''
         self.grid_files = [''] * MAX_GRIDS
         self.swap_bytes = ''

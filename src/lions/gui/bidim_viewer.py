@@ -11,7 +11,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationTool
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QFileDialog, QComboBox, QLabel, QDialog, QListWidget,
-    QDialogButtonBox, QSplitter
+    QSplitter
 )
 from PyQt5.QtCore import Qt
 
@@ -27,21 +27,17 @@ def read_bidim(filepath):
     with open(filepath, 'rb') as f:
         # Header
         num = struct.unpack('i', f.read(4))[0]
-        type_str = f.read(10).decode('ascii', errors='replace').strip()
-        idate = struct.unpack('3i', f.read(12))
-        itime = struct.unpack('3i', f.read(12))
-        lieu = f.read(10).decode('ascii', errors='replace').strip()
-        auteur = f.read(10).decode('ascii', errors='replace').strip()
+        f.read(10 + 12 + 12 + 10 + 10)  # type, date, time, place, author
         titre = f.read(25).decode('ascii', errors='replace').strip()
         labelx = f.read(25).decode('ascii', errors='replace').strip()
         labely = f.read(25).decode('ascii', errors='replace').strip()
         maxx, maxy = struct.unpack('2i', f.read(8))
-        forma = f.read(10).decode('ascii', errors='replace').strip()
+        f.read(10)  # format
         cxmi = f.read(20).decode('ascii', errors='replace').strip()
         cxma = f.read(20).decode('ascii', errors='replace').strip()
         cymi = f.read(20).decode('ascii', errors='replace').strip()
         cyma = f.read(20).decode('ascii', errors='replace').strip()
-        _vide = f.read(120)
+        f.read(120)  # padding
 
         try:
             xmin = float(cxmi)

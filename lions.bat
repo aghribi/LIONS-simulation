@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-python lions_gui.py
+uv run lions-gui
 pause

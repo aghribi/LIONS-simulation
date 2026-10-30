@@ -30,7 +30,7 @@ def fortran(tmp_path_factory):
     exe = build / 'lions_f'
     # No FMA contraction: NumPy does not fuse, and fusing alone shifts the last bits.
     subprocess.run(['gfortran', '-O2', '-ffp-contract=off', '-J', str(build), '-o', str(exe),
-                    str(REPO / 'lion_m.f90'), str(REPO / 'lions_2.0_ep.f90')],
+                    str(REPO / 'fortran' / 'lion_m.f90'), str(REPO / 'fortran' / 'lions_2.0_ep.f90')],
                    check=True, capture_output=True)
     return exe
 
@@ -57,6 +57,15 @@ def case_outer(bunch_file):
     syn.write_pot_outer('pot2.dat', pot=lambda x, y: 0.5 * (1 + np.tanh(y / 0.01)))
     syn.write_deck('deck.dat', **orbit(v_dee=V_DEE, z0=0.002, pr0=10.0, pz0=5.0),
                    tail=[f'no {bunch_file}'])
+    return NOVERT + ['0'], []
+
+
+def case_eighth_map(bunch_file):
+    """Same field as case_outer, given as a 1/8 map (0 to 45 deg, 91 columns)."""
+    case_outer(bunch_file)
+    syn.write_bmap('bmap.dat', bz=lambda r, t: B0 * (1 + 0.05 * np.cos(4 * t)), d2bz=-2.0,
+                   dbzx=lambda r, t: 0.3 * np.sin(4 * t), dbzy=lambda r, t: 0.3 * np.cos(4 * t),
+                   ntet=91, theta_max=np.pi / 4)
     return NOVERT + ['0'], []
 
 
@@ -118,6 +127,7 @@ def case_traps(bunch_file, loaded):
 
 CASES = {
     'outer': case_outer,
+    'eighth_map': case_eighth_map,
     'central': case_central,
     'extraction': case_extraction,
     'correlations': case_correlations,
@@ -152,7 +162,7 @@ def test_python_matches_fortran(tmp_path, fortran, name):
     setup = CASES[name]
     loaded = {'correlations': True, 'traps': True}.get(name)
     extra = run_in(tmp_path / 'f', [str(fortran)], setup, 'bunch_f.bin' if loaded else None)
-    run_in(tmp_path / 'p', [sys.executable, str(REPO / 'lions.py')], setup,
+    run_in(tmp_path / 'p', [sys.executable, '-m', 'lions'], setup,
            'bunch_py.bin' if loaded else None)
 
     n = N_BUNCH if loaded else 1

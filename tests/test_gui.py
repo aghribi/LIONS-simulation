@@ -10,7 +10,7 @@ QtWidgets = pytest.importorskip('PyQt5.QtWidgets')
 import synthetic as syn  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-EXAMPLE = REPO / 'don.120.ref_phi10_mars_2017'
+EXAMPLE = REPO / 'examples' / 'don.120.ref_phi10_mars_2017'
 
 
 @pytest.fixture(scope='module')
@@ -19,14 +19,14 @@ def app():
 
 
 def test_main_window_builds(app):
-    from lions_gui import LionsMainWindow
+    from lions.gui.app import LionsMainWindow
     window = LionsMainWindow()
     assert window.input_panel is not None
     window.close()
 
 
 def test_deck_round_trip(app, tmp_path):
-    from lions_input_form import InputFormPanel
+    from lions.gui.input_form import InputFormPanel
     first = InputFormPanel()
     first.load_data_file(str(EXAMPLE))
     first.write_data_file(str(tmp_path / 'deck.dat'))
@@ -52,7 +52,7 @@ def normalise(params):
 
 
 def test_worker_runs(app, workdir):
-    from lions_worker import SimulationWorker
+    from lions.gui.worker import SimulationWorker
     syn.write_bmap('bmap.dat', -1.0)
     syn.write_deck('deck.dat', fhf=syn.revolution_frequency(1.0, -1.0),
                    r0=syn.larmor_radius(1.0, -1.0), w0=1.0, turns=1)
@@ -68,3 +68,18 @@ def test_worker_runs(app, workdir):
     assert events['done']
     assert events['progress'][0] == 0 and events['progress'][-1] == 360
     assert events['data'] == 3  # step 0, step 1, step 360
+
+
+@pytest.mark.parametrize('ntheta, theta_max', [(361, 2 * 3.141592653589793), (91, 3.141592653589793 / 4)])
+def test_field_viewer_plots_engine_readers(app, workdir, ntheta, theta_max):
+    from lions.gui.field_viewer import FieldViewerDialog
+    from lions.io import read_bfield_map, read_central_potential, read_outer_potential
+    syn.write_bmap('bmap.dat', -1.0, ntet=ntheta, theta_max=theta_max)
+    dialog = FieldViewerDialog()
+    dialog.mag_data = read_bfield_map('bmap.dat')
+    dialog.pot1_data = read_central_potential('pot1.bin')
+    dialog.pot2_data = read_outer_potential('pot2.dat')
+    for index in range(dialog.field_combo.count()):
+        dialog.field_combo.setCurrentIndex(index)
+        dialog._replot()
+    dialog.close()

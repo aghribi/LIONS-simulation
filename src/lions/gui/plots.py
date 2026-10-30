@@ -3,6 +3,8 @@ lions_plots.py - Widget pyqtgraph pour les plots temps reel de LIONS
 Plots dynamiques avec zoom/pan persistant et curseur crosshair.
 """
 
+import importlib
+
 import numpy as np
 import tempfile
 import os
@@ -10,14 +12,14 @@ import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QDoubleSpinBox, QCheckBox, QPushButton, QSpinBox, QDialog,
-    QFileDialog, QRubberBand
+    QFileDialog
 )
-from PyQt5.QtCore import Qt, QEvent, QRect, QSize, QPoint, QUrl
-from PyQt5.QtGui import QFont, QColor, QVector3D
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QFont, QColor
 
 # OpenGL 3D (optionnel, fallback)
 try:
-    import pyqtgraph.opengl as gl
+    importlib.import_module('pyqtgraph.opengl')
     HAS_GL = True
 except ImportError:
     HAS_GL = False

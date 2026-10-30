@@ -12,5 +12,6 @@ Python port of the Fortran 90 code by P. Bertrand (GANIL).
 :maxdepth: 2
 
 guide
+glossary
 api
 ```

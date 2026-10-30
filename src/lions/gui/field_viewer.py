@@ -4,242 +4,16 @@ Lit les fichiers de cartes de champ et affiche en 2D/3D.
 """
 
 import os
-import struct
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
-from mpl_toolkits.mplot3d import Axes3D
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
-    QPushButton, QFileDialog, QComboBox, QLabel, QCheckBox,
-    QLineEdit, QGroupBox, QMessageBox
+    QDialog, QVBoxLayout, QHBoxLayout, QWidget, QPushButton,
+    QFileDialog, QComboBox, QLabel, QCheckBox, QLineEdit,
+    QGroupBox, QMessageBox
 )
-from PyQt5.QtCore import Qt
 
-
-# --- Utilitaires de lecture (repliques de lions.py) ---
-
-def _fortran_float(s):
-    return float(s.replace('d', 'e').replace('D', 'e'))
-
-
-def _read_tokens(f, n, buffer):
-    """Lit n tokens depuis un fichier texte, sur plusieurs lignes si necessaire."""
-    while len(buffer) < n:
-        line = f.readline()
-        if not line:
-            break
-        line = line.strip()
-        if not line:
-            continue
-        buffer.extend(line.split())
-    result = buffer[:n]
-    del buffer[:n]
-    return result
-
-
-# --- Lecture des fichiers ---
-
-def read_magnetic_field(filepath, swap='n'):
-    """Lit une carte de champ magnetique et retourne les tableaux."""
-    tbz = np.zeros((250, 721), dtype=np.float64)
-    d2bz = np.zeros((250, 721), dtype=np.float64)
-    dbzx = np.zeros((250, 721), dtype=np.float64)
-    dbzy = np.zeros((250, 721), dtype=np.float64)
-    dbzxlu = np.zeros((250, 91), dtype=np.float64)
-    dbzylu = np.zeros((250, 91), dtype=np.float64)
-
-    buf = []
-    with open(filepath, 'r') as f:
-        title = f.readline().strip()
-        vals = f.readline().split()
-        rmin = _fortran_float(vals[0])
-        rmax = _fortran_float(vals[1])
-        nr = int(vals[2])
-        ntet = int(vals[3])
-
-        if ntet != 91:
-            # Carte complete
-            for i in range(nr):
-                tokens = _read_tokens(f, ntet, buf)
-                for j in range(ntet):
-                    tbz[i, j] = _fortran_float(tokens[j])
-            for i in range(nr):
-                tokens = _read_tokens(f, ntet, buf)
-                for j in range(ntet):
-                    d2bz[i, j] = _fortran_float(tokens[j])
-            for i in range(nr):
-                tokens = _read_tokens(f, ntet, buf)
-                for j in range(ntet):
-                    dbzx[i, j] = _fortran_float(tokens[j])
-            for i in range(nr):
-                tokens = _read_tokens(f, ntet, buf)
-                for j in range(ntet):
-                    dbzy[i, j] = _fortran_float(tokens[j])
-            htet = 2.0 * np.pi / (ntet - 1.0)
-            ntetall = ntet
-        else:
-            # Carte TOSCA 1/8 symetrie
-            for i in range(nr):
-                tokens = _read_tokens(f, ntet, buf)
-                for j in range(ntet):
-                    tbz[i, 91 - j] = _fortran_float(tokens[j])
-            for i in range(nr):
-                tokens = _read_tokens(f, ntet, buf)
-                for j in range(ntet):
-                    d2bz[i, 91 - j] = _fortran_float(tokens[j])
-            try:
-                for i in range(nr):
-                    tokens = _read_tokens(f, ntet, buf)
-                    for j in range(ntet):
-                        dbzxlu[i, j] = _fortran_float(tokens[j])
-                for i in range(nr):
-                    tokens = _read_tokens(f, ntet, buf)
-                    for j in range(ntet):
-                        dbzylu[i, j] = _fortran_float(tokens[j])
-            except Exception:
-                dbzxlu[:] = 0
-                dbzylu[:] = 0
-
-            # Expansion des symetries
-            tbz[:nr, 180:91:-1] = tbz[:nr, :89]
-            tbz[:nr, 181:361] = tbz[:nr, 1:181]
-            tbz[:nr, 361:721] = tbz[:nr, 1:361]
-            d2bz[:nr, 180:91:-1] = d2bz[:nr, :89]
-            d2bz[:nr, 181:361] = d2bz[:nr, 1:181]
-            d2bz[:nr, 361:721] = d2bz[:nr, 1:361]
-
-            r2 = np.sqrt(2.0) / 2.0
-            dbzx[:nr, 90::-1] = r2 * (dbzxlu[:nr, :91] + dbzylu[:nr, :91])
-            dbzy[:nr, 90::-1] = r2 * (dbzxlu[:nr, :91] - dbzylu[:nr, :91])
-            dbzx[:nr, 180:91:-1] = dbzy[:nr, :89]
-            dbzy[:nr, 180:91:-1] = dbzx[:nr, :89]
-            dbzx[:nr, 181:361] = -dbzx[:nr, 179::-1]
-            dbzy[:nr, 181:361] = dbzy[:nr, 179::-1]
-            dbzx[:nr, 361:721] = dbzx[:nr, 359::-1]
-            dbzy[:nr, 361:721] = -dbzy[:nr, 359::-1]
-            htet = np.pi / 4.0 / (ntet - 1.0)
-            ntetall = 721
-
-    hr = (rmax - rmin) / (nr - 1.0)
-
-    return {
-        'title': title, 'rmin': rmin, 'rmax': rmax,
-        'nr': nr, 'ntet': ntet, 'ntetall': ntetall,
-        'hr': hr, 'htet': htet,
-        'tbz': tbz[:nr, :ntetall],
-        'd2bz': d2bz[:nr, :ntetall],
-        'dbzx': dbzx[:nr, :ntetall],
-        'dbzy': dbzy[:nr, :ntetall],
-    }
-
-
-def _try_read_pot_central(filepath, fdtype, idtype):
-    """Tente de lire le header du potentiel central avec un endianness donne."""
-    with open(filepath, 'rb') as f:
-        f.read(4)  # record marker
-        header_floats = np.frombuffer(f.read(32), dtype=fdtype)
-        header_ints = np.frombuffer(f.read(8), dtype=idtype)
-        xmin = float(header_floats[0]) / 1000.0
-        xmax = float(header_floats[1]) / 1000.0
-        ymin = float(header_floats[2]) / 1000.0
-        ymax = float(header_floats[3]) / 1000.0
-        nx = int(header_ints[0])
-        ny = int(header_ints[1])
-    return xmin, xmax, ymin, ymax, nx, ny
-
-
-def read_potential_central(filepath, swap='n'):
-    """Lit le fichier de potentiel electrique central (binaire Fortran)."""
-    if swap == 'y':
-        fdtype = np.dtype(np.float64).newbyteorder('>')
-        idtype = np.dtype(np.int32).newbyteorder('>')
-    else:
-        fdtype = np.float64
-        idtype = np.int32
-
-    # Lire le header et verifier les dimensions
-    xmin, xmax, ymin, ymax, nx, ny = _try_read_pot_central(filepath, fdtype, idtype)
-
-    # Si les dimensions sont aberrantes, essayer l'autre endianness
-    if nx <= 0 or ny <= 0 or nx > 10000 or ny > 10000:
-        if swap == 'y':
-            fdtype2 = np.float64
-            idtype2 = np.int32
-        else:
-            fdtype2 = np.dtype(np.float64).newbyteorder('>')
-            idtype2 = np.dtype(np.int32).newbyteorder('>')
-        xmin2, xmax2, ymin2, ymax2, nx2, ny2 = _try_read_pot_central(filepath, fdtype2, idtype2)
-        if 0 < nx2 <= 10000 and 0 < ny2 <= 10000:
-            fdtype, idtype = fdtype2, idtype2
-            xmin, xmax, ymin, ymax, nx, ny = xmin2, xmax2, ymin2, ymax2, nx2, ny2
-
-    if nx <= 0 or ny <= 0 or nx > 10000 or ny > 10000:
-        raise ValueError(
-            f"Dimensions invalides dans le header : nx={nx}, ny={ny}. "
-            f"Verifiez le format du fichier et le parametre byte-swap.")
-
-    with open(filepath, 'rb') as f:
-        f.read(4 + 32 + 8 + 4)  # skip header record
-
-        pot = np.zeros((nx, ny), dtype=np.float64)
-        d2pot = np.zeros((nx, ny), dtype=np.float64)
-
-        for i in range(nx):
-            f.read(4)
-            row = np.frombuffer(f.read(ny * 8), dtype=fdtype)
-            pot[i, :] = row
-            f.read(4)
-        try:
-            for i in range(nx):
-                f.read(4)
-                row = np.frombuffer(f.read(ny * 8), dtype=fdtype)
-                d2pot[i, :] = row
-                f.read(4)
-        except Exception:
-            d2pot[:] = 0.0
-
-    return {
-        'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax,
-        'nx': nx, 'ny': ny,
-        'pot': pot, 'd2pot': d2pot,
-    }
-
-
-def read_potential_peripheral(filepath):
-    """Lit le fichier de potentiel electrique peripherique (texte)."""
-    buf = []
-    with open(filepath, 'r') as f:
-        vals = _read_tokens(f, 6, buf)
-        xmin = _fortran_float(vals[0])
-        xmax = _fortran_float(vals[1])
-        ymin = _fortran_float(vals[2])
-        ymax = _fortran_float(vals[3])
-        nx = int(_fortran_float(vals[4]))
-        ny = int(_fortran_float(vals[5]))
-
-        if nx <= 0 or ny <= 0 or nx > 10000 or ny > 10000:
-            raise ValueError(
-                f"Dimensions invalides : nx={nx}, ny={ny}. "
-                f"Verifiez le format du fichier (texte attendu).")
-
-        pot = np.zeros((nx, ny), dtype=np.float64)
-        d2pot = np.zeros((nx, ny), dtype=np.float64)
-
-        for i in range(nx):
-            tokens = _read_tokens(f, ny, buf)
-            for j in range(ny):
-                pot[i, j] = _fortran_float(tokens[j])
-        for i in range(nx):
-            tokens = _read_tokens(f, ny, buf)
-            for j in range(ny):
-                d2pot[i, j] = _fortran_float(tokens[j])
-
-    return {
-        'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax,
-        'nx': nx, 'ny': ny,
-        'pot': pot, 'd2pot': d2pot,
-    }
+from ..io import read_bfield_map, read_central_potential, read_outer_potential
 
 
 # --- Widget de visualisation ---
@@ -362,7 +136,7 @@ class FieldViewerDialog(QDialog):
             QMessageBox.warning(self, "Erreur", "Fichier champ B introuvable.")
             return
         try:
-            self.mag_data = read_magnetic_field(path, self.swap)
+            self.mag_data = read_bfield_map(path)
             self.field_combo.setCurrentIndex(0)
             self._replot()
         except Exception as e:
@@ -374,7 +148,11 @@ class FieldViewerDialog(QDialog):
             QMessageBox.warning(self, "Erreur", "Fichier pot. central introuvable.")
             return
         try:
-            self.pot1_data = read_potential_central(path, self.swap)
+            swap = self.swap == 'y'
+            try:
+                self.pot1_data = read_central_potential(path, swap)
+            except ValueError:  # header unreadable: retry with the other byte order
+                self.pot1_data = read_central_potential(path, not swap)
             self.field_combo.setCurrentIndex(4)
             self._replot()
         except Exception as e:
@@ -386,7 +164,7 @@ class FieldViewerDialog(QDialog):
             QMessageBox.warning(self, "Erreur", "Fichier pot. periph. introuvable.")
             return
         try:
-            self.pot2_data = read_potential_peripheral(path)
+            self.pot2_data = read_outer_potential(path)
             self.field_combo.setCurrentIndex(5)
             self._replot()
         except Exception as e:
@@ -416,13 +194,14 @@ class FieldViewerDialog(QDialog):
             return
 
         d = self.mag_data
-        fields = [d['tbz'], d['d2bz'], d['dbzx'], d['dbzy']]
+        nr, nt = d['nr'], d['ntheta_all']
+        fields = [d[k][:nr, :nt] for k in ('bz', 'd2bz', 'dbzdx', 'dbzdy')]
         names = ['Bz (T)', 'd\u00b2Bz/dr\u00b2', 'dBz/dx', 'dBz/dy']
         data = fields[field_idx]
 
         # Creer grille (r, theta) -> (x, y) en mm
         r_arr = np.linspace(d['rmin'], d['rmax'], d['nr']) * 1000.0
-        theta_arr = np.linspace(0, 2 * np.pi, d['ntetall'])
+        theta_arr = np.linspace(0, 2 * np.pi, d['ntheta_all'])
         R, Theta = np.meshgrid(r_arr, theta_arr, indexing='ij')
         X = R * np.cos(Theta)
         Y = R * np.sin(Theta)
@@ -431,7 +210,7 @@ class FieldViewerDialog(QDialog):
             ax = fig.add_subplot(111, projection='3d')
             # Sous-echantillonner pour la 3D
             step_r = max(1, d['nr'] // 80)
-            step_t = max(1, d['ntetall'] // 180)
+            step_t = max(1, d['ntheta_all'] // 180)
             ax.plot_surface(X[::step_r, ::step_t], Y[::step_r, ::step_t],
                            data[::step_r, ::step_t],
                            cmap=cmap, alpha=0.9, linewidth=0,
@@ -441,7 +220,7 @@ class FieldViewerDialog(QDialog):
             ax.set_zlabel(names[field_idx])
         else:
             ax = fig.add_subplot(111)
-            im = ax.pcolormesh(X, Y, data, cmap=cmap, shading='auto')
+            im = ax.pcolormesh(X, Y, data, cmap=cmap, shading='gouraud')
             fig.colorbar(im, ax=ax, label=names[field_idx])
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')
@@ -449,7 +228,7 @@ class FieldViewerDialog(QDialog):
 
         ax.set_title(f"{d['title']} - {names[field_idx]}\n"
                      f"r: [{d['rmin']*1000:.0f}, {d['rmax']*1000:.0f}] mm, "
-                     f"nr={d['nr']}, ntet={d['ntet']}")
+                     f"nr={d['nr']}, ntheta={d['ntheta']}")
 
     def _plot_potential(self, fig, pot_idx, cmap, is_3d):
         data_dict = self.pot1_data if pot_idx == 0 else self.pot2_data
