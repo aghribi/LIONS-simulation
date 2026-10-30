@@ -52,7 +52,7 @@ d = lions.run('don.120.ref_phi10_mars_2017', on_step=lambda d: d.step < 1000)
 `vertical` takes the keyword arguments of `lions.set_vertical_sorter` (lengths in m, angles in deg); the default is no vertical sorter.
 State names and their Fortran counterparts: `docs/glossary.md`.
 
-The input deck format is described line by line in section 4 of `DOCUMENTATION_LIONS.md`.
+The input deck format is described line by line in `docs/guide/02_inputs.md`.
 The deck ends with two optional entries, `[b_factor] [ficloa ficsto]`.
 Without `b_factor`, the magnetic map is used as read, as in the Fortran.
 With it, the map is scaled so that max|Bz| = `b_factor` (T).
@@ -74,7 +74,7 @@ The GUI always writes `b_factor`.
 | `src/lions/gui/` | Main window, parameter form, worker thread, plots, field and bidim viewers |
 | `fortran/` | Fortran reference. `lions_2.0_ep_windows.f90` reads the central potential and writes saved bunches as big-endian |
 | `examples/` | CIME decks. Their maps and sigma file are not in the repository |
-| `generate_pdf.py` | PDF of `DOCUMENTATION_LIONS.md` (needs `fpdf2`) |
+| `generate_pdf.py` | PDF of the guide pages `docs/guide/*.md` (needs `fpdf2`) |
 
 ## Units
 
@@ -112,11 +112,18 @@ Inputs are synthetic, written per test into a temporary directory (`tests/synthe
 
 ## Documentation
 
-Full technical documentation (French): `DOCUMENTATION_LIONS.md`. Sphinx site with the same content and the API:
+Technical guide: `docs/guide/` (inputs, outputs, coordinates, algorithms, bunch generation, GUI, worked example).
+Sphinx site with the guide, the glossary and the API:
 
 ```bash
 uv sync
 uv run sphinx-build -b html docs docs/_build/html
+```
+
+PDF of the guide, written to `docs/_build/pdf/LIONS.pdf`:
+
+```bash
+uv run --with fpdf2 python generate_pdf.py
 ```
 
 ## Credits

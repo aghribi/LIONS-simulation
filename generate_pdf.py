@@ -1,26 +1,30 @@
+"""PDF of the LIONS guide: docs/guide/*.md in filename order, rendered with fpdf2.
+
+Usage: uv run --with fpdf2 python generate_pdf.py
+Output: docs/_build/pdf/LIONS.pdf
 """
-Script de generation du PDF de la documentation LIONS.
-Utilise fpdf2 pour produire un PDF propre a partir du fichier Markdown.
-"""
-import re
+import datetime
+import glob
 import os
+import re
+
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-# Chemins
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MD_FILE = os.path.join(SCRIPT_DIR, 'DOCUMENTATION_LIONS.md')
-PDF_FILE = os.path.join(SCRIPT_DIR, 'DOCUMENTATION_LIONS.pdf')
+GUIDE_DIR = os.path.join(SCRIPT_DIR, 'docs', 'guide')
+PDF_FILE = os.path.join(SCRIPT_DIR, 'docs', '_build', 'pdf', 'LIONS.pdf')
+TITLE = 'LIONS technical guide'
 
 
 class DocPDF(FPDF):
-    """PDF personnalise avec en-tete et pied de page."""
+    """PDF with page header and footer."""
 
     def header(self):
         if self.page_no() > 1:
             self.set_font('Helvetica', 'I', 8)
             self.set_text_color(120, 120, 120)
-            self.cell(0, 5, 'LIONS - Documentation Technique Complete', align='C')
+            self.cell(0, 5, TITLE, align='C')
             self.ln(8)
 
     def footer(self):
@@ -31,7 +35,7 @@ class DocPDF(FPDF):
 
 
 def clean_text(text):
-    """Nettoie le texte markdown pour l'affichage PDF."""
+    """Strip inline markdown (code, bold, italics, links)."""
     text = re.sub(r'`([^`]+)`', r'\1', text)
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'\*([^*]+)\*', r'\1', text)
@@ -40,7 +44,7 @@ def clean_text(text):
 
 
 def parse_table(lines, start_idx):
-    """Parse un tableau markdown et retourne (rows, end_idx)."""
+    """Parse a markdown table; return (rows, index of the next line)."""
     rows = []
     idx = start_idx
     while idx < len(lines):
@@ -56,19 +60,13 @@ def parse_table(lines, start_idx):
     return rows, idx
 
 
-def nl(pdf):
-    """Passe a la ligne suivante (equivalent de ln=True dans cell)."""
-    pdf.set_x(pdf.l_margin)
-    pdf.set_y(pdf.get_y())
-
-
 def cell_ln(pdf, w, h, txt, **kwargs):
-    """cell() suivi d'un passage a la ligne."""
+    """cell() followed by a line break."""
     pdf.cell(w, h, txt, new_x=XPos.LMARGIN, new_y=YPos.NEXT, **kwargs)
 
 
 def fit_text(pdf, txt, max_w):
-    """Tronque le texte pour qu'il tienne dans max_w (mm)."""
+    """Truncate txt to fit in max_w (mm)."""
     if pdf.get_string_width(txt) + 1 <= max_w:
         return txt
     while len(txt) > 0 and pdf.get_string_width(txt + '..') + 1 > max_w:
@@ -76,38 +74,45 @@ def fit_text(pdf, txt, max_w):
     return txt + '..' if txt else ''
 
 
-def generate_pdf():
-    with open(MD_FILE, 'r', encoding='utf-8') as f:
-        md_text = f.read()
+def read_guide():
+    """Lines of all guide pages, in filename order."""
+    pages = sorted(glob.glob(os.path.join(GUIDE_DIR, '*.md')))
+    if not pages:
+        raise FileNotFoundError(f'no guide page in {GUIDE_DIR}')
+    lines = []
+    for page in pages:
+        with open(page, encoding='utf-8') as f:
+            lines += f.read().split('\n') + ['']
+    return pages, lines
 
-    lines = md_text.split('\n')
+
+def generate_pdf():
+    pages, lines = read_guide()
 
     pdf = DocPDF()
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=20)
 
-    # -- Page de titre --
+    # Title page
     pdf.add_page()
     pdf.set_font('Helvetica', 'B', 28)
     pdf.ln(50)
     cell_ln(pdf, 0, 15, 'LIONS', align='C')
     pdf.set_font('Helvetica', '', 14)
     pdf.ln(5)
-    cell_ln(pdf, 0, 10, 'Documentation Technique Complete', align='C')
+    cell_ln(pdf, 0, 10, 'Technical guide', align='C')
     pdf.ln(10)
     pdf.set_font('Helvetica', '', 11)
-    cell_ln(pdf, 0, 8, 'Programme de Simulation de Dynamique', align='C')
-    cell_ln(pdf, 0, 8, "d'Ions dans un Cyclotron", align='C')
+    cell_ln(pdf, 0, 8, 'Ion tracking in separated-sector cyclotrons', align='C')
     pdf.ln(20)
     pdf.set_font('Helvetica', 'I', 10)
-    cell_ln(pdf, 0, 8, 'Auteur original : Patrick Bertrand - GANIL', align='C')
-    cell_ln(pdf, 0, 8, 'Conversion Python et GUI : 2026', align='C')
+    cell_ln(pdf, 0, 8, 'Fortran code: P. Bertrand, GANIL', align='C')
+    cell_ln(pdf, 0, 8, 'Python port and GUI: O. Kamalou, GANIL', align='C')
     pdf.ln(30)
     pdf.set_font('Helvetica', '', 9)
-    cell_ln(pdf, 0, 6, 'Genere le 13 fevrier 2026', align='C')
+    cell_ln(pdf, 0, 6, f'Generated on {datetime.date.today().isoformat()}', align='C')
 
-    # -- Contenu --
-    pdf.add_page()
+    # Content
     i = 0
     in_code_block = False
     code_buffer = []
@@ -115,13 +120,13 @@ def generate_pdf():
     while i < len(lines):
         line = lines[i]
 
-        # Blocs de code
+        # Code blocks
         if line.strip().startswith('```'):
             if in_code_block:
                 in_code_block = False
                 pdf.set_font('Courier', '', 7)
                 pdf.set_fill_color(240, 240, 240)
-                pdf.set_x(pdf.l_margin)  # Reset position X
+                pdf.set_x(pdf.l_margin)
                 code_text = '\n'.join(code_buffer)
                 if code_text.strip():
                     pdf.multi_cell(0, 3.5, code_text, border=1, fill=True)
@@ -141,12 +146,12 @@ def generate_pdf():
 
         stripped = line.strip()
 
-        # Lignes vides
+        # Blank lines
         if not stripped:
             i += 1
             continue
 
-        # Separateurs ---
+        # Rules ---
         if re.match(r'^-{3,}$', stripped):
             pdf.ln(3)
             pdf.set_draw_color(180, 180, 180)
@@ -155,53 +160,36 @@ def generate_pdf():
             i += 1
             continue
 
-        # Titre H1
-        if stripped.startswith('# ') and not stripped.startswith('## '):
-            i += 1
-            continue
-
-        # Titre H2 -> nouvelle page
-        if stripped.startswith('## '):
-            title = clean_text(stripped[3:])
-            pdf.add_page()
-            pdf.set_font('Helvetica', 'B', 18)
-            pdf.set_text_color(0, 51, 102)
-            cell_ln(pdf, 0, 12, title)
-            pdf.set_draw_color(0, 51, 102)
-            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-            pdf.ln(5)
+        # Headings: H1 (one per guide page) starts a new page
+        level = len(stripped) - len(stripped.lstrip('#'))
+        if 1 <= level <= 4 and stripped[level:level + 1] == ' ':
+            title = clean_text(stripped[level + 1:])
+            if level == 1:
+                pdf.add_page()
+                pdf.set_font('Helvetica', 'B', 18)
+                pdf.set_text_color(0, 51, 102)
+                cell_ln(pdf, 0, 12, title)
+                pdf.set_draw_color(0, 51, 102)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(5)
+            elif level == 2:
+                pdf.ln(5)
+                pdf.set_font('Helvetica', 'B', 13)
+                pdf.set_text_color(0, 70, 130)
+                cell_ln(pdf, 0, 8, title)
+                pdf.ln(2)
+            else:
+                pdf.ln(3)
+                pdf.set_font('Helvetica', 'B', 11)
+                pdf.set_text_color(50, 50, 50)
+                cell_ln(pdf, 0, 7, title)
+                pdf.ln(1)
             pdf.set_text_color(0, 0, 0)
             pdf.set_font('Helvetica', '', 10)
             i += 1
             continue
 
-        # Titre H3
-        if stripped.startswith('### '):
-            title = clean_text(stripped[4:])
-            pdf.ln(5)
-            pdf.set_font('Helvetica', 'B', 13)
-            pdf.set_text_color(0, 70, 130)
-            cell_ln(pdf, 0, 8, title)
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font('Helvetica', '', 10)
-            pdf.ln(2)
-            i += 1
-            continue
-
-        # Titre H4
-        if stripped.startswith('#### '):
-            title = clean_text(stripped[5:])
-            pdf.ln(3)
-            pdf.set_font('Helvetica', 'B', 11)
-            pdf.set_text_color(50, 50, 50)
-            cell_ln(pdf, 0, 7, title)
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font('Helvetica', '', 10)
-            pdf.ln(1)
-            i += 1
-            continue
-
-        # Tableaux
+        # Tables
         if stripped.startswith('|'):
             rows, end_idx = parse_table(lines, i)
             if rows:
@@ -209,7 +197,7 @@ def generate_pdf():
                 page_w = 190
                 font_size = 6 if n_cols > 6 else (7 if n_cols > 5 else (8 if n_cols > 3 else 9))
 
-                # Calculer les largeurs adaptees au contenu
+                # Column widths from the content
                 pdf.set_font('Helvetica', 'B', font_size)
                 max_lens = [0] * n_cols
                 for row in rows:
@@ -220,11 +208,11 @@ def generate_pdf():
                             max_lens[ci] = sw
                 total = sum(max_lens) if sum(max_lens) > 0 else 1
                 col_widths = [max(12, ml / total * page_w) for ml in max_lens]
-                # Normaliser pour que la somme = page_w
+                # Scale so that the widths add up to page_w
                 s = sum(col_widths)
                 col_widths = [w / s * page_w for w in col_widths]
 
-                # En-tete du tableau
+                # Header row
                 pdf.set_font('Helvetica', 'B', font_size)
                 pdf.set_fill_color(0, 51, 102)
                 pdf.set_text_color(255, 255, 255)
@@ -235,7 +223,7 @@ def generate_pdf():
                 pdf.ln()
                 pdf.set_text_color(0, 0, 0)
 
-                # Donnees
+                # Data rows
                 pdf.set_font('Helvetica', '', font_size)
                 for ri, row in enumerate(rows[1:]):
                     fill = (ri % 2 == 0)
@@ -255,7 +243,7 @@ def generate_pdf():
             i = end_idx
             continue
 
-        # Listes a puces
+        # Lists
         if re.match(r'^[-*]\s', stripped) or re.match(r'^\d+\.\s', stripped):
             text = re.sub(r'^[-*]\s+', '', stripped)
             text = re.sub(r'^\d+\.\s+', '', text)
@@ -269,7 +257,7 @@ def generate_pdf():
                 num = stripped.split('.')[0].strip()
                 prefix = f'  {num}. '
             pdf.set_font('Helvetica', '', 9)
-            pdf.set_x(pdf.l_margin)  # Reset position X
+            pdf.set_x(pdf.l_margin)
             full_text = prefix + text
             if full_text.strip():
                 pdf.multi_cell(0, 4.5, full_text)
@@ -277,20 +265,20 @@ def generate_pdf():
             i += 1
             continue
 
-        # Paragraphes normaux
+        # Paragraphs
         text = clean_text(stripped)
         if text:
             pdf.set_font('Helvetica', '', 10)
-            pdf.set_x(pdf.l_margin)  # Reset position X
+            pdf.set_x(pdf.l_margin)
             pdf.multi_cell(0, 5, text)
             pdf.ln(2)
 
         i += 1
 
+    os.makedirs(os.path.dirname(PDF_FILE), exist_ok=True)
     pdf.output(PDF_FILE)
-    print(f'PDF genere : {PDF_FILE}')
-    print(f'Taille : {os.path.getsize(PDF_FILE) / 1024:.0f} Ko')
-    print(f'Pages : {pdf.page_no()}')
+    print(f'{len(pages)} guide pages -> {PDF_FILE}')
+    print(f'size: {os.path.getsize(PDF_FILE) / 1024:.0f} kB, pages: {pdf.page_no()}')
 
 
 if __name__ == '__main__':

@@ -10,8 +10,16 @@ Python port of the Fortran 90 code by P. Bertrand (GANIL).
 
 ```{toctree}
 :maxdepth: 2
+:caption: Guide
+:glob:
 
-guide
+guide/*
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Reference
+
 glossary
 api
 ```
