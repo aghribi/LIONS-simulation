@@ -6,7 +6,7 @@ import numpy as np
 
 
 def check_box(d):
-    """Vérifie quelles particules sont dans la boîte de simulation."""
+    """Mask of live particles inside the field map and the z limits."""
     d.r = np.sqrt(d.x * d.x + d.y * d.y)
     d.in_box = ((d.r > d.map_rmin) & (d.r < (d.map_rmax - 0.02)) &
              (d.z > d.zmin) & (d.z < d.zmax))
@@ -15,13 +15,13 @@ def check_box(d):
 
 
 def check_central(d):
-    """Vérifie les particules dans la zone centrale."""
+    """Mask of particles in the central region."""
     d.in_central = d.in_box & (d.r < d.central_rmax) & (np.abs(d.y) < (d.central_ymax - d.central_dy))
     d.n_central = np.count_nonzero(d.in_central)
 
 
 def check_outer(d, vecx, vecy):
-    """Vérifie les particules dans la zone périphérique (vecx, vecy : repere du gap)."""
+    """Mask of particles in the outer region (vecx, vecy: gap frame)."""
     d.in_outer = ((vecx > d.outer_xmin) & (vecx < d.outer_xmax) &
                 (vecy > d.outer_ymin) & (vecy < d.outer_ymax) &
                 d.in_box & ~d.in_central)
@@ -29,8 +29,7 @@ def check_outer(d, vecx, vecy):
 
 
 def check_deflector(d, i):
-    """Vérifie les particules dans un déflecteur électrique."""
-    # i est 0-based en Python
+    """Mask of particles inside electrostatic deflector i (0-based)."""
     cond_in = (((d.x - d.deflector_in_x[i]) * d.deflector_in_uy[i] - (d.y - d.deflector_in_y[i]) * d.deflector_in_ux[i]) <= 0.0)
     cond_out = (((d.x - d.deflector_out_x[i]) * d.deflector_out_uy[i] - (d.y - d.deflector_out_y[i]) * d.deflector_out_ux[i]) >= 0.0)
 
@@ -54,7 +53,7 @@ def check_deflector(d, i):
 
 
 def check_dipole(d, i):
-    """Vérifie les particules dans un dipôle magnétique."""
+    """Mask of particles inside magnetic dipole i (0-based)."""
     cond_in = (((d.x - d.dipole_x[i]) * d.dipole_in_uy[i] - (d.y - d.dipole_y[i]) * d.dipole_in_ux[i]) <= 0.0)
     cond_out = (((d.x - d.dipole_x[i]) * d.dipole_out_uy[i] - (d.y - d.dipole_y[i]) * d.dipole_out_ux[i]) >= 0.0)
     d.in_element = d.extracted & cond_in & cond_out & d.alive
@@ -62,7 +61,7 @@ def check_dipole(d, i):
 
 
 def check_grid(d, i):
-    """Vérifie les particules aux grilles d'extraction."""
+    """Mask of particles crossing extraction grid i (0-based)."""
     cond_cross = (((d.x - d.grid_x[i]) * d.grid_uy[i] -
                    (d.y - d.grid_y[i]) * d.grid_ux[i]) <= 0.0)
 
@@ -81,7 +80,7 @@ def check_grid(d, i):
 
 
 def apply_traps(d):
-    """Gère le piégeage des ions dans les obstacles."""
+    """Remove particles outside the z limits or inside a trap circle."""
     if d.n_traps == 0:
         return
     mask_z = (d.z < d.zmin) | (d.z > d.zmax)
@@ -89,9 +88,9 @@ def apply_traps(d):
 
     if d.step <= d.trap_last_step:
         for k in range(d.n_traps):
-            rpie2 = d.trap_r[k]**2
-            mask_pie = ((d.x - d.trap_x[k])**2 + (d.y - d.trap_y[k])**2) <= rpie2
-            d.alive[mask_pie] = False
+            r2 = d.trap_r[k]**2
+            inside = ((d.x - d.trap_x[k])**2 + (d.y - d.trap_y[k])**2) <= r2
+            d.alive[inside] = False
 
     d.n_alive = np.count_nonzero(d.alive)
     if d.trapped_follow == 1:

@@ -11,33 +11,33 @@ from .fields import add_harmonics
 
 
 def prompt(prompt=''):
-    """Lit une ligne d'entrée utilisateur."""
+    """Print the prompt if any, then read one stripped line from stdin."""
     if prompt:
         print(prompt)
     return input().strip()
 
 
 def fortran_float(s):
-    """Convertit un nombre Fortran (notation d/D) en float Python."""
+    """Float from a Fortran number string (d/D exponent allowed)."""
     return float(s.replace('d', 'e').replace('D', 'e'))
 
 
 def parse_floats(s):
-    """Parse une chaîne en liste de floats (supporte la notation Fortran d0)."""
+    """Whitespace-separated floats, Fortran d exponent allowed."""
     return [fortran_float(x) for x in s.split()]
 
 
 def parse_ints(s):
-    """Parse une chaîne en liste d'ints."""
+    """Whitespace-separated ints, read through fortran_float."""
     return [int(fortran_float(x)) for x in s.split()]
 
 
 class FortranFile:
-    """Émule la lecture Fortran list-directed (read(unit,*)).
+    """Fortran list-directed reading (read(unit,*)).
 
-    - Saute les lignes vides
-    - Peut lire N tokens sur plusieurs lignes
-    - Gère les chaînes entre quotes (simple ou double)
+    - skips blank lines
+    - reads N tokens across several lines
+    - handles single- or double-quoted strings
     """
 
     def __init__(self, f):
@@ -52,7 +52,7 @@ class FortranFile:
 
     @staticmethod
     def _tokenize(line):
-        """Découpe une ligne en tokens, en gérant les chaînes quotées."""
+        """Split a line on blanks and commas, keeping quoted strings whole."""
         tokens = []
         i = 0
         while i < len(line):
@@ -76,7 +76,7 @@ class FortranFile:
         return tokens
 
     def readline(self):
-        """Lit la prochaine ligne non vide (comme Fortran)."""
+        """Next non-blank line, '' at end of file."""
         while True:
             line = self.f.readline()
             if not line:
@@ -85,7 +85,7 @@ class FortranFile:
                 return line
 
     def read_tokens(self, n):
-        """Lit exactement n tokens, en continuant sur les lignes suivantes si nécessaire."""
+        """Exactly n tokens, read across lines if needed; fewer only at end of file."""
         result = list(self._buffer)
         self._buffer = []
         while len(result) < n:
@@ -216,61 +216,60 @@ def read_outer_potential(path):
             'nx': nx, 'ny': ny, 'pot': pot, 'd2pot': d2pot}
 
 
-def load(d, ficin):
-    """Initialisation : lecture du fichier de données ficin, cartes de champ, etc."""
+def load(d, deck_file):
+    """Read the input deck, the field maps and potentials, and set up the bunch and outputs."""
     d.outputs.clear()
 
-
-    d.deck_file = ficin
-    with open(d.deck_file, 'r') as f20_raw:
-      f20 = FortranFile(f20_raw)
-      with f20:  # dummy context for indentation
-        d.title = f20.readline().strip().strip('"').strip("'")
-        vals = f20.readline().split()
+    d.deck_file = deck_file
+    with open(d.deck_file, 'r') as raw:
+      deck = FortranFile(raw)
+      with deck:  # no-op context, keeps the block indented as one unit
+        d.title = deck.readline().strip().strip('"').strip("'")
+        vals = deck.readline().split()
         d.steps_per_turn = int(vals[0])
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.design_r_final = fortran_float(vals[0])
         d.design_turns = int(vals[1])
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.rf_frequency = fortran_float(vals[0])
         d.dee_half_angle = fortran_float(vals[2])
         d.harmonic = fortran_float(vals[3])
         d.db_over_b = fortran_float(vals[4])
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.phase_right = fortran_float(vals[0]) * np.pi / 180.0
         d.phase_left = fortran_float(vals[1]) * np.pi / 180.0
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.v_dee_right = -fortran_float(vals[0])
         d.v_dee_left = -fortran_float(vals[1])
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.harmonic_n_coef[0] = int(vals[0])
         if d.harmonic_n_coef[0] != 0:
-            vals = f20.readline().split()
+            vals = deck.readline().split()
             for i in range(d.harmonic_n_coef[0]):
                 d.harmonic_coef[i, 0] = fortran_float(vals[i])
-            d.harmonic_phase[0] = fortran_float(f20.readline().split()[0])
-        vals = f20.readline().split()
+            d.harmonic_phase[0] = fortran_float(deck.readline().split()[0])
+        vals = deck.readline().split()
         d.harmonic_n_coef[1] = int(vals[0])
         if d.harmonic_n_coef[1] != 0:
-            vals = f20.readline().split()
+            vals = deck.readline().split()
             for i in range(d.harmonic_n_coef[1]):
                 d.harmonic_coef[i, 1] = fortran_float(vals[i])
-            d.harmonic_phase[1] = fortran_float(f20.readline().split()[0])
+            d.harmonic_phase[1] = fortran_float(deck.readline().split()[0])
 
         d.gap_offset = 0.0
         if d.dee_half_angle < 0.0:
-            print('attention : gap en biais...')
-            print('on remet teta1 positif')
-            print('et on va lire le decalage...')
+            print('warning: skewed gap')
+            print('dee half-angle made positive')
+            print('reading the gap offset')
             d.dee_half_angle = -d.dee_half_angle
-            d.gap_offset = fortran_float(f20.readline().split()[0])
-            print(f'decalage yomega : {d.gap_offset}')
+            d.gap_offset = fortran_float(deck.readline().split()[0])
+            print(f'gap offset yomega: {d.gap_offset}')
 
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.zmin = fortran_float(vals[0])
         d.zmax = fortran_float(vals[1])
         d.central_rmax = fortran_float(vals[2])
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.extraction = fortran_float(vals[0])
         d.cut_bunch = fortran_float(vals[1])
         d.grids_on = fortran_float(vals[2])
@@ -281,50 +280,50 @@ def load(d, ficin):
         if d.extraction < 0.0:
             if d.cut_bunch <= 0.0:
                 d.extraction_start_step = 0
-                print('extraction : le paquet sera coupe')
+                print('extraction: the bunch will be cut')
             else:
                 d.extraction_start_step = int(d.cut_bunch + 0.5)
-                print('extraction : le paquet sera entier')
-            d.n_deflectors = int(f20.readline().split()[0])
+                print('extraction: the bunch will be kept whole')
+            d.n_deflectors = int(deck.readline().split()[0])
             if d.n_deflectors > 0:
                 for i in range(d.n_deflectors):
-                    vals = f20.readline().split()
+                    vals = deck.readline().split()
                     d.deflector_r[i] = fortran_float(vals[0])
                     d.deflector_e[i] = fortran_float(vals[1])
                     d.deflector_in_x[i] = fortran_float(vals[2])
                     d.deflector_in_y[i] = fortran_float(vals[3])
                     d.deflector_out_x[i] = fortran_float(vals[4])
                     d.deflector_out_y[i] = fortran_float(vals[5])
-                    tetdfid = fortran_float(vals[6])
-                    tetdfod = fortran_float(vals[7])
-                    d.deflector_in_angle[i] = tetdfid * np.pi / 180.0
-                    d.deflector_out_angle[i] = tetdfod * np.pi / 180.0
+                    in_angle_deg = fortran_float(vals[6])
+                    out_angle_deg = fortran_float(vals[7])
+                    d.deflector_in_angle[i] = in_angle_deg * np.pi / 180.0
+                    d.deflector_out_angle[i] = out_angle_deg * np.pi / 180.0
                     d.deflector_in_ux[i] = np.cos(d.deflector_in_angle[i])
                     d.deflector_in_uy[i] = np.sin(d.deflector_in_angle[i])
                     d.deflector_out_ux[i] = np.cos(d.deflector_out_angle[i])
                     d.deflector_out_uy[i] = np.sin(d.deflector_out_angle[i])
-            d.n_dipoles = int(f20.readline().split()[0])
+            d.n_dipoles = int(deck.readline().split()[0])
             if d.n_dipoles > 0:
                 for i in range(d.n_dipoles):
-                    vals = f20.readline().split()
+                    vals = deck.readline().split()
                     d.dipole_r[i] = fortran_float(vals[0])
                     d.dipole_gradient[i] = fortran_float(vals[1])
                     d.dipole_x[i] = fortran_float(vals[2])
                     d.dipole_y[i] = fortran_float(vals[3])
-                    tetdmid = fortran_float(vals[4])
-                    tetdmod = fortran_float(vals[5])
-                    d.dipole_in_angle[i] = tetdmid * np.pi / 180.0
-                    d.dipole_out_angle[i] = tetdmod * np.pi / 180.0
+                    in_angle_deg = fortran_float(vals[4])
+                    out_angle_deg = fortran_float(vals[5])
+                    d.dipole_in_angle[i] = in_angle_deg * np.pi / 180.0
+                    d.dipole_out_angle[i] = out_angle_deg * np.pi / 180.0
                     d.dipole_in_ux[i] = np.cos(d.dipole_in_angle[i])
                     d.dipole_in_uy[i] = np.sin(d.dipole_in_angle[i])
                     d.dipole_out_ux[i] = np.cos(d.dipole_out_angle[i])
                     d.dipole_out_uy[i] = np.sin(d.dipole_out_angle[i])
             if d.grids_on > 0.0:
-                print('grilles extraction...')
+                print('extraction grids')
                 d.grid_start_step = int(d.grid_start + 0.5)
-                d.n_grids = int(f20.readline().split()[0])
+                d.n_grids = int(deck.readline().split()[0])
                 for kg in range(d.n_grids):
-                    vals = f20.readline().split()
+                    vals = deck.readline().split()
                     d.grid_angle_deg[kg] = fortran_float(vals[0])
                     d.grid_x[kg] = fortran_float(vals[1]) / 1000.0
                     d.grid_y[kg] = fortran_float(vals[2]) / 1000.0
@@ -334,14 +333,13 @@ def load(d, ficin):
                                           (d.grid_y[kg] - d.grid_yc[kg])**2)
                     d.grid_ux[kg] = (d.grid_x[kg] - d.grid_xc[kg]) / d.grid_length[kg]
                     d.grid_uy[kg] = (d.grid_y[kg] - d.grid_yc[kg]) / d.grid_length[kg]
-                d.grid_file_prefix = f20.readline().strip()
+                d.grid_file_prefix = deck.readline().strip()
                 for kg in range(d.n_grids):
-                    ficfingex = str(kg + 1)
-                    d.grid_files[kg] = d.grid_file_prefix + '.' + ficfingex
-                    fgex = open(d.grid_files[kg], 'w')
-                    d.outputs[f'grid{kg}'] = fgex
-                    fgex.write('teta x y xc yc : \n')
-                    fgex.write(f'{d.grid_angle_deg[kg]} {d.grid_x[kg]} {d.grid_y[kg]}'
+                    d.grid_files[kg] = d.grid_file_prefix + '.' + str(kg + 1)
+                    fgrid = open(d.grid_files[kg], 'w')
+                    d.outputs[f'grid{kg}'] = fgrid
+                    fgrid.write('theta x y xc yc : \n')
+                    fgrid.write(f'{d.grid_angle_deg[kg]} {d.grid_x[kg]} {d.grid_y[kg]}'
                                f' {d.grid_xc[kg]} {d.grid_yc[kg]}\n')
 
         d.dt = d.harmonic / d.rf_frequency / d.steps_per_turn
@@ -351,19 +349,19 @@ def load(d, ficin):
         d.dee_half_angle = d.dee_half_angle * np.pi / 180.0
         d.cut_bunch = d.cut_bunch * np.pi / 180.0
         d.grids_on = d.grids_on * np.pi / 180.0
-        iharm = int(d.harmonic + 0.5)
+        harm = int(d.harmonic + 0.5)
         d.harmonic_sign = 1.0
-        if (iharm // 2) * 2 == iharm:
+        if (harm // 2) * 2 == harm:
             d.harmonic_sign = -1.0
 
-        d.n_families = int(f20.readline().split()[0])
+        d.n_families = int(deck.readline().split()[0])
         if d.n_families > 1:
-            d.n_particles = int(f20.readline().split()[0])
+            d.n_particles = int(deck.readline().split()[0])
         d.family_start[0] = 0  # 0-based
         n_loaded = 0
 
         for k in range(d.n_families):
-            vals = f20.readline().split()
+            vals = deck.readline().split()
             d.family_size[k] = int(vals[0])
             d.atomic_mass[k] = fortran_float(vals[1])
             d.mass_number[k] = fortran_float(vals[2])
@@ -379,16 +377,16 @@ def load(d, ficin):
                 d.n_traps = 0
                 d.trapped_follow = 1
 
-            vals = f20.readline().split()
+            vals = deck.readline().split()
             d.r0[k] = fortran_float(vals[0])
             d.theta0[k] = fortran_float(vals[1])
             d.z0[k] = fortran_float(vals[2])
             d.pr0[k] = fortran_float(vals[3])
             d.pz0[k] = fortran_float(vals[4])
-            w0mev = fortran_float(vals[5])
+            w0_mev_per_u = fortran_float(vals[5])
             d.phi0_deg[k] = fortran_float(vals[6])
             if k == 0:
-                d.w0_mev_per_u = w0mev
+                d.w0_mev_per_u = w0_mev_per_u
 
             d.theta0[k] *= np.pi / 180.0
             d.pr0[k] *= 0.001
@@ -396,7 +394,7 @@ def load(d, ficin):
             n_loaded += d.family_size[k]
             if n_loaded > d.n_particles:
                 print(f'n np : {d.n_particles} {n_loaded}')
-                print('changer n ou np...')
+                print('change n or np')
                 sys.exit(1)
             d.family_start[k + 1] = d.family_start[k] + d.family_size[k]
             i1 = d.family_start[k]
@@ -404,9 +402,9 @@ def load(d, ficin):
             d.x[i1:i2] = d.r0[k] * np.cos(d.theta0[k])
             d.y[i1:i2] = d.r0[k] * np.sin(d.theta0[k])
             d.z[i1:i2] = d.z0[k]
-            d.w0[k] = w0mev * MEV * d.mass_number[k]
-            am0k = AMU * (d.atomic_mass[k] - ELECTRON_MASS_U * d.charge_state[k])
-            d.mass[i1:i2] = am0k
+            d.w0[k] = w0_mev_per_u * MEV * d.mass_number[k]
+            ion_mass = AMU * (d.atomic_mass[k] - ELECTRON_MASS_U * d.charge_state[k])
+            d.mass[i1:i2] = ion_mass
             d.mass_c[i1:i2] = d.mass[i1:i2] * C_LIGHT
             d.rest_energy[i1:i2] = d.mass[i1:i2] * C_LIGHT**2
             d.gamma[i1:i2] = 1.0 + d.w0[k] / d.rest_energy[i1:i2]
@@ -422,26 +420,26 @@ def load(d, ficin):
         if d.grids_on > 0.0 and d.n_grids > 0:
             for kg in range(d.n_grids):
                 f = d.outputs[f'grid{kg}']
-                f.write('caracteristiques particules :\n')
+                f.write('particles (n A amat q):\n')
                 f.write(f'{d.n_particles} {d.mass_number[0]} {d.atomic_mass[0]} {d.charge_state[0]}\n')
-                f.write('caracteristiques HF :\n')
+                f.write('RF (steps per turn, frequency, harmonic):\n')
                 f.write(f'{d.steps_per_turn} {d.rf_frequency} {d.harmonic}\n')
 
-        d.correlations = int(f20.readline().split()[0])
-        d.sigma_file = "pas de fichier correl..."
+        d.correlations = int(deck.readline().split()[0])
+        d.sigma_file = "no correlation file"
         sigma_matrices = []
         if d.correlations != 0:
-            d.sigma_file = f20.readline().strip()
-            d.phase_space = f20.readline().strip()
-            f25 = open(d.sigma_file, 'r')
-            vals = f20.read_tokens(3)
+            d.sigma_file = deck.readline().strip()
+            d.phase_space = deck.readline().strip()
+            fsigma = open(d.sigma_file, 'r')
+            vals = deck.read_tokens(3)
             d.correlation_file = vals[0]
             d.matrix_file = vals[1]
             d.dc_matrix_file = vals[2]
             if d.correlation_file != 'no':
                 d.outputs['correlation'] = open(d.correlation_file, 'w')
                 d.outputs['correlation'].write(
-                    '  tr     r      teta    dr    ds      dphi'
+                    'turn     r     theta    dr    ds      dphi'
                     '   epsr    dwsw        wmpa     dw          dwdphi'
                     '       dz     epsz\n')
             if d.matrix_file != 'no':
@@ -449,42 +447,42 @@ def load(d, ficin):
             if d.dc_matrix_file != 'no':
                 d.outputs['dc_matrix'] = open(d.dc_matrix_file, 'w')
                 d.outputs['dc_matrix'].write(
-                    '  tr     r      teta   drdc  dsdc  dphidc'
+                    'turn     r     theta   drdc  dsdc  dphidc'
                     ' epsrdc  dwswdc        wmpa   dwdc        dwdphidc\n')
 
-            # Pre-lire les matrices sigma (calcul differe apres chargement champ magnetique)
+            # Sigma matrices are read now, the bunch is built after the field map is loaded
             for k in range(d.n_families):
-                cor_mat = np.zeros((6, 6), dtype=np.float64)
+                sigma = np.zeros((6, 6), dtype=np.float64)
                 for i in range(6):
-                    vals_sig = f25.readline().split()
+                    row = fsigma.readline().split()
                     for j in range(6):
-                        cor_mat[i, j] = fortran_float(vals_sig[j])
-                sigma_matrices.append(cor_mat)
-            f25.close()
+                        sigma[i, j] = fortran_float(row[j])
+                sigma_matrices.append(sigma)
+            fsigma.close()
 
         if n_loaded != d.n_particles:
             print(f'n np : {d.n_particles} {n_loaded}')
-            print('changer n ou np...')
+            print('change n or np')
             sys.exit(1)
 
         d.t0 = d.phi0_deg[0] * np.pi / 180.0 / d.omega_rf
         d.t = d.t0
 
-        vals = f20.readline().split()
+        vals = deck.readline().split()
         d.n_steps = int(vals[0])
         d.output_every = int(vals[1])
-        vals = f20.read_tokens(2)
+        vals = deck.read_tokens(2)
         d.z_output_file = vals[0]
         d.xy_output_file = vals[1]
-        vals = f20.read_tokens(3)
+        vals = deck.read_tokens(3)
         d.bfield_file = vals[0]
         d.central_potential_file = vals[1]
         d.outer_potential_file = vals[2]
-        # Fin optionnelle : [b_factor] [ficloa ficsto]. Le Fortran ne lit que
-        # ficloa ficsto ; b_factor n'est reconnu que s'il est numerique.
+        # Optional tail: [b_factor] [ficloa ficsto]. The Fortran reads only
+        # ficloa ficsto; b_factor is taken only when the first token is numeric.
         tail = []
         while True:
-            tok = f20.read_tokens(1)
+            tok = deck.read_tokens(1)
             if not tok:
                 break
             tail += tok
@@ -501,37 +499,35 @@ def load(d, ficin):
     d.map_rmin, d.map_rmax = bmap['rmin'], bmap['rmax']
     d.map_nr, d.map_ntheta = bmap['nr'], bmap['ntheta']
     d.map_dtheta = bmap['dtheta']
-    ntetall = bmap['ntheta_all']
+    ntheta_all = bmap['ntheta_all']
     d.bz_map[:] = bmap['bz']
     d.d2bz_map[:] = bmap['d2bz']
     d.dbzdx_map[:] = bmap['dbzdx']
     d.dbzdy_map[:] = bmap['dbzdy']
 
     if d.harmonic_n_coef[0] != 0 or d.harmonic_n_coef[1] != 0:
-        print('carte mag. + rajout harmonique 1 et/ou 2...')
-        add_harmonics(d.map_rmin, d.map_rmax, d.map_nr, ntetall, d.bz_map, d.d2bz_map,
+        print('field map plus first and/or second harmonic')
+        add_harmonics(d.map_rmin, d.map_rmax, d.map_nr, ntheta_all, d.bz_map, d.d2bz_map,
              d.dbzdx_map, d.dbzdy_map, d.harmonic_n_coef, d.harmonic_coef, d.harmonic_phase)
 
     d.map_dr = (d.map_rmax - d.map_rmin) / (d.map_nr - 1.0)
 
-    # Sans b_factor, la carte est utilisee telle quelle (comme le Fortran).
-    # Avec b_factor, elle est ramenee a max|Bz| = b_factor (T).
+    # Without b_factor the map is used as read (as in the Fortran).
+    # With b_factor it is scaled to max|Bz| = b_factor (T).
     if d.b_factor is not None:
-        bz_max = np.max(np.abs(d.bz_map[:d.map_nr, :ntetall]))
+        bz_max = np.max(np.abs(d.bz_map[:d.map_nr, :ntheta_all]))
         if bz_max == 0.0:
-            raise ValueError(f'carte magnetique nulle ({d.bfield_file}) : b_factor inapplicable')
+            raise ValueError(f'magnetic field map is zero ({d.bfield_file}): b_factor cannot be applied')
         scale = d.b_factor / bz_max
         d.bz_map *= scale
         d.d2bz_map *= scale
         d.dbzdx_map *= scale
         d.dbzdy_map *= scale
-        print(f'carte magnetique : Bmax_lu = {bz_max:.6e} T, facteur B = {d.b_factor:.6f} T')
+        print(f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.b_factor:.6f} T')
 
-    # Correction relative dB/B
     d.bz_map *= (1.0 + d.db_over_b)
     d.d2bz_map *= (1.0 + d.db_over_b)
 
-    # Lecture potentiel centre
     if d.central_potential_file != 'no':
         pot = read_central_potential(d.central_potential_file, d.swap_bytes == 'y')
         d.central_xmin, d.central_xmax = pot['xmin'], pot['xmax']
@@ -540,8 +536,8 @@ def load(d, ficin):
         d.central_pot[:nx1, :ny1] = pot['pot']
         d.central_d2pot[:nx1, :ny1] = pot['d2pot']
     else:
-        print('pas de fichier centre cyclo...')
-        vals = parse_floats(prompt('xmin1 xmax1 ymin1 ymax1 nx1 ny1 ?'))
+        print('no central region potential file')
+        vals = parse_floats(prompt('central grid: xmin1 xmax1 ymin1 ymax1 nx1 ny1:'))
         d.central_xmin, d.central_xmax, d.central_ymin, d.central_ymax = vals[:4]
         nx1 = int(vals[4])
         ny1 = int(vals[5])
@@ -551,7 +547,6 @@ def load(d, ficin):
     d.central_dx = (d.central_xmax - d.central_xmin) / (nx1 - 1.0)
     d.central_dy = (d.central_ymax - d.central_ymin) / (ny1 - 1.0)
 
-    # Lecture potentiel périphérique
     pot = read_outer_potential(d.outer_potential_file)
     d.outer_xmin, d.outer_xmax = pot['xmin'], pot['xmax']
     d.outer_ymin, d.outer_ymax = pot['ymin'], pot['ymax']
@@ -564,8 +559,8 @@ def load(d, ficin):
 
     distribute_bunch(d, sigma_matrices)
 
-    rr = np.sqrt(d.x[0]**2 + d.y[0]**2)
-    d.theta_deg = np.arccos(d.x[0] / rr)
+    r = np.sqrt(d.x[0]**2 + d.y[0]**2)
+    d.theta_deg = np.arccos(d.x[0] / r)
     if d.y[0] < 0.0:
         d.theta_deg = 2.0 * np.pi - d.theta_deg
     d.theta_deg = 180.0 / np.pi * d.theta_deg

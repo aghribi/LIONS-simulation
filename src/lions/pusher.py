@@ -6,9 +6,9 @@ import numpy as np
 
 
 def boris_push(d):
-    """Avance les particules avec le Boris pusher."""
+    """Advance momenta and positions by one Boris step. With trapped_follow == 0 only live particles move."""
     if d.trapped_follow == 0:
-        m = d.alive  # masque
+        m = d.alive
         vec_m = d.boris_b_coef[m] / d.gamma[m]
         a1_m = vec_m * d.bx[m]
         a2_m = vec_m * d.by[m]
@@ -44,7 +44,6 @@ def boris_push(d):
         d.y[m] = d.y[m] + vec_m * d.py[m]
         d.z[m] = d.z[m] + vec_m * d.pz[m]
     else:
-        # Pas de masque, toutes les particules
         vec = d.boris_b_coef / d.gamma
         a1 = vec * d.bx
         a2 = vec * d.by

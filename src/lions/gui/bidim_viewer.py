@@ -1,7 +1,4 @@
-"""
-lions_bidim_viewer.py - Visualiseur de fichiers bidim GANIL (.bid)
-Peut etre utilise seul ou integre dans la GUI LIONS.
-"""
+"""Viewer for GANIL bidim files (.bid), standalone or inside the LIONS GUI."""
 
 import struct
 import numpy as np
@@ -17,18 +14,17 @@ from PyQt5.QtCore import Qt
 
 
 def read_bidim(filepath):
-    """Lit un fichier bidim GANIL et retourne le header + les points (ix, iy).
+    """Read a GANIL bidim file: header and the (ix, iy) points.
 
     Returns:
-        dict avec les cles:
-            num, titre, labelx, labely, maxx, maxy,
-            xmin, xmax, ymin, ymax, ix_array, iy_array
+        dict with keys
+            num, title, labelx, labely, maxx, maxy,
+            xmin, xmax, ymin, ymax, ix, iy
     """
     with open(filepath, 'rb') as f:
-        # Header
         num = struct.unpack('i', f.read(4))[0]
         f.read(10 + 12 + 12 + 10 + 10)  # type, date, time, place, author
-        titre = f.read(25).decode('ascii', errors='replace').strip()
+        title = f.read(25).decode('ascii', errors='replace').strip()
         labelx = f.read(25).decode('ascii', errors='replace').strip()
         labely = f.read(25).decode('ascii', errors='replace').strip()
         maxx, maxy = struct.unpack('2i', f.read(8))
@@ -47,7 +43,7 @@ def read_bidim(filepath):
         except ValueError:
             xmin, xmax, ymin, ymax = 0, maxx, 0, maxy
 
-        # Lire les blocs de donnees (4096 int32 par bloc)
+        # Data blocks of 4096 int32, each packing ix * 65536 + iy.
         end_marker = 9999 * 65536 + 9999
         ix_list = []
         iy_list = []
@@ -70,7 +66,7 @@ def read_bidim(filepath):
 
     return {
         'num': num,
-        'titre': titre,
+        'title': title,
         'labelx': labelx,
         'labely': labely,
         'maxx': maxx,
@@ -85,22 +81,22 @@ def read_bidim(filepath):
 
 
 def plot_bidim(ax, bidim_data, nbins=256, cmap='hot'):
-    """Trace un bidim sur un axe matplotlib.
+    """Plot a bidim as a log-scaled 2D histogram.
 
     Args:
-        ax: axe matplotlib
-        bidim_data: dict retourne par read_bidim()
-        nbins: nombre de bins pour l'histogramme 2D
-        cmap: colormap matplotlib
+        ax: matplotlib axes
+        bidim_data: dict returned by read_bidim()
+        nbins: number of bins per axis
+        cmap: matplotlib colormap
     """
     ax.clear()
     d = bidim_data
 
     if len(d['ix']) == 0:
-        ax.set_title(f"{d['titre']} (vide)")
+        ax.set_title(f"{d['title']} (empty)")
         return
 
-    # Convertir indices en coordonnees physiques
+    # Channel indices to physical coordinates.
     if d['maxx'] > 0:
         x = d['xmin'] + (d['xmax'] - d['xmin']) * d['ix'] / d['maxx']
         y = d['ymin'] + (d['ymax'] - d['ymin']) * d['iy'] / d['maxy']
@@ -108,11 +104,9 @@ def plot_bidim(ax, bidim_data, nbins=256, cmap='hot'):
         x = d['ix'].astype(float)
         y = d['iy'].astype(float)
 
-    # Histogramme 2D
     h, xedges, yedges = np.histogram2d(x, y, bins=nbins)
-    h = h.T  # pour que l'axe y soit correct
+    h = h.T  # histogram2d puts x on axis 0; imshow wants rows = y
 
-    # Afficher avec log scale pour mieux voir
     h_display = np.where(h > 0, np.log10(h + 1), 0)
 
     ax.imshow(h_display, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
@@ -120,11 +114,11 @@ def plot_bidim(ax, bidim_data, nbins=256, cmap='hot'):
 
     ax.set_xlabel(d['labelx'] if d['labelx'] else 'x')
     ax.set_ylabel(d['labely'] if d['labely'] else 'y')
-    ax.set_title(f"Bidim {d['num']} : {d['titre']} ({len(d['ix'])} pts)")
+    ax.set_title(f"Bidim {d['num']}: {d['title']} ({len(d['ix'])} pts)")
 
 
 class BidimViewerWidget(QWidget):
-    """Widget Qt pour visualiser les fichiers bidim."""
+    """File list and plot canvas for bidim files."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -133,9 +127,8 @@ class BidimViewerWidget(QWidget):
 
         layout = QVBoxLayout(self)
 
-        # Toolbar
         toolbar = QHBoxLayout()
-        btn_open = QPushButton("Ouvrir bidim(s)...")
+        btn_open = QPushButton("Open bidim(s)...")
         btn_open.clicked.connect(self.open_files)
         toolbar.addWidget(btn_open)
 
@@ -152,14 +145,13 @@ class BidimViewerWidget(QWidget):
         self.bins_combo.currentTextChanged.connect(self.replot)
         toolbar.addWidget(self.bins_combo)
 
-        btn_refresh = QPushButton("Rafraichir")
+        btn_refresh = QPushButton("Refresh")
         btn_refresh.clicked.connect(self.reload_and_replot)
         toolbar.addWidget(btn_refresh)
 
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        # Splitter : liste + canvas
         splitter = QSplitter(Qt.Horizontal)
 
         self.file_list = QListWidget()
@@ -167,7 +159,6 @@ class BidimViewerWidget(QWidget):
         self.file_list.currentRowChanged.connect(self.on_selection_changed)
         splitter.addWidget(self.file_list)
 
-        # Canvas matplotlib
         canvas_widget = QWidget()
         canvas_layout = QVBoxLayout(canvas_widget)
         canvas_layout.setContentsMargins(0, 0, 0, 0)
@@ -183,7 +174,7 @@ class BidimViewerWidget(QWidget):
 
     def open_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Ouvrir fichier(s) bidim", "", "Bidim (*.bid);;Tous (*)")
+            self, "Open bidim file(s)", "", "Bidim (*.bid);;All (*)")
         if paths:
             self.bidim_files = paths
             self.file_list.clear()
@@ -196,7 +187,7 @@ class BidimViewerWidget(QWidget):
                 self.file_list.setCurrentRow(0)
 
     def load_from_paths(self, paths):
-        """Charge des fichiers bidim depuis une liste de chemins."""
+        """Load bidim files from a list of paths."""
         self.bidim_files = paths
         self.file_list.clear()
         self.bidim_data.clear()
@@ -206,7 +197,7 @@ class BidimViewerWidget(QWidget):
             try:
                 self.bidim_data[name] = read_bidim(p)
             except Exception as e:
-                print(f"Erreur lecture {p}: {e}")
+                print(f"Cannot read {p}: {e}")
         if self.file_list.count() > 0:
             self.file_list.setCurrentRow(0)
 
@@ -229,8 +220,8 @@ class BidimViewerWidget(QWidget):
         self.canvas.draw()
 
     def reload_and_replot(self):
-        """Recharge les fichiers depuis le disque et re-affiche."""
-        for i, p in enumerate(self.bidim_files):
+        """Reload the files from disk and redraw."""
+        for p in self.bidim_files:
             name = p.split('/')[-1].split('\\')[-1]
             try:
                 self.bidim_data[name] = read_bidim(p)
@@ -240,11 +231,11 @@ class BidimViewerWidget(QWidget):
 
 
 class BidimViewerDialog(QDialog):
-    """Dialogue standalone pour visualiser les bidims."""
+    """Dialog wrapping the bidim viewer."""
 
     def __init__(self, parent=None, paths=None):
         super().__init__(parent)
-        self.setWindowTitle("LIONS - Visualiseur Bidim")
+        self.setWindowTitle("LIONS - Bidim Viewer")
         self.setMinimumSize(900, 600)
 
         layout = QVBoxLayout(self)
@@ -255,14 +246,11 @@ class BidimViewerDialog(QDialog):
             self.viewer.load_from_paths(paths)
 
 
-# ---------------------------------------------------------------
-# Utilisation standalone
-# ---------------------------------------------------------------
 if __name__ == '__main__':
     import sys
     from PyQt5.QtWidgets import QApplication
 
-    # Mode simple : afficher avec matplotlib directement
+    # --simple: plain matplotlib windows, no Qt dialog.
     if len(sys.argv) > 1 and '--simple' in sys.argv:
         files = [f for f in sys.argv[1:] if f != '--simple']
         for fpath in files:
@@ -272,7 +260,6 @@ if __name__ == '__main__':
         plt.tight_layout()
         plt.show()
     else:
-        # Mode Qt
         app = QApplication(sys.argv)
         dlg = BidimViewerDialog()
         if len(sys.argv) > 1:

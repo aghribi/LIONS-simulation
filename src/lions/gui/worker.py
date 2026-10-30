@@ -1,7 +1,4 @@
-"""
-lions_worker.py - Worker QThread pour la simulation LIONS
-Intercepte input() et print() pour les router vers la GUI.
-"""
+"""QThread that runs the LIONS engine and routes input() and print() to the GUI."""
 
 import sys
 import io
@@ -20,13 +17,13 @@ from ..state import State
 
 
 class InputQueue:
-    """Remplace builtins.input : fournit les reponses pre-chargees."""
+    """Stands in for builtins.input and returns the preloaded answers in order."""
 
     def __init__(self, answers):
         self.q = queue.Queue()
         for a in answers:
             self.q.put(a)
-        self.fallback_signal = None  # pyqtSignal(str) pour inputs inattendus
+        self.fallback_signal = None  # pyqtSignal(str) emitted when the answers run out
         self.response_queue = queue.Queue()
 
     def __call__(self, prompt=''):
@@ -35,16 +32,16 @@ class InputQueue:
             return answer
         except queue.Empty:
             if self.fallback_signal:
-                self.fallback_signal.emit(prompt or "Entree requise :")
+                self.fallback_signal.emit(prompt or "Input required:")
                 try:
                     return self.response_queue.get(timeout=300)
                 except queue.Empty:
-                    raise RuntimeError("Timeout en attente de reponse utilisateur")
-            raise RuntimeError(f"Input inattendu: {prompt}")
+                    raise RuntimeError("Timed out waiting for user input")
+            raise RuntimeError(f"Unexpected input: {prompt}")
 
 
 class OutputInterceptor(io.TextIOBase):
-    """Intercepte sys.stdout pour emettre un signal Qt."""
+    """Replaces sys.stdout: emits each write as a Qt signal and echoes it to the terminal."""
 
     def __init__(self, signal):
         super().__init__()
@@ -64,14 +61,14 @@ class OutputInterceptor(io.TextIOBase):
 
 
 class SimulationWorker(QThread):
-    """Thread qui execute la simulation LIONS avec hooks pour la GUI."""
+    """Runs the LIONS simulation with GUI hooks."""
 
     progress = pyqtSignal(int, int)          # (iteration, total)
-    iteration_data = pyqtSignal(dict)        # donnees pour les plots
-    console_output = pyqtSignal(str)         # texte de sortie
-    simulation_finished = pyqtSignal()       # fin normale
-    simulation_error = pyqtSignal(str)       # erreur
-    input_needed = pyqtSignal(str)           # input inattendu
+    iteration_data = pyqtSignal(dict)        # plot data
+    console_output = pyqtSignal(str)         # console text
+    simulation_finished = pyqtSignal()       # normal end
+    simulation_error = pyqtSignal(str)       # error message
+    input_needed = pyqtSignal(str)           # unexpected input() prompt
 
     def __init__(self, input_answers, work_dir=None):
         super().__init__()
@@ -81,32 +78,27 @@ class SimulationWorker(QThread):
         self._input_queue = None
 
     def provide_input(self, answer):
-        """Appele par la GUI quand un input inattendu est necessaire."""
+        """Answer an unexpected input() call from the GUI."""
         if self._input_queue:
             self._input_queue.response_queue.put(answer)
 
     def run(self):
-        # Importer lions ici (dans le thread) pour eviter les problemes
-        # de modules charges au mauvais moment
         original_input = builtins.input
         original_stdout = sys.stdout
         original_dir = os.getcwd()
 
         try:
-            # Changer de repertoire vers le fichier de donnees
+            # Paths in the data file are relative to its directory.
             if self.work_dir:
                 os.chdir(self.work_dir)
 
-            # Installer les intercepteurs I/O
             self._input_queue = InputQueue(self.input_answers)
             self._input_queue.fallback_signal = self.input_needed
             interceptor = OutputInterceptor(self.console_output)
             builtins.input = self._input_queue
             sys.stdout = interceptor
 
-            # Import du moteur de simulation
-
-            # Reponses fournies par la file d'entree (meme sequence que le CLI)
+            # Same input() sequence as lions.cli.main.
             cli.banner()
             d = State()
             d.swap_bytes = input().strip()
@@ -118,7 +110,7 @@ class SimulationWorker(QThread):
             cli.write_trapped(d)
 
             if not self.stop_flag:
-                print('\n=== Simulation terminee ===')
+                print('\n=== Simulation finished ===')
 
             self.simulation_finished.emit()
 
@@ -132,21 +124,21 @@ class SimulationWorker(QThread):
             os.chdir(original_dir)
 
     def _on_step(self, d):
-        """Hook de lions.cli.track : progression, donnees de plot, arret."""
+        """lions.cli.track hook: progress, plot data, stop request."""
         ite = d.step
-        # Progression limitee a ~200 emissions pour ne pas noyer la boucle Qt
+        # About 200 progress signals per run, to keep the Qt event loop responsive.
         if ite % max(1, d.n_steps // 200) == 0 or ite == 1 or ite == d.n_steps:
             self.progress.emit(ite, d.n_steps)
         if ite == 0 or (d.output_every > 0 and
                         (ite % d.output_every == 0 or ite == 1 or ite == d.n_steps)):
             self._emit_data(d)
         if self.stop_flag:
-            print(f'\n--- Simulation arretee a l iteration {ite + 1} ---')
+            print(f'\n--- Simulation stopped at step {ite + 1} ---')
             return False
         return True
 
     def _emit_data(self, d):
-        """Extrait les donnees de la simulation pour les plots (par famille)."""
+        """Emit one plot-data dict per family: reference particle plus all live particles."""
         try:
             nbrfam = d.n_families
             for k in range(nbrfam):
@@ -158,7 +150,7 @@ class SimulationWorker(QThread):
                 if ppp > 0:
                     tpz = np.arcsin(np.clip(d.pz[i1] / ppp, -1.0, 1.0)) * 1000.0
 
-                # Calculer theta pour cette famille (comme info() le fait pour fam 0)
+                # Azimuth of the reference particle, in degrees.
                 if rr > 0:
                     tetnew_k = np.arccos(np.clip(d.x[i1] / rr, -1.0, 1.0))
                     if d.y[i1] < 0.0:
@@ -167,7 +159,7 @@ class SimulationWorker(QThread):
                 else:
                     tetnew_k = 0.0
 
-                # Calculer dphi (dephasage HF)
+                # RF phase slip (deg).
                 phihf = 180.0 / np.pi * d.omega_rf * d.t
                 tetall_k = tetnew_k + 360.0 * (d.turn - 1)
                 dph = phihf - d.harmonic * tetall_k - 90.0
@@ -188,7 +180,7 @@ class SimulationWorker(QThread):
                     'dph': float(dph),
                 }
 
-                # === Scatter: toutes les particules actives de la famille ===
+                # Scatter: all live particles of the family.
                 n_k = d.family_size[k]
                 if n_k > 1:
                     idx_s = d.family_start[k]
@@ -216,7 +208,7 @@ class SimulationWorker(QThread):
                     tpz_a = np.arcsin(np.clip(pz_a / safe_p, -1.0, 1.0)) * 1000.0
                     tpz_a[ppp_a == 0] = 0.0
 
-                    # Energie (MeV/A)
+                    # Energy (MeV/A)
                     ga_a = d.gamma[idx_s:idx_e][ok_k]
                     am0c2_a = d.rest_energy[idx_s:idx_e][ok_k]
                     wmevpa_a = am0c2_a * (ga_a - 1.0) / MEV / d.mass_number[k]
@@ -237,4 +229,4 @@ class SimulationWorker(QThread):
 
                 self.iteration_data.emit(data)
         except Exception:
-            pass  # Ne pas bloquer la simulation pour un probleme de plot
+            pass  # a plotting error must not stop the run

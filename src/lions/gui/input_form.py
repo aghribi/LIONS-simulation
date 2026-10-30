@@ -1,11 +1,8 @@
-"""
-lions_input_form.py - Formulaire d'entree pour la simulation LIONS
-Integre tous les parametres du fichier de donnees + parametres runtime.
-"""
+"""Input form for the LIONS simulation: every data file parameter plus the runtime answers."""
 
 import json
+import math
 import os
-import sys
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox,
@@ -16,7 +13,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 
 
 class CollapsibleSection(QWidget):
-    """Section repliable avec un titre cliquable."""
+    """Collapsible section with a clickable title."""
 
     def __init__(self, title, parent=None, collapsed=False):
         super().__init__(parent)
@@ -76,7 +73,7 @@ def _make_int_spin(value=0, minimum=-999999, maximum=999999):
 
 
 def _make_file_row(default='', browse_cb=None):
-    """Cree un widget QLineEdit + bouton browse."""
+    """QLineEdit with a browse button."""
     w = QWidget()
     lay = QHBoxLayout(w)
     lay.setContentsMargins(0, 0, 0, 0)
@@ -91,7 +88,7 @@ def _make_file_row(default='', browse_cb=None):
 
 
 def _fortran_fmt(val):
-    """Formate un float en notation Fortran (d0)."""
+    """Format a float in Fortran d-exponent notation."""
     if val == 0.0:
         return '0.d0'
     s = f'{val:.10e}'.replace('e', 'd')
@@ -99,10 +96,10 @@ def _fortran_fmt(val):
 
 
 class _FamilyWidget(QGroupBox):
-    """Widget pour une famille d'ions avec spinboxes dedies."""
+    """Spinboxes for one extra ion family."""
 
     def __init__(self, index, parent=None):
-        super().__init__(f"Famille {index}", parent)
+        super().__init__(f"Family {index}", parent)
         lay = QFormLayout(self)
         self.nbrion_spin = _make_int_spin(1, 1, 999999)
         self.amat_spin = _make_double_spin(100.0, 0.0, decimals=8)
@@ -115,9 +112,9 @@ class _FamilyWidget(QGroupBox):
         self.pz0_spin = _make_double_spin(0.0, decimals=6)
         self.w0mev_spin = _make_double_spin(5.665e-3, 0.0, decimals=8)
         self.phi0_spin = _make_double_spin(-250.0, decimals=4)
-        lay.addRow("Nb ions :", self.nbrion_spin)
-        lay.addRow("Masse atomique :", self.amat_spin)
-        lay.addRow("Nb masse A :", self.a_mass_spin)
+        lay.addRow("Ions :", self.nbrion_spin)
+        lay.addRow("Atomic mass :", self.amat_spin)
+        lay.addRow("Mass number A :", self.a_mass_spin)
         lay.addRow("Charge Q :", self.qn_spin)
         lay.addRow("r0 (m) :", self.r0_spin)
         lay.addRow("teta0 (deg) :", self.teta0_spin)
@@ -157,16 +154,16 @@ class _FamilyWidget(QGroupBox):
 
 
 class InputFormPanel(QWidget):
-    """Panneau de formulaire avec toutes les entrees de la simulation LIONS."""
+    """Form panel with every LIONS simulation input."""
 
     params_changed = pyqtSignal()
-    file_loaded = pyqtSignal(str)  # emis quand un fichier de donnees est charge
+    file_loaded = pyqtSignal(str)  # path of the data file just loaded
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(280)
         self.setMaximumWidth(400)
-        self._loading = False  # flag pour eviter les boucles
+        self._loading = False  # guards against re-entrant loads
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -177,7 +174,7 @@ class InputFormPanel(QWidget):
         main_layout.setSpacing(5)
 
         # ============================================================
-        # Section 1 : General (existant)
+        # Section 1: General
         # ============================================================
         self.sec_general = CollapsibleSection("General")
         main_layout.addWidget(self.sec_general)
@@ -196,27 +193,26 @@ class InputFormPanel(QWidget):
         btn_browse.clicked.connect(self._browse_ficin)
         file_layout.addWidget(self.ficin_edit)
         file_layout.addWidget(btn_browse)
-        self.sec_general.add_row("Fichier donnees :", file_widget)
+        self.sec_general.add_row("Data file :", file_widget)
 
-        # Bouton charger explicite
-        btn_load_don = QPushButton("Charger fichier donnees")
-        btn_load_don.clicked.connect(lambda: self.load_data_file(self.ficin_edit.text()))
-        self.sec_general.add_row("", btn_load_don)
+        btn_load_data = QPushButton("Load data file")
+        btn_load_data.clicked.connect(lambda: self.load_data_file(self.ficin_edit.text()))
+        self.sec_general.add_row("", btn_load_data)
 
         # ============================================================
-        # Section 2 : Description
+        # Section 2: Description
         # ============================================================
         self.sec_desc = CollapsibleSection("Description", collapsed=True)
         main_layout.addWidget(self.sec_desc)
 
-        self.corps_edit = QLineEdit()
-        self.sec_desc.add_row("Titre :", self.corps_edit)
+        self.title_edit = QLineEdit()
+        self.sec_desc.add_row("Title :", self.title_edit)
 
         # ============================================================
-        # Section 3 : HF / Cyclotron
+        # Section 3: RF / Cyclotron
         # ============================================================
-        self.sec_hf = CollapsibleSection("HF / Cyclotron", collapsed=True)
-        main_layout.addWidget(self.sec_hf)
+        self.sec_rf = CollapsibleSection("RF / Cyclotron", collapsed=True)
+        main_layout.addWidget(self.sec_rf)
 
         self.npaspt_spin = _make_int_spin(1080, 1, 99999)
         self.fhf_spin = _make_double_spin(14400000.0, 0.0, decimals=1)
@@ -224,26 +220,26 @@ class InputFormPanel(QWidget):
         self.teta1_spin = _make_double_spin(20.0, 0.0, 180.0, decimals=4)
         self.harm_spin = _make_double_spin(3.0, 0.0, 20.0, decimals=1)
         self.dbsb_spin = _make_double_spin(1.0e-4, decimals=8)
-        self.sec_hf.add_row("Pas/tour (npaspt) :", self.npaspt_spin)
-        self.sec_hf.add_row("Freq HF (Hz) :", self.fhf_spin)
-        self.sec_hf.add_row("Pot HF (V) :", self.pothf_spin)
-        self.sec_hf.add_row("Ouverture dee (deg) :", self.teta1_spin)
-        self.sec_hf.add_row("Harmonique :", self.harm_spin)
-        self.sec_hf.add_row("dB/B :", self.dbsb_spin)
+        self.sec_rf.add_row("Steps/turn (npaspt) :", self.npaspt_spin)
+        self.sec_rf.add_row("RF freq (Hz) :", self.fhf_spin)
+        self.sec_rf.add_row("RF voltage (V) :", self.pothf_spin)
+        self.sec_rf.add_row("Dee angle (deg) :", self.teta1_spin)
+        self.sec_rf.add_row("Harmonic :", self.harm_spin)
+        self.sec_rf.add_row("dB/B :", self.dbsb_spin)
 
         # ============================================================
-        # Section 4 : Rayon / Tours
+        # Section 4: Radius / Turns
         # ============================================================
-        self.sec_rayon = CollapsibleSection("Rayon / Tours", collapsed=True)
-        main_layout.addWidget(self.sec_rayon)
+        self.sec_radius = CollapsibleSection("Radius / Turns", collapsed=True)
+        main_layout.addWidget(self.sec_radius)
 
         self.r1th_spin = _make_double_spin(1.50, 0.0, decimals=6)
         self.ntours_spin = _make_int_spin(250, 1, 99999)
-        self.sec_rayon.add_row("Rayon final (m) :", self.r1th_spin)
-        self.sec_rayon.add_row("Nb tours :", self.ntours_spin)
+        self.sec_radius.add_row("Final radius (m) :", self.r1th_spin)
+        self.sec_radius.add_row("Turns :", self.ntours_spin)
 
         # ============================================================
-        # Section 5 : Dees
+        # Section 5: Dees
         # ============================================================
         self.sec_dees = CollapsibleSection("Dees", collapsed=True)
         main_layout.addWidget(self.sec_dees)
@@ -254,53 +250,53 @@ class InputFormPanel(QWidget):
         self.pothfg_spin = _make_double_spin(51890.0, 0.0, decimals=1)
         self.sec_dees.add_row("dphid (deg) :", self.dphid_spin)
         self.sec_dees.add_row("dphig (deg) :", self.dphig_spin)
-        self.sec_dees.add_row("Pot dee D (V) :", self.pothfd_spin)
-        self.sec_dees.add_row("Pot dee G (V) :", self.pothfg_spin)
+        self.sec_dees.add_row("Right dee voltage (V) :", self.pothfd_spin)
+        self.sec_dees.add_row("Left dee voltage (V) :", self.pothfg_spin)
 
         # ============================================================
-        # Section 6 : Harmoniques
+        # Section 6: Harmonics
         # ============================================================
-        self.sec_harmo = CollapsibleSection("Harmoniques", collapsed=True)
-        main_layout.addWidget(self.sec_harmo)
+        self.sec_harmonics = CollapsibleSection("Harmonics", collapsed=True)
+        main_layout.addWidget(self.sec_harmonics)
 
         self.ncoh0_spin = _make_int_spin(0, 0, 10)
-        self.sec_harmo.add_row("ncoh canal 0 :", self.ncoh0_spin)
+        self.sec_harmonics.add_row("ncoh channel 0 :", self.ncoh0_spin)
         self.coh0_detail = QWidget()
         coh0_lay = QFormLayout(self.coh0_detail)
         coh0_lay.setContentsMargins(0, 0, 0, 0)
         self.coh0_edit = QLineEdit()
-        self.coh0_edit.setPlaceholderText("coefficients separes par espaces")
+        self.coh0_edit.setPlaceholderText("space-separated coefficients")
         coh0_lay.addRow("Coeff coh[0] :", self.coh0_edit)
         self.phihar0_spin = _make_double_spin(0.0, decimals=4)
         coh0_lay.addRow("Phase (deg) :", self.phihar0_spin)
-        self.sec_harmo.content_layout.addRow(self.coh0_detail)
+        self.sec_harmonics.content_layout.addRow(self.coh0_detail)
         self.coh0_detail.setVisible(False)
         self.ncoh0_spin.valueChanged.connect(
             lambda v: self.coh0_detail.setVisible(v != 0))
 
         sep_h = QFrame()
         sep_h.setFrameShape(QFrame.HLine)
-        self.sec_harmo.content_layout.addRow(sep_h)
+        self.sec_harmonics.content_layout.addRow(sep_h)
 
         self.ncoh1_spin = _make_int_spin(0, 0, 10)
-        self.sec_harmo.add_row("ncoh canal 1 :", self.ncoh1_spin)
+        self.sec_harmonics.add_row("ncoh channel 1 :", self.ncoh1_spin)
         self.coh1_detail = QWidget()
         coh1_lay = QFormLayout(self.coh1_detail)
         coh1_lay.setContentsMargins(0, 0, 0, 0)
         self.coh1_edit = QLineEdit()
-        self.coh1_edit.setPlaceholderText("coefficients separes par espaces")
+        self.coh1_edit.setPlaceholderText("space-separated coefficients")
         coh1_lay.addRow("Coeff coh[1] :", self.coh1_edit)
         self.phihar1_spin = _make_double_spin(0.0, decimals=4)
         coh1_lay.addRow("Phase (deg) :", self.phihar1_spin)
-        self.sec_harmo.content_layout.addRow(self.coh1_detail)
+        self.sec_harmonics.content_layout.addRow(self.coh1_detail)
         self.coh1_detail.setVisible(False)
         self.ncoh1_spin.valueChanged.connect(
             lambda v: self.coh1_detail.setVisible(v != 0))
 
         # ============================================================
-        # Section 7 : Geometrie Z
+        # Section 7: Z geometry
         # ============================================================
-        self.sec_geomz = CollapsibleSection("Geometrie Z", collapsed=True)
+        self.sec_geomz = CollapsibleSection("Z geometry", collapsed=True)
         main_layout.addWidget(self.sec_geomz)
 
         self.zmin_spin = _make_double_spin(-0.5, decimals=4)
@@ -311,7 +307,7 @@ class InputFormPanel(QWidget):
         self.sec_geomz.add_row("rmax1 (m) :", self.rmax1_spin)
 
         # ============================================================
-        # Section 8 : Extraction
+        # Section 8: Extraction
         # ============================================================
         self.sec_extract = CollapsibleSection("Extraction", collapsed=True)
         main_layout.addWidget(self.sec_extract)
@@ -325,49 +321,49 @@ class InputFormPanel(QWidget):
         self.sec_extract.add_row("tet2ex (deg) :", self.tet2ex_spin)
         self.sec_extract.add_row("eex :", self.eex_spin)
 
-        # Sous-section conditionnelle (rex < 0)
+        # Shown only when rex < 0
         self.extract_detail = QWidget()
         ext_lay = QFormLayout(self.extract_detail)
         ext_lay.setContentsMargins(0, 0, 0, 0)
 
         self.ndf_spin = _make_int_spin(0, 0, 10)
-        ext_lay.addRow("Nb deflecteurs :", self.ndf_spin)
+        ext_lay.addRow("Deflectors (count) :", self.ndf_spin)
         self.edf_spin = _make_double_spin(0.0, decimals=0)
         self.edf_spin.setRange(-1e9, 1e9)
         self.edf_spin.setSingleStep(10000)
         self.edf_spin.setSuffix(" V")
-        ext_lay.addRow("Tension extraction :", self.edf_spin)
+        ext_lay.addRow("Extraction voltage :", self.edf_spin)
         self.deflectors_text = QPlainTextEdit()
         self.deflectors_text.setPlaceholderText(
-            "1 ligne/deflecteur: rdf edf xdfi ydfi xdfo ydfo tetdfi_deg tetdfo_deg")
+            "1 line per deflector: rdf edf xdfi ydfi xdfo ydfo tetdfi_deg tetdfo_deg")
         self.deflectors_text.setMaximumHeight(80)
-        ext_lay.addRow("Deflecteurs :", self.deflectors_text)
+        ext_lay.addRow("Deflectors :", self.deflectors_text)
 
         sep_e = QFrame()
         sep_e.setFrameShape(QFrame.HLine)
         ext_lay.addRow(sep_e)
 
         self.ndm_spin = _make_int_spin(0, 0, 10)
-        ext_lay.addRow("Nb dipoles mag. :", self.ndm_spin)
+        ext_lay.addRow("Mag. dipoles (count) :", self.ndm_spin)
         self.magdip_text = QPlainTextEdit()
         self.magdip_text.setPlaceholderText(
-            "1 ligne/dipole: rdm bdm xdm ydm tetdmi_deg tetdmo_deg")
+            "1 line per dipole: rdm bdm xdm ydm tetdmi_deg tetdmo_deg")
         self.magdip_text.setMaximumHeight(60)
-        ext_lay.addRow("Dipoles mag. :", self.magdip_text)
+        ext_lay.addRow("Mag. dipoles :", self.magdip_text)
 
-        # Sous-section grilles (tet2ex > 0)
+        # Shown only when tet2ex > 0
         self.grids_detail = QWidget()
         grid_lay = QFormLayout(self.grids_detail)
         grid_lay.setContentsMargins(0, 0, 0, 0)
         self.ngex_spin = _make_int_spin(0, 0, 10)
-        grid_lay.addRow("Nb grilles :", self.ngex_spin)
+        grid_lay.addRow("Grids (count) :", self.ngex_spin)
         self.grids_text = QPlainTextEdit()
         self.grids_text.setPlaceholderText(
-            "1 ligne/grille: tetagex xgex_mm ygex_mm xgexc_mm ygexc_mm")
+            "1 line per grid: tetagex xgex_mm ygex_mm xgexc_mm ygexc_mm")
         self.grids_text.setMaximumHeight(60)
-        grid_lay.addRow("Grilles :", self.grids_text)
+        grid_lay.addRow("Grids :", self.grids_text)
         self.ficdebgex_edit = QLineEdit()
-        grid_lay.addRow("Fichier base grilles :", self.ficdebgex_edit)
+        grid_lay.addRow("Grid base file :", self.ficdebgex_edit)
         ext_lay.addRow(self.grids_detail)
         self.grids_detail.setVisible(False)
 
@@ -378,16 +374,15 @@ class InputFormPanel(QWidget):
         self.tet2ex_spin.valueChanged.connect(self._on_tet2ex_changed)
 
         # ============================================================
-        # Section 9 : Ion(s)
+        # Section 9: Ion(s)
         # ============================================================
         self.sec_ions = CollapsibleSection("Ion(s)", collapsed=True)
         main_layout.addWidget(self.sec_ions)
 
         self.nbrfam_spin = _make_int_spin(1, 1, 10)
-        self.sec_ions.add_row("Nb familles :", self.nbrfam_spin)
+        self.sec_ions.add_row("Families :", self.nbrfam_spin)
 
-        # Famille 1 (toujours visible)
-        fam1_group = QGroupBox("Famille 1")
+        fam1_group = QGroupBox("Family 1")
         fam1_lay = QFormLayout(fam1_group)
         self.nbrion_spin = _make_int_spin(1, 1, 999999)
         self.amat_spin = _make_double_spin(100.0, 0.0, decimals=8)
@@ -400,9 +395,9 @@ class InputFormPanel(QWidget):
         self.pz0_spin = _make_double_spin(0.0, decimals=6)
         self.w0mev_spin = _make_double_spin(5.665e-3, 0.0, decimals=8)
         self.phi0_spin = _make_double_spin(-250.0, decimals=4)
-        fam1_lay.addRow("Nb ions :", self.nbrion_spin)
-        fam1_lay.addRow("Masse atomique :", self.amat_spin)
-        fam1_lay.addRow("Nb masse A :", self.a_mass_spin)
+        fam1_lay.addRow("Ions :", self.nbrion_spin)
+        fam1_lay.addRow("Atomic mass :", self.amat_spin)
+        fam1_lay.addRow("Mass number A :", self.a_mass_spin)
         fam1_lay.addRow("Charge Q :", self.qn_spin)
         fam1_lay.addRow("r0 (m) :", self.r0_spin)
         fam1_lay.addRow("teta0 (deg) :", self.teta0_spin)
@@ -413,16 +408,15 @@ class InputFormPanel(QWidget):
         fam1_lay.addRow("phi0 (deg) :", self.phi0_spin)
         self.sec_ions.content_layout.addRow(fam1_group)
 
-        # N total (visible seulement si nbrfam > 1)
+        # Shown only when nbrfam > 1
         self.n_total_widget = QWidget()
         ntot_lay = QFormLayout(self.n_total_widget)
         ntot_lay.setContentsMargins(0, 0, 0, 0)
         self.n_total_spin = _make_int_spin(1, 1, 999999)
-        ntot_lay.addRow("N total particules :", self.n_total_spin)
+        ntot_lay.addRow("Total particles :", self.n_total_spin)
         self.sec_ions.content_layout.addRow(self.n_total_widget)
         self.n_total_widget.setVisible(False)
 
-        # Container pour familles supplementaires (dynamique)
         self.extra_fam_container = QWidget()
         self.extra_fam_layout = QVBoxLayout(self.extra_fam_container)
         self.extra_fam_layout.setContentsMargins(0, 0, 0, 0)
@@ -433,27 +427,26 @@ class InputFormPanel(QWidget):
         self.nbrfam_spin.valueChanged.connect(self._on_nbrfam_changed)
 
         # ============================================================
-        # Section 10 : Correlations
+        # Section 10: Correlations
         # ============================================================
-        self.sec_correl = CollapsibleSection("Correlations", collapsed=True)
-        main_layout.addWidget(self.sec_correl)
+        self.sec_correlations = CollapsibleSection("Correlations", collapsed=True)
+        main_layout.addWidget(self.sec_correlations)
 
         self.iflcor_spin = _make_int_spin(0, 0, 10)
-        self.sec_correl.add_row("iflcor :", self.iflcor_spin)
+        self.sec_correlations.add_row("iflcor :", self.iflcor_spin)
 
         self.correl_detail = QWidget()
         cor_lay = QFormLayout(self.correl_detail)
         cor_lay.setContentsMargins(0, 0, 0, 0)
         w_ficsig, self.ficsig_edit, _btn = _make_file_row('', lambda: self._browse_open(self.ficsig_edit))
-        cor_lay.addRow("Fichier sigma :", w_ficsig)
-        self.espace_edit = QLineEdit('6d')
-        cor_lay.addRow("Espace de phase :", self.espace_edit)
+        cor_lay.addRow("Sigma file :", w_ficsig)
+        self.phase_space_edit = QLineEdit('6d')
+        cor_lay.addRow("Phase space :", self.phase_space_edit)
 
-        # --- Sigma diagonaux (sans correlation) ---
         sep_sig = QFrame()
         sep_sig.setFrameShape(QFrame.HLine)
         cor_lay.addRow(sep_sig)
-        lbl_sig = QLabel("\u03c3 diagonaux (sans corr.) :")
+        lbl_sig = QLabel("Diagonal \u03c3 (no corr.) :")
         lbl_sig.setStyleSheet("font-weight: bold;")
         cor_lay.addRow(lbl_sig)
         self.sig_dr = _make_double_spin(0.1, 0.0, 1000.0, decimals=6)
@@ -468,10 +461,10 @@ class InputFormPanel(QWidget):
         cor_lay.addRow(u"\u03c3 dpz (mrad) :", self.sig_dpz)
         cor_lay.addRow(u"\u03c3 d\u03c6 (mm) :", self.sig_dphi)
         cor_lay.addRow(u"\u03c3 dp (mrad) :", self.sig_dp)
-        btn_apply_sig = QPushButton("Appliquer \u2192 fichier sigma")
+        btn_apply_sig = QPushButton("Apply \u2192 sigma file")
         btn_apply_sig.setToolTip(
-            "Ecrit les valeurs diagonales dans le fichier sigma "
-            "(ecrase le fichier existant)")
+            "Write the diagonal values to the sigma file "
+            "(overwrites the existing file)")
         btn_apply_sig.clicked.connect(self._write_sigma_from_gui)
         cor_lay.addRow("", btn_apply_sig)
 
@@ -479,62 +472,62 @@ class InputFormPanel(QWidget):
         sep_sig2.setFrameShape(QFrame.HLine)
         cor_lay.addRow(sep_sig2)
         self.ficcor_edit = QLineEdit('no')
-        cor_lay.addRow("Fichier correl :", self.ficcor_edit)
+        cor_lay.addRow("Correlation file :", self.ficcor_edit)
         self.ficmat_edit = QLineEdit('no')
-        cor_lay.addRow("Fichier matrice :", self.ficmat_edit)
+        cor_lay.addRow("Matrix file :", self.ficmat_edit)
         self.ficdc_edit = QLineEdit('no')
-        cor_lay.addRow("Fichier dc :", self.ficdc_edit)
-        self.sec_correl.content_layout.addRow(self.correl_detail)
+        cor_lay.addRow("dc file :", self.ficdc_edit)
+        self.sec_correlations.content_layout.addRow(self.correl_detail)
         self.correl_detail.setVisible(False)
         self.iflcor_spin.valueChanged.connect(
             lambda v: self.correl_detail.setVisible(v != 0))
 
         # ============================================================
-        # Section 11 : Simulation
+        # Section 11: Simulation
         # ============================================================
-        self.sec_simul = CollapsibleSection("Simulation", collapsed=True)
-        main_layout.addWidget(self.sec_simul)
+        self.sec_simulation = CollapsibleSection("Simulation", collapsed=True)
+        main_layout.addWidget(self.sec_simulation)
 
         self.nbdt_spin = _make_int_spin(350000, 1, 99999999)
         self.ifreq_spin = _make_int_spin(30, 1, 999999)
-        self.sec_simul.add_row("Nb pas (nbdt) :", self.nbdt_spin)
-        self.sec_simul.add_row("Freq affichage :", self.ifreq_spin)
+        self.sec_simulation.add_row("Steps (nbdt) :", self.nbdt_spin)
+        self.sec_simulation.add_row("Display freq :", self.ifreq_spin)
 
         # ============================================================
-        # Section 12 : Fichiers Sortie
+        # Section 12: Output files
         # ============================================================
-        self.sec_ficsort = CollapsibleSection("Fichiers Sortie", collapsed=True)
-        main_layout.addWidget(self.sec_ficsort)
+        self.sec_output_files = CollapsibleSection("Output files", collapsed=True)
+        main_layout.addWidget(self.sec_output_files)
 
         self.ficz_edit = QLineEdit('no')
-        self.sec_ficsort.add_row("Fichier z :", self.ficz_edit)
+        self.sec_output_files.add_row("z file :", self.ficz_edit)
         self.ficxy_edit = QLineEdit('no')
-        self.sec_ficsort.add_row("Fichier xy :", self.ficxy_edit)
+        self.sec_output_files.add_row("xy file :", self.ficxy_edit)
 
         # ============================================================
-        # Section 13 : Fichiers Champs
+        # Section 13: Field files
         # ============================================================
-        self.sec_ficchamps = CollapsibleSection("Fichiers Champs", collapsed=True)
-        main_layout.addWidget(self.sec_ficchamps)
+        self.sec_field_files = CollapsibleSection("Field files", collapsed=True)
+        main_layout.addWidget(self.sec_field_files)
 
         w_ficb, self.ficb_edit, _btn = _make_file_row('', lambda: self._browse_ficb())
-        self.sec_ficchamps.add_row("Carte mag (ficb) :", w_ficb)
+        self.sec_field_files.add_row("Magnetic map (ficb) :", w_ficb)
         w_ficv1, self.ficv1_edit, _btn = _make_file_row('', lambda: self._browse_open(self.ficv1_edit))
-        self.sec_ficchamps.add_row("Pot centre (ficv1) :", w_ficv1)
+        self.sec_field_files.add_row("Central potential (ficv1) :", w_ficv1)
         w_ficv2, self.ficv2_edit, _btn = _make_file_row('', lambda: self._browse_open(self.ficv2_edit))
-        self.sec_ficchamps.add_row("Pot periph (ficv2) :", w_ficv2)
+        self.sec_field_files.add_row("Outer potential (ficv2) :", w_ficv2)
 
         self.b_factor_spin = _make_double_spin(1.0, 0.0, 100.0, decimals=6)
         self.b_factor_spin.setSuffix(" T")
         self.b_factor_spin.setToolTip(
-            "Facteur B (Tesla). La carte magnetique est normalisee a 1,\n"
-            "puis multipliee par ce facteur. Ex: 1.56 T pour CIME.")
-        self.sec_ficchamps.add_row("Facteur B (T) :", self.b_factor_spin)
+            "B factor (tesla). The magnetic map is normalised to 1,\n"
+            "then multiplied by this factor. Example: 1.56 T for CIME.")
+        self.sec_field_files.add_row("B factor (T) :", self.b_factor_spin)
 
         # ============================================================
-        # Section 14 : Trieur Vertical (existant)
+        # Section 14: Vertical sorter
         # ============================================================
-        self.sec_vertical = CollapsibleSection("Trieur Vertical")
+        self.sec_vertical = CollapsibleSection("Vertical sorter")
         main_layout.addWidget(self.sec_vertical)
 
         self.rmin_ver = _make_double_spin(1000.0, decimals=1)
@@ -564,13 +557,13 @@ class InputFormPanel(QWidget):
         self.sec_vertical.add_row("dpotspot :", self.dpotspot)
 
         # ============================================================
-        # Section 15 : Bidim / Diagnostics (existant)
+        # Section 15: Bidim / Diagnostics
         # ============================================================
         self.sec_bidim = CollapsibleSection("Bidim / Diagnostics")
         main_layout.addWidget(self.sec_bidim)
 
         self.numbid_spin = _make_int_spin(0, 0, 999)
-        self.sec_bidim.add_row("Num premier bidim :", self.numbid_spin)
+        self.sec_bidim.add_row("First bidim number :", self.numbid_spin)
         self.numbid_spin.valueChanged.connect(self._on_numbid_changed)
 
         self.bidim_detail = QWidget()
@@ -578,11 +571,11 @@ class InputFormPanel(QWidget):
         bidim_layout.setContentsMargins(0, 0, 0, 0)
 
         self.ifreb_spin = _make_int_spin(1, 1, 999999)
-        bidim_layout.addRow("Freq. trace :", self.ifreb_spin)
+        bidim_layout.addRow("Plot freq :", self.ifreb_spin)
 
         self.baryc_combo = QComboBox()
         self.baryc_combo.addItems(['c', 'b'])
-        bidim_layout.addRow("Centres/Barycentres :", self.baryc_combo)
+        bidim_layout.addRow("Centres/Barycentres (c/b) :", self.baryc_combo)
 
         self.bid_xmin = _make_double_spin(-0.5, decimals=4)
         self.bid_xmax = _make_double_spin(0.5, decimals=4)
@@ -608,7 +601,7 @@ class InputFormPanel(QWidget):
         multi_layout.addRow("dpr/p0_max :", self.dpr_max)
         multi_layout.addRow("dz_max :", self.dz_max)
         multi_layout.addRow("dpz/p0_max :", self.dpz_max)
-        multi_layout.addRow("Debut iter bidim :", self.itebid_spin)
+        multi_layout.addRow("Bidim start iteration :", self.itebid_spin)
         bidim_layout.addRow(self.multi_group)
 
         self.bary_xmin = _make_double_spin(-0.2, decimals=4)
@@ -629,45 +622,45 @@ class InputFormPanel(QWidget):
         btn_ficrep.clicked.connect(self._browse_ficrep)
         ficrep_layout.addWidget(self.ficrep_edit)
         ficrep_layout.addWidget(btn_ficrep)
-        bidim_layout.addRow("Fichier reperes :", ficrep_widget)
+        bidim_layout.addRow("Marker file :", ficrep_widget)
 
         self.sec_bidim.content_layout.addRow(self.bidim_detail)
         self.bidim_detail.setVisible(False)
 
         # ============================================================
-        # Section 16 : Post-Simulation (existant)
+        # Section 16: Post-simulation
         # ============================================================
         self.sec_post = CollapsibleSection("Post-Simulation")
         main_layout.addWidget(self.sec_post)
 
         self.save_trapped_combo = QComboBox()
         self.save_trapped_combo.addItems(['n', 'o'])
-        self.sec_post.add_row("Sauver pieges :", self.save_trapped_combo)
+        self.sec_post.add_row("Save trapped (o/n) :", self.save_trapped_combo)
 
         ficpie_widget = QWidget()
         ficpie_layout = QHBoxLayout(ficpie_widget)
         ficpie_layout.setContentsMargins(0, 0, 0, 0)
-        self.ficpie_edit = QLineEdit('pieges.dat')
+        self.ficpie_edit = QLineEdit('trapped.dat')
         btn_ficpie = QPushButton('...')
         btn_ficpie.setFixedWidth(30)
         btn_ficpie.clicked.connect(self._browse_ficpie)
         ficpie_layout.addWidget(self.ficpie_edit)
         ficpie_layout.addWidget(btn_ficpie)
-        self.sec_post.add_row("Fichier pieges :", ficpie_widget)
+        self.sec_post.add_row("Trapped file :", ficpie_widget)
 
         # ============================================================
-        # Boutons sauver/charger
+        # Save / load buttons
         # ============================================================
         btn_layout = QHBoxLayout()
-        btn_save = QPushButton("Sauver params")
-        btn_load = QPushButton("Charger params")
-        btn_save_don = QPushButton("Sauver donnees")
+        btn_save = QPushButton("Save params")
+        btn_load = QPushButton("Load params")
+        btn_save_data = QPushButton("Save data file")
         btn_save.clicked.connect(self.save_params)
         btn_load.clicked.connect(self.load_params)
-        btn_save_don.clicked.connect(self._save_data_file_dialog)
+        btn_save_data.clicked.connect(self._save_data_file_dialog)
         btn_layout.addWidget(btn_save)
         btn_layout.addWidget(btn_load)
-        btn_layout.addWidget(btn_save_don)
+        btn_layout.addWidget(btn_save_data)
         main_layout.addLayout(btn_layout)
 
         main_layout.addStretch()
@@ -678,7 +671,7 @@ class InputFormPanel(QWidget):
         outer.addWidget(scroll)
 
     # ================================================================
-    # Callbacks de visibilite conditionnelle
+    # Conditional visibility
     # ================================================================
 
     def _on_numbid_changed(self, val):
@@ -686,17 +679,15 @@ class InputFormPanel(QWidget):
 
     def _on_nbrfam_changed(self, val):
         self.n_total_widget.setVisible(val > 1)
-        needed = val - 1  # nombre de familles supplementaires
-        # Ajouter les widgets manquants
+        needed = val - 1  # families beyond the first
         while len(self.extra_families) < needed:
-            idx = len(self.extra_families) + 2  # famille 2, 3, ...
+            idx = len(self.extra_families) + 2
             fw = _FamilyWidget(idx)
             self.extra_fam_layout.addWidget(fw)
             self.extra_families.append(fw)
-        # Masquer/afficher les widgets existants
         for i, fw in enumerate(self.extra_families):
             fw.setVisible(i < needed)
-        # Ajuster n_total pour qu'il soit >= somme nbrion
+        # Keep n_total >= sum of nbrion
         if val > 1:
             total = self.nbrion_spin.value()
             for i in range(needed):
@@ -715,26 +706,25 @@ class InputFormPanel(QWidget):
     # ================================================================
 
     def _browse_ficin(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Fichier de donnees")
+        path, _ = QFileDialog.getOpenFileName(self, "Data file")
         if path:
             self.ficin_edit.setText(path)
             self.load_data_file(path)
 
     def _browse_ficrep(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Fichier reperes")
+        path, _ = QFileDialog.getOpenFileName(self, "Marker file")
         if path:
             self.ficrep_edit.setText(path)
 
     def _browse_ficpie(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Fichier pieges")
+        path, _ = QFileDialog.getSaveFileName(self, "Trapped particles file")
         if path:
             self.ficpie_edit.setText(path)
 
     def _compute_betagamma(self):
-        """Calcule beta*gamma total a partir des parametres ion (amat, qn, w0mev).
+        """Total beta*gamma = sqrt(gamma^2 - 1) from amat, qn, w0mev, or 0.0 on failure.
 
-        Retourne bg_total = sqrt(gamma^2 - 1), ou 0.0 si le calcul echoue.
-        Meme formule que lions.io.load().
+        Same formula as lions.io.load().
         """
         try:
             amat = self.amat_spin.value()
@@ -747,20 +737,19 @@ class InputFormPanel(QWidget):
             am0c2 = am0 * clum ** 2
             w0_j = w0mev * 1.60217733e-13 * amat
             gamma = 1.0 + w0_j / am0c2
-            import math
             bg = math.sqrt(gamma ** 2 - 1.0)
             return bg
         except Exception:
             return 0.0
 
     def _load_sigma_diag(self, ficsig, data_path):
-        """Charge les 6 valeurs diagonales d'un fichier sigma dans les spinboxes.
+        """Load the 6 diagonal values of a sigma file into the spinboxes.
 
-        Le fichier contient sigma^2 (variance) en m^2 / (bg)^2.
-        La GUI affiche sigma (ecart-type) en mm (positions) / mrad (impulsions).
+        The file holds sigma^2 (variance) in m^2 / (bg)^2.
+        The GUI shows sigma (std dev) in mm (positions) / mrad (momenta).
         """
         try:
-            # Resoudre chemin relatif par rapport au fichier de donnees
+            # Relative paths are resolved against the data file directory
             if data_path and os.path.dirname(data_path):
                 sig_path = os.path.join(os.path.dirname(data_path), ficsig)
             else:
@@ -769,12 +758,11 @@ class InputFormPanel(QWidget):
                 sig_path = ficsig
             if not os.path.exists(sig_path):
                 return
-            import math
             bg_total = self._compute_betagamma()
             with open(sig_path, 'r') as sf:
                 spins = [self.sig_dr, self.sig_ds, self.sig_dz,
                          self.sig_dpz, self.sig_dphi, self.sig_dp]
-                # True = position (m -> mm), False = impulsion (bg -> mrad)
+                # True = position (m -> mm), False = momentum (bg -> mrad)
                 is_pos = [True, False, True, False, True, False]
                 for i, spin in enumerate(spins):
                     line = sf.readline()
@@ -787,25 +775,23 @@ class InputFormPanel(QWidget):
                         if is_pos[i]:
                             sig *= 1000.0  # m -> mm
                         else:
-                            # bg -> mrad : angle_mrad = arcsin(p_comp/p_total) * 1000
-                            # Pour petits angles : ~ (sig_bg / bg_total) * 1000
+                            # Small-angle approximation of arcsin(p_comp / p_total) * 1000
                             if bg_total > 0:
                                 sig = sig / bg_total * 1000.0
                         spin.setValue(sig)
         except Exception:
-            pass  # silencieux si le fichier sigma n'est pas lisible
+            pass  # unreadable sigma file: keep the current values
 
     def _write_sigma_from_gui(self):
-        """Ecrit un fichier sigma 6x6 diagonal a partir des valeurs GUI.
+        """Write a diagonal 6x6 sigma file from the GUI values.
 
-        La GUI contient sigma (ecart-type) en mm (positions) / mrad (impulsions).
-        Le fichier doit contenir sigma^2 (variance) en m^2 / (bg)^2.
+        The GUI holds sigma (std dev) in mm (positions) / mrad (momenta).
+        The file holds sigma^2 (variance) in m^2 / (bg)^2.
         """
         ficsig = self.ficsig_edit.text().strip()
         if not ficsig:
             ficsig = 'sigma6d_no_corr.dat'
             self.ficsig_edit.setText(ficsig)
-        # Resoudre le chemin relatif par rapport au fichier de donnees
         ficin = self.ficin_edit.text().strip()
         if ficin and os.path.dirname(ficin):
             sig_path = os.path.join(os.path.dirname(ficin), ficsig)
@@ -813,14 +799,12 @@ class InputFormPanel(QWidget):
             sig_path = ficsig
         try:
             bg_total = self._compute_betagamma()
-            # Lire sigma (ecart-type) depuis la GUI
             sig_gui = [self.sig_dr.value(), self.sig_ds.value(),
                        self.sig_dz.value(), self.sig_dpz.value(),
                        self.sig_dphi.value(), self.sig_dp.value()]
-            # True = position (mm -> m), False = impulsion (mrad -> bg)
+            # True = position (mm -> m), False = momentum (mrad -> bg)
             is_pos = [True, False, True, False, True, False]
-            # Convertir en sigma^2 en m^2 / (bg)^2
-            # Epsilon minimal pour eviter sigma^2 = 0 (Cholesky exige matrice > 0)
+            # Floor sigma^2 above 0: the Cholesky decomposition needs a positive definite matrix
             EPS_POS = 1e-30   # m^2 (~ 1e-12 mm)
             EPS_MOM = 1e-30   # (bg)^2
             sig2 = []
@@ -841,33 +825,33 @@ class InputFormPanel(QWidget):
                         else:
                             row.append('0.d0')
                     f.write('   '.join(row) + '\n')
-            print(f'Fichier sigma ecrit : {sig_path}')
+            print(f'Sigma file written: {sig_path}')
         except Exception as e:
-            QMessageBox.warning(self, "Erreur sigma", str(e))
+            QMessageBox.warning(self, "Sigma error", str(e))
 
     def _browse_open(self, edit_widget):
-        path, _ = QFileDialog.getOpenFileName(self, "Ouvrir fichier")
+        path, _ = QFileDialog.getOpenFileName(self, "Open file")
         if path:
             edit_widget.setText(path)
 
     def _browse_ficb(self):
-        """Browse pour le fichier de champ magnetique + auto-detection Bmax."""
+        """Browse for the magnetic field map, then detect Bmax."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Ouvrir carte magnetique", "",
-            "Cartes champ (*.dat *.lio.dat);;Tous (*)")
+            self, "Open magnetic map", "",
+            "Field maps (*.dat *.lio.dat);;All (*)")
         if path:
             self.ficb_edit.setText(path)
             self._auto_detect_bmax(path)
 
     def _auto_detect_bmax(self, filepath):
-        """Lit le fichier de champ magnetique et met a jour Facteur B avec Bmax."""
+        """Read the magnetic field map and set the B factor to its Bmax."""
         try:
             with open(filepath, 'r') as f:
-                f.readline()  # commentaire
+                f.readline()  # comment line
                 vals = f.readline().split()
                 nr = int(vals[2])
                 ntet = int(vals[3])
-                # Lire le premier bloc (Bz)
+                # First block is Bz
                 bz_vals = []
                 while len(bz_vals) < nr * ntet:
                     line = f.readline()
@@ -878,22 +862,22 @@ class InputFormPanel(QWidget):
                 if bz_vals:
                     bmax = max(abs(v) for v in bz_vals[:nr * ntet])
                     self.b_factor_spin.setValue(bmax)
-                    print(f'Bmax detecte : {bmax:.6e} T -> Facteur B mis a jour')
+                    print(f'Bmax detected: {bmax:.6e} T, B factor updated')
         except Exception as e:
-            print(f'Auto-detection Bmax echouee : {e}')
+            print(f'Bmax detection failed: {e}')
 
     def _save_data_file_dialog(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Sauver fichier de donnees", "", "Tous (*)")
+            self, "Save data file", "", "All (*)")
         if path:
             self.write_data_file(path)
 
     # ================================================================
-    # Chargement du fichier de donnees
+    # Data file loading
     # ================================================================
 
     def load_data_file(self, path):
-        """Parse le fichier de donnees et remplit les champs GUI."""
+        """Parse the data file and fill the GUI fields."""
         if self._loading:
             return
         if not path or not os.path.exists(path):
@@ -905,23 +889,21 @@ class InputFormPanel(QWidget):
             self.file_loaded.emit(path)
         except Exception as e:
             QMessageBox.warning(
-                self, "Erreur chargement",
-                f"Erreur lors du chargement de {path}:\n{e}")
+                self, "Load error",
+                f"Error while loading {path}:\n{e}")
         finally:
             self._loading = False
 
     def _do_load_data_file(self, path):
-        """Logique de parsing du fichier de donnees (meme structure que lions.io.load())."""
-        # Import du parser Fortran
-        sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
+        """Same line structure as lions.io.load()."""
         from ..io import FortranFile, fortran_float
 
         with open(path, 'r') as f_raw:
             f = FortranFile(f_raw)
 
-            # 1. corps
-            corps = f.readline().strip().strip('"').strip("'")
-            self.corps_edit.setText(corps)
+            # 1. corps (title)
+            title = f.readline().strip().strip('"').strip("'")
+            self.title_edit.setText(title)
 
             # 2. npaspt
             vals = f.readline().split()
@@ -941,12 +923,12 @@ class InputFormPanel(QWidget):
             self.harm_spin.setValue(fortran_float(vals[3]))
             self.dbsb_spin.setValue(fortran_float(vals[4]))
 
-            # 5. dphid, dphig (en degres dans le fichier)
+            # 5. dphid, dphig (degrees in the file)
             vals = f.readline().split()
             self.dphid_spin.setValue(fortran_float(vals[0]))
             self.dphig_spin.setValue(fortran_float(vals[1]))
 
-            # 6. pothfd, pothfg (positif dans fichier, inverse a la lecture par init)
+            # 6. pothfd, pothfg (positive in the file, sign flipped by init)
             vals = f.readline().split()
             self.pothfd_spin.setValue(fortran_float(vals[0]))
             self.pothfg_spin.setValue(fortran_float(vals[1]))
@@ -977,11 +959,10 @@ class InputFormPanel(QWidget):
                 self.coh1_edit.setText('')
                 self.phihar1_spin.setValue(0.0)
 
-            # Note: si teta1 < 0, on lit yomega (stocke dans teta1_spin en absolu)
-            # Pour simplifier, on ne gere pas yomega dans la GUI pour l'instant
-            # (cas tres rare)
+            # teta1 < 0 means a yomega line follows. The GUI does not edit yomega:
+            # it is skipped and teta1 is kept as an absolute value.
             if teta1_val < 0:
-                f.readline()  # consommer la ligne yomega
+                f.readline()  # yomega
 
             # 9. zmin, zmax, rmax1
             vals = f.readline().split()
@@ -1000,9 +981,7 @@ class InputFormPanel(QWidget):
             self.tet2ex_spin.setValue(tet2ex)
             self.eex_spin.setValue(eex)
 
-            # Extraction conditionnelle
             if rex < 0:
-                # ndf
                 ndf = int(f.readline().split()[0])
                 self.ndf_spin.setValue(ndf)
                 defl_lines = []
@@ -1010,7 +989,7 @@ class InputFormPanel(QWidget):
                     line = f.readline().strip()
                     defl_lines.append(line)
                 self.deflectors_text.setPlainText('\n'.join(defl_lines))
-                # Extraire edf du premier deflecteur
+                # edf_spin mirrors the voltage of the first deflector
                 if ndf > 0 and defl_lines:
                     try:
                         edf_val = fortran_float(defl_lines[0].split()[1])
@@ -1020,7 +999,6 @@ class InputFormPanel(QWidget):
                 else:
                     self.edf_spin.setValue(0.0)
 
-                # ndm
                 ndm = int(f.readline().split()[0])
                 self.ndm_spin.setValue(ndm)
                 mag_lines = []
@@ -1029,7 +1007,6 @@ class InputFormPanel(QWidget):
                     mag_lines.append(line)
                 self.magdip_text.setPlainText('\n'.join(mag_lines))
 
-                # Grilles extraction
                 if tet2ex > 0:
                     ngex = int(f.readline().split()[0])
                     self.ngex_spin.setValue(ngex)
@@ -1051,12 +1028,11 @@ class InputFormPanel(QWidget):
             nbrfam = int(f.readline().split()[0])
             self.nbrfam_spin.setValue(nbrfam)
 
-            # Si multi-famille, lire n total
             if nbrfam > 1:
                 n_total = int(f.readline().split()[0])
                 self.n_total_spin.setValue(n_total)
 
-            # Famille 1
+            # Family 1
             vals = f.readline().split()
             self.nbrion_spin.setValue(int(vals[0]))
             self.amat_spin.setValue(fortran_float(vals[1]))
@@ -1072,14 +1048,12 @@ class InputFormPanel(QWidget):
             self.w0mev_spin.setValue(fortran_float(vals[5]))
             self.phi0_spin.setValue(fortran_float(vals[6]))
 
-            # Familles supplementaires -> remplir les widgets dynamiques
-            # (nbrfam_spin.setValue a deja cree les widgets via _on_nbrfam_changed)
+            # Extra families: nbrfam_spin.setValue already created their widgets
             for k in range(nbrfam - 1):
                 vals_p = f.readline().split()
                 vals_i = f.readline().split()
-                # S'assurer que le widget existe
                 if k >= len(self.extra_families):
-                    self._on_nbrfam_changed(nbrfam)  # forcer la creation
+                    self._on_nbrfam_changed(nbrfam)
                 fw = self.extra_families[k]
                 fw.nbrion_spin.setValue(int(vals_p[0]))
                 fw.amat_spin.setValue(fortran_float(vals_p[1]))
@@ -1100,12 +1074,11 @@ class InputFormPanel(QWidget):
                 ficsig = f.readline().strip()
                 self.ficsig_edit.setText(ficsig)
                 espace = f.readline().strip()
-                self.espace_edit.setText(espace)
+                self.phase_space_edit.setText(espace)
                 cor_tokens = f.read_tokens(3)
                 self.ficcor_edit.setText(cor_tokens[0])
                 self.ficmat_edit.setText(cor_tokens[1])
                 self.ficdc_edit.setText(cor_tokens[2])
-                # Charger les diagonales du fichier sigma dans la GUI
                 self._load_sigma_diag(ficsig, path)
 
             # 13. nbdt, ifreq
@@ -1124,7 +1097,7 @@ class InputFormPanel(QWidget):
             self.ficv1_edit.setText(fic_tokens[1])
             self.ficv2_edit.setText(fic_tokens[2])
 
-            # 15b. b_factor (optionnel, retro-compatible)
+            # 15b. b_factor (optional, older files omit it)
             b_factor_found = False
             try:
                 bf_tokens = f.read_tokens(1)
@@ -1134,22 +1107,21 @@ class InputFormPanel(QWidget):
             except Exception:
                 self.b_factor_spin.setValue(1.0)
 
-        # Si pas de b_factor dans le fichier, auto-detecter depuis ficb
         if not b_factor_found:
             ficb_path = self.ficb_edit.text().strip()
             if ficb_path and ficb_path != 'no' and os.path.isfile(ficb_path):
                 self._auto_detect_bmax(ficb_path)
 
     # ================================================================
-    # Ecriture du fichier de donnees
+    # Data file writing
     # ================================================================
 
     def write_data_file(self, path):
-        """Ecrit les valeurs GUI dans un fichier de donnees au format Fortran."""
+        """Write the GUI values to a data file in the Fortran format."""
         lines = []
 
         # 1. corps
-        lines.append(f'"{self.corps_edit.text()}"')
+        lines.append(f'"{self.title_edit.text()}"')
         # 2. npaspt
         lines.append(str(self.npaspt_spin.value()))
         # 3. r1th, ntours
@@ -1205,7 +1177,6 @@ class InputFormPanel(QWidget):
             f'{_fortran_fmt(tet2ex)} '
             f'{_fortran_fmt(self.eex_spin.value())}')
 
-        # Extraction conditionnelle
         if rex < 0:
             ndf = self.ndf_spin.value()
             lines.append(str(ndf))
@@ -1217,7 +1188,7 @@ class InputFormPanel(QWidget):
                         dl = dl.strip()
                         if not dl:
                             continue
-                        # Injecter edf_spin dans le premier deflecteur
+                        # edf_spin overrides the first deflector voltage
                         if idx_dl == 0:
                             parts = dl.split()
                             if len(parts) >= 2:
@@ -1227,7 +1198,6 @@ class InputFormPanel(QWidget):
                     for dl in defl_lines_out:
                         lines.append(dl)
                 else:
-                    # Premier deflecteur avec edf_spin, reste a zero
                     edf_val = _fortran_fmt(self.edf_spin.value())
                     lines.append(f'0.d0 {edf_val} 0.d0 0.d0 0.d0 0.d0 0.d0 0.d0')
                     for _ in range(ndf - 1):
@@ -1248,14 +1218,13 @@ class InputFormPanel(QWidget):
             if tet2ex > 0:
                 ngex = self.ngex_spin.value()
                 lines.append(str(ngex))
-                # Ecrire exactement ngex lignes de grille
+                # Exactly ngex grid lines, padded with zeros
                 grid_lines_out = []
                 grid_text = self.grids_text.toPlainText().strip()
                 if grid_text:
                     for gl in grid_text.splitlines():
                         if gl.strip():
                             grid_lines_out.append(gl.strip())
-                # Completer avec des lignes placeholder si necessaire
                 while len(grid_lines_out) < ngex:
                     grid_lines_out.append('0.0 0.0 0.0 0.0 0.0')
                 for gl in grid_lines_out[:ngex]:
@@ -1266,11 +1235,10 @@ class InputFormPanel(QWidget):
         nbrfam = self.nbrfam_spin.value()
         lines.append(str(nbrfam))
 
-        # Si multi-famille, n total
         if nbrfam > 1:
             lines.append(str(self.n_total_spin.value()))
 
-        # Famille 1
+        # Family 1
         lines.append(
             f'{self.nbrion_spin.value()} '
             f'{_fortran_fmt(self.amat_spin.value())} '
@@ -1285,13 +1253,13 @@ class InputFormPanel(QWidget):
             f'{_fortran_fmt(self.w0mev_spin.value())} '
             f'{_fortran_fmt(self.phi0_spin.value())}')
 
-        # Familles supplementaires (depuis les widgets dynamiques)
+        # Extra families
         for k in range(nbrfam - 1):
             if k < len(self.extra_families):
                 fw = self.extra_families[k]
                 v = fw.get_values()
             else:
-                # Fallback : copie famille 1
+                # Missing widget: copy family 1
                 v = {
                     'nbrion': self.nbrion_spin.value(),
                     'amat': self.amat_spin.value(),
@@ -1324,7 +1292,7 @@ class InputFormPanel(QWidget):
         lines.append(str(iflcor))
         if iflcor != 0:
             lines.append(self.ficsig_edit.text().strip())
-            lines.append(self.espace_edit.text().strip())
+            lines.append(self.phase_space_edit.text().strip())
             lines.append(
                 f'{self.ficcor_edit.text().strip()} '
                 f'{self.ficmat_edit.text().strip()} '
@@ -1337,54 +1305,51 @@ class InputFormPanel(QWidget):
         lines.append(self.ficz_edit.text().strip())
         lines.append(self.ficxy_edit.text().strip())
 
-        # ligne vide pour separation avant fichiers quotes
+        # Blank line before the quoted file names
         lines.append('')
 
-        # 15. ficb, ficv1, ficv2 (quotes simples)
-        # Ecrire 'no' si le champ est vide pour eviter FileNotFoundError
+        # 15. ficb, ficv1, ficv2 (single quotes). Empty fields become 'no' so the engine does not try to open them.
         ficb_val = self.ficb_edit.text().strip() or 'no'
         ficv1_val = self.ficv1_edit.text().strip() or 'no'
         ficv2_val = self.ficv2_edit.text().strip() or 'no'
         lines.append(f"'{ficb_val}'")
         lines.append(f"'{ficv1_val}'")
         lines.append(f"'{ficv2_val}'")
-        # 15b. b_factor (facteur champ magnetique en Tesla)
+        # 15b. b_factor (magnetic field factor in tesla)
         lines.append(f'{_fortran_fmt(self.b_factor_spin.value())}')
 
-        # Ecriture
         with open(path, 'w') as fout:
             fout.write('\n'.join(lines) + '\n')
 
-        # Log des valeurs de chaque famille pour verification
         self._log_family_summary(nbrfam)
 
         return path
 
     def _log_family_summary(self, nbrfam):
-        """Affiche un resume des valeurs de chaque famille (pour debug)."""
-        summary = [f"[write_data_file] {nbrfam} famille(s) :"]
+        """Print the main values of each ion family."""
+        summary = [f"[write_data_file] {nbrfam} family(ies):"]
         summary.append(
-            f"  Fam 1: nbrion={self.nbrion_spin.value()}, "
+            f"  Family 1: nbrion={self.nbrion_spin.value()}, "
             f"amat={self.amat_spin.value()}, qn={self.qn_spin.value()}, "
             f"w0={self.w0mev_spin.value()}")
         for k in range(nbrfam - 1):
             if k < len(self.extra_families):
                 fw = self.extra_families[k]
                 summary.append(
-                    f"  Fam {k+2}: nbrion={fw.nbrion_spin.value()}, "
+                    f"  Family {k+2}: nbrion={fw.nbrion_spin.value()}, "
                     f"amat={fw.amat_spin.value()}, qn={fw.qn_spin.value()}, "
                     f"w0={fw.w0mev_spin.value()}")
         print('\n'.join(summary))
 
     # ================================================================
-    # Geometrie des deflecteurs pour le plot XY
+    # Deflector geometry for the XY plot
     # ================================================================
 
     def get_deflector_geometry(self):
-        """Retourne la geometrie des deflecteurs pour l'affichage sur le plot XY.
+        """Deflector geometry for the XY plot.
 
         Returns:
-            list of dicts avec cles : rdf_m, xdfi_m, ydfi_m, xdfo_m,
+            list of dicts with keys: rdf_m, xdfi_m, ydfi_m, xdfo_m,
             ydfo_m, tetdfi_deg, tetdfo_deg
         """
         if self.rex_spin.value() >= 0:
@@ -1420,19 +1385,20 @@ class InputFormPanel(QWidget):
         return result
 
     # ================================================================
-    # Sequences pour le worker (input queue)
+    # Answer sequences for the worker (input queue)
     # ================================================================
 
     def get_input_sequence(self):
-        """Construit la liste ordonnee des reponses pour le monkey-patching input()."""
-        # Ecrire un fichier temporaire avec les valeurs GUI
+        """Ordered answers fed to the engine in place of input().
+
+        The GUI values go to a temporary data file next to ficin.
+        """
         ficin_orig = self.ficin_edit.text()
         if ficin_orig:
             work_dir = os.path.dirname(os.path.abspath(ficin_orig))
         else:
             work_dir = '.'
         temp_path = os.path.join(work_dir, '_lions_gui_temp.dat')
-        # Auto-ecrire le fichier sigma si iflcor actif
         if self.iflcor_spin.value() != 0:
             self._write_sigma_from_gui()
         self.write_data_file(temp_path)
@@ -1440,7 +1406,7 @@ class InputFormPanel(QWidget):
         answers = []
         # 1. repswap
         answers.append(self.repswap_combo.currentText())
-        # 2. ficin (fichier temporaire)
+        # 2. ficin (temporary file)
         answers.append(temp_path)
         # 3. rmin_ver rmax_ver teta1_ver teta2_ver
         answers.append(
@@ -1460,7 +1426,7 @@ class InputFormPanel(QWidget):
             answers.append(
                 f"{self.bid_xmin.value()} {self.bid_xmax.value()} "
                 f"{self.bid_ymin.value()} {self.bid_ymax.value()}")
-            # Correlations multi-particules (initgra les lit quand d.n > 1)
+            # Multi-particle correlations (initgra reads them when d.n > 1)
             total_n = self.nbrion_spin.value()
             for fw in self.extra_families:
                 total_n += fw.nbrion_spin.value()
@@ -1480,7 +1446,7 @@ class InputFormPanel(QWidget):
         return answers
 
     def get_post_answers(self):
-        """Reponses pour la phase post-simulation (pieges)."""
+        """Answers for the post-simulation phase (trapped particles)."""
         answers = []
         answers.append(self.save_trapped_combo.currentText())
         if self.save_trapped_combo.currentText() == 'o':
@@ -1488,12 +1454,12 @@ class InputFormPanel(QWidget):
         return answers
 
     # ================================================================
-    # Sauver / Charger parametres JSON
+    # Save / load JSON parameters
     # ================================================================
 
     def save_params(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Sauver parametres", "", "JSON (*.json)")
+            self, "Save parameters", "", "JSON (*.json)")
         if not path:
             return
         data = self._collect_all_params()
@@ -1502,7 +1468,7 @@ class InputFormPanel(QWidget):
 
     def load_params(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Charger parametres", "", "JSON (*.json)")
+            self, "Load parameters", "", "JSON (*.json)")
         if not path:
             return
         with open(path, 'r') as f:
@@ -1510,21 +1476,21 @@ class InputFormPanel(QWidget):
         self._apply_all_params(data)
 
     def _collect_all_params(self):
-        """Collecte tous les parametres dans un dict."""
+        """All parameters as a dict (keys are the saved JSON format)."""
         return {
             # General
             'repswap': self.repswap_combo.currentText(),
             'ficin': self.ficin_edit.text(),
             # Description
-            'corps': self.corps_edit.text(),
-            # HF
+            'corps': self.title_edit.text(),
+            # RF
             'npaspt': self.npaspt_spin.value(),
             'fhf': self.fhf_spin.value(),
             'pothf': self.pothf_spin.value(),
             'teta1': self.teta1_spin.value(),
             'harm': self.harm_spin.value(),
             'dbsb': self.dbsb_spin.value(),
-            # Rayon/Tours
+            # Radius / turns
             'r1th': self.r1th_spin.value(),
             'ntours': self.ntours_spin.value(),
             # Dees
@@ -1532,14 +1498,14 @@ class InputFormPanel(QWidget):
             'dphig': self.dphig_spin.value(),
             'pothfd': self.pothfd_spin.value(),
             'pothfg': self.pothfg_spin.value(),
-            # Harmoniques
+            # Harmonics
             'ncoh0': self.ncoh0_spin.value(),
             'coh0': self.coh0_edit.text(),
             'phihar0': self.phihar0_spin.value(),
             'ncoh1': self.ncoh1_spin.value(),
             'coh1': self.coh1_edit.text(),
             'phihar1': self.phihar1_spin.value(),
-            # Geometrie Z
+            # Z geometry
             'zmin': self.zmin_spin.value(),
             'zmax': self.zmax_spin.value(),
             'rmax1': self.rmax1_spin.value(),
@@ -1575,7 +1541,7 @@ class InputFormPanel(QWidget):
             # Correlations
             'iflcor': self.iflcor_spin.value(),
             'ficsig': self.ficsig_edit.text(),
-            'espace': self.espace_edit.text(),
+            'espace': self.phase_space_edit.text(),
             'ficcor': self.ficcor_edit.text(),
             'ficmat': self.ficmat_edit.text(),
             'ficdc': self.ficdc_edit.text(),
@@ -1588,15 +1554,15 @@ class InputFormPanel(QWidget):
             # Simulation
             'nbdt': self.nbdt_spin.value(),
             'ifreq': self.ifreq_spin.value(),
-            # Fichiers sortie
+            # Output files
             'ficz': self.ficz_edit.text(),
             'ficxy': self.ficxy_edit.text(),
-            # Fichiers champs
+            # Field files
             'ficb': self.ficb_edit.text(),
             'ficv1': self.ficv1_edit.text(),
             'ficv2': self.ficv2_edit.text(),
             'b_factor': self.b_factor_spin.value(),
-            # Trieur vertical
+            # Vertical sorter
             'rmin_ver': self.rmin_ver.value(),
             'rmax_ver': self.rmax_ver.value(),
             'teta1_ver': self.teta1_ver.value(),
@@ -1633,20 +1599,20 @@ class InputFormPanel(QWidget):
         }
 
     def _apply_all_params(self, data):
-        """Applique un dict de parametres aux champs GUI."""
+        """Apply a parameter dict to the GUI fields."""
         # General
         self.repswap_combo.setCurrentText(data.get('repswap', 'y'))
         self.ficin_edit.setText(data.get('ficin', ''))
         # Description
-        self.corps_edit.setText(data.get('corps', ''))
-        # HF
+        self.title_edit.setText(data.get('corps', ''))
+        # RF
         self.npaspt_spin.setValue(data.get('npaspt', 1080))
         self.fhf_spin.setValue(data.get('fhf', 14400000.0))
         self.pothf_spin.setValue(data.get('pothf', -51890.0))
         self.teta1_spin.setValue(data.get('teta1', 20.0))
         self.harm_spin.setValue(data.get('harm', 3.0))
         self.dbsb_spin.setValue(data.get('dbsb', 1e-4))
-        # Rayon/Tours
+        # Radius / turns
         self.r1th_spin.setValue(data.get('r1th', 1.50))
         self.ntours_spin.setValue(data.get('ntours', 250))
         # Dees
@@ -1654,14 +1620,14 @@ class InputFormPanel(QWidget):
         self.dphig_spin.setValue(data.get('dphig', 0.0))
         self.pothfd_spin.setValue(data.get('pothfd', 51890.0))
         self.pothfg_spin.setValue(data.get('pothfg', 51890.0))
-        # Harmoniques
+        # Harmonics
         self.ncoh0_spin.setValue(data.get('ncoh0', 0))
         self.coh0_edit.setText(data.get('coh0', ''))
         self.phihar0_spin.setValue(data.get('phihar0', 0.0))
         self.ncoh1_spin.setValue(data.get('ncoh1', 0))
         self.coh1_edit.setText(data.get('coh1', ''))
         self.phihar1_spin.setValue(data.get('phihar1', 0.0))
-        # Geometrie Z
+        # Z geometry
         self.zmin_spin.setValue(data.get('zmin', -0.5))
         self.zmax_spin.setValue(data.get('zmax', 0.5))
         self.rmax1_spin.setValue(data.get('rmax1', 0.164))
@@ -1692,7 +1658,7 @@ class InputFormPanel(QWidget):
         self.pz0_spin.setValue(data.get('pz0', 0.0))
         self.w0mev_spin.setValue(data.get('w0mev', 5.665e-3))
         self.phi0_spin.setValue(data.get('phi0', -250.0))
-        # Familles supplementaires (nbrfam_spin.setValue cree les widgets)
+        # Extra families (nbrfam_spin.setValue created the widgets)
         extra_fams = data.get('extra_families', [])
         for i, fd in enumerate(extra_fams):
             if i < len(self.extra_families):
@@ -1700,7 +1666,7 @@ class InputFormPanel(QWidget):
         # Correlations
         self.iflcor_spin.setValue(data.get('iflcor', 0))
         self.ficsig_edit.setText(data.get('ficsig', ''))
-        self.espace_edit.setText(data.get('espace', '6d'))
+        self.phase_space_edit.setText(data.get('espace', '6d'))
         self.ficcor_edit.setText(data.get('ficcor', 'no'))
         self.ficmat_edit.setText(data.get('ficmat', 'no'))
         self.ficdc_edit.setText(data.get('ficdc', 'no'))
@@ -1713,15 +1679,15 @@ class InputFormPanel(QWidget):
         # Simulation
         self.nbdt_spin.setValue(data.get('nbdt', 350000))
         self.ifreq_spin.setValue(data.get('ifreq', 30))
-        # Fichiers sortie
+        # Output files
         self.ficz_edit.setText(data.get('ficz', 'no'))
         self.ficxy_edit.setText(data.get('ficxy', 'no'))
-        # Fichiers champs
+        # Field files
         self.ficb_edit.setText(data.get('ficb', ''))
         self.ficv1_edit.setText(data.get('ficv1', ''))
         self.ficv2_edit.setText(data.get('ficv2', ''))
         self.b_factor_spin.setValue(data.get('b_factor', 1.0))
-        # Trieur vertical
+        # Vertical sorter
         self.rmin_ver.setValue(data.get('rmin_ver', 1000.0))
         self.rmax_ver.setValue(data.get('rmax_ver', 2000.0))
         self.teta1_ver.setValue(data.get('teta1_ver', 0.0))
@@ -1754,4 +1720,4 @@ class InputFormPanel(QWidget):
         self.ficrep_edit.setText(data.get('ficrep', 'no'))
         # Post-simulation
         self.save_trapped_combo.setCurrentText(data.get('save_trapped', 'n'))
-        self.ficpie_edit.setText(data.get('ficpie', 'pieges.dat'))
+        self.ficpie_edit.setText(data.get('ficpie', 'trapped.dat'))

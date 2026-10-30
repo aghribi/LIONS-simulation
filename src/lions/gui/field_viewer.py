@@ -1,7 +1,4 @@
-"""
-lions_field_viewer.py - Visualiseur des champs magnetiques et electriques
-Lit les fichiers de cartes de champ et affiche en 2D/3D.
-"""
+"""Viewer for the magnetic field map and the electric potential maps, in 2D or 3D."""
 
 import os
 import numpy as np
@@ -16,10 +13,8 @@ from PyQt5.QtWidgets import (
 from ..io import read_bfield_map, read_central_potential, read_outer_potential
 
 
-# --- Widget de visualisation ---
-
 class FieldTab(QWidget):
-    """Onglet avec un canvas matplotlib et des controles."""
+    """Matplotlib canvas with its navigation toolbar."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -36,11 +31,11 @@ class FieldTab(QWidget):
 
 
 class FieldViewerDialog(QDialog):
-    """Dialogue pour visualiser les champs magnetiques et electriques."""
+    """Dialog to view the magnetic and electric fields."""
 
     def __init__(self, parent=None, ficb='', ficv1='', ficv2='', swap='n'):
         super().__init__(parent)
-        self.setWindowTitle("LIONS - Visualiseur des Champs")
+        self.setWindowTitle("LIONS - Field Viewer")
         self.setMinimumSize(1000, 700)
         self.mag_data = None
         self.pot1_data = None
@@ -49,66 +44,61 @@ class FieldViewerDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # --- Barre de fichiers ---
-        files_group = QGroupBox("Fichiers de champs")
+        files_group = QGroupBox("Field files")
         files_layout = QVBoxLayout(files_group)
 
-        # Champ B
         row1 = QHBoxLayout()
-        row1.addWidget(QLabel("Champ B :"))
+        row1.addWidget(QLabel("B field:"))
         self.ficb_edit = QLineEdit(ficb)
         row1.addWidget(self.ficb_edit)
         btn_b = QPushButton("...")
         btn_b.setMaximumWidth(30)
-        btn_b.clicked.connect(lambda: self._browse(self.ficb_edit, "Carte magnetique (*)"))
+        btn_b.clicked.connect(lambda: self._browse(self.ficb_edit, "Magnetic field map (*)"))
         row1.addWidget(btn_b)
-        btn_load_b = QPushButton("Charger")
+        btn_load_b = QPushButton("Load")
         btn_load_b.clicked.connect(self._load_magnetic)
         row1.addWidget(btn_load_b)
         files_layout.addLayout(row1)
 
-        # Pot central
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel("Pot. central :"))
+        row2.addWidget(QLabel("Central pot.:"))
         self.ficv1_edit = QLineEdit(ficv1)
         row2.addWidget(self.ficv1_edit)
         btn_v1 = QPushButton("...")
         btn_v1.setMaximumWidth(30)
-        btn_v1.clicked.connect(lambda: self._browse(self.ficv1_edit, "Potentiel (*.dat *.bin *)"))
+        btn_v1.clicked.connect(lambda: self._browse(self.ficv1_edit, "Potential (*.dat *.bin *)"))
         row2.addWidget(btn_v1)
-        btn_load_v1 = QPushButton("Charger")
+        btn_load_v1 = QPushButton("Load")
         btn_load_v1.clicked.connect(self._load_pot_central)
         row2.addWidget(btn_load_v1)
         files_layout.addLayout(row2)
 
-        # Pot peripherique
         row3 = QHBoxLayout()
-        row3.addWidget(QLabel("Pot. periph. :"))
+        row3.addWidget(QLabel("Outer pot.:"))
         self.ficv2_edit = QLineEdit(ficv2)
         row3.addWidget(self.ficv2_edit)
         btn_v2 = QPushButton("...")
         btn_v2.setMaximumWidth(30)
-        btn_v2.clicked.connect(lambda: self._browse(self.ficv2_edit, "Potentiel (*.dat *)"))
+        btn_v2.clicked.connect(lambda: self._browse(self.ficv2_edit, "Potential (*.dat *)"))
         row3.addWidget(btn_v2)
-        btn_load_v2 = QPushButton("Charger")
+        btn_load_v2 = QPushButton("Load")
         btn_load_v2.clicked.connect(self._load_pot_peripheral)
         row3.addWidget(btn_load_v2)
         files_layout.addLayout(row3)
 
         layout.addWidget(files_group)
 
-        # --- Controles ---
         ctrl_layout = QHBoxLayout()
 
-        ctrl_layout.addWidget(QLabel("Donnee :"))
+        ctrl_layout.addWidget(QLabel("Quantity:"))
         self.field_combo = QComboBox()
         self.field_combo.addItems(['Bz', 'd2Bz', 'dBz/dx', 'dBz/dy',
-                                    'Pot. central', 'Pot. periph.',
-                                    'd2Pot central', 'd2Pot periph.'])
+                                    'Central pot.', 'Outer pot.',
+                                    'd2Pot central', 'd2Pot outer'])
         self.field_combo.currentIndexChanged.connect(self._replot)
         ctrl_layout.addWidget(self.field_combo)
 
-        ctrl_layout.addWidget(QLabel("Colormap :"))
+        ctrl_layout.addWidget(QLabel("Colormap:"))
         self.cmap_combo = QComboBox()
         self.cmap_combo.addItems(['coolwarm', 'viridis', 'jet', 'hot', 'RdBu_r', 'seismic'])
         self.cmap_combo.currentIndexChanged.connect(self._replot)
@@ -121,31 +111,30 @@ class FieldViewerDialog(QDialog):
         ctrl_layout.addStretch()
         layout.addLayout(ctrl_layout)
 
-        # --- Canvas ---
         self.field_tab = FieldTab(self)
         layout.addWidget(self.field_tab)
 
     def _browse(self, line_edit, filter_str):
-        path, _ = QFileDialog.getOpenFileName(self, "Ouvrir fichier", "", filter_str)
+        path, _ = QFileDialog.getOpenFileName(self, "Open file", "", filter_str)
         if path:
             line_edit.setText(path)
 
     def _load_magnetic(self):
         path = self.ficb_edit.text().strip()
         if not path or not os.path.exists(path):
-            QMessageBox.warning(self, "Erreur", "Fichier champ B introuvable.")
+            QMessageBox.warning(self, "Error", "B field file not found.")
             return
         try:
             self.mag_data = read_bfield_map(path)
             self.field_combo.setCurrentIndex(0)
             self._replot()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur lecture", str(e))
+            QMessageBox.critical(self, "Read error", str(e))
 
     def _load_pot_central(self):
         path = self.ficv1_edit.text().strip()
         if not path or not os.path.exists(path):
-            QMessageBox.warning(self, "Erreur", "Fichier pot. central introuvable.")
+            QMessageBox.warning(self, "Error", "Central potential file not found.")
             return
         try:
             swap = self.swap == 'y'
@@ -156,19 +145,19 @@ class FieldViewerDialog(QDialog):
             self.field_combo.setCurrentIndex(4)
             self._replot()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur lecture", str(e))
+            QMessageBox.critical(self, "Read error", str(e))
 
     def _load_pot_peripheral(self):
         path = self.ficv2_edit.text().strip()
         if not path or not os.path.exists(path):
-            QMessageBox.warning(self, "Erreur", "Fichier pot. periph. introuvable.")
+            QMessageBox.warning(self, "Error", "Outer potential file not found.")
             return
         try:
             self.pot2_data = read_outer_potential(path)
             self.field_combo.setCurrentIndex(5)
             self._replot()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur lecture", str(e))
+            QMessageBox.critical(self, "Read error", str(e))
 
     def _replot(self):
         fig = self.field_tab.fig
@@ -189,7 +178,7 @@ class FieldViewerDialog(QDialog):
     def _plot_magnetic(self, fig, field_idx, cmap, is_3d):
         if self.mag_data is None:
             ax = fig.add_subplot(111)
-            ax.text(0.5, 0.5, "Chargez un fichier de champ B",
+            ax.text(0.5, 0.5, "Load a B field file",
                     ha='center', va='center', fontsize=14, color='#888')
             return
 
@@ -199,7 +188,7 @@ class FieldViewerDialog(QDialog):
         names = ['Bz (T)', 'd\u00b2Bz/dr\u00b2', 'dBz/dx', 'dBz/dy']
         data = fields[field_idx]
 
-        # Creer grille (r, theta) -> (x, y) en mm
+        # Polar grid (r, theta) to Cartesian (x, y) in mm.
         r_arr = np.linspace(d['rmin'], d['rmax'], d['nr']) * 1000.0
         theta_arr = np.linspace(0, 2 * np.pi, d['ntheta_all'])
         R, Theta = np.meshgrid(r_arr, theta_arr, indexing='ij')
@@ -208,7 +197,7 @@ class FieldViewerDialog(QDialog):
 
         if is_3d:
             ax = fig.add_subplot(111, projection='3d')
-            # Sous-echantillonner pour la 3D
+            # Decimate: plot_surface is slow on the full grid.
             step_r = max(1, d['nr'] // 80)
             step_t = max(1, d['ntheta_all'] // 180)
             ax.plot_surface(X[::step_r, ::step_t], Y[::step_r, ::step_t],
@@ -232,11 +221,11 @@ class FieldViewerDialog(QDialog):
 
     def _plot_potential(self, fig, pot_idx, cmap, is_3d):
         data_dict = self.pot1_data if pot_idx == 0 else self.pot2_data
-        name = "Potentiel central" if pot_idx == 0 else "Potentiel peripherique"
+        name = "Central potential" if pot_idx == 0 else "Outer potential"
 
         if data_dict is None:
             ax = fig.add_subplot(111)
-            ax.text(0.5, 0.5, f"Chargez le fichier {name.lower()}",
+            ax.text(0.5, 0.5, f"Load the {name.lower()} file",
                     ha='center', va='center', fontsize=14, color='#888')
             return
 
@@ -272,11 +261,11 @@ class FieldViewerDialog(QDialog):
 
     def _plot_potential_d2(self, fig, pot_idx, cmap, is_3d):
         data_dict = self.pot1_data if pot_idx == 0 else self.pot2_data
-        name = "d\u00b2V central" if pot_idx == 0 else "d\u00b2V peripherique"
+        name = "d\u00b2V central" if pot_idx == 0 else "d\u00b2V outer"
 
         if data_dict is None:
             ax = fig.add_subplot(111)
-            ax.text(0.5, 0.5, "Chargez le fichier potentiel correspondant",
+            ax.text(0.5, 0.5, "Load the matching potential file",
                     ha='center', va='center', fontsize=14, color='#888')
             return
 
@@ -308,7 +297,6 @@ class FieldViewerDialog(QDialog):
         ax.set_title(f"{name}\n{d['nx']}x{d['ny']}")
 
 
-# --- Standalone ---
 if __name__ == '__main__':
     import sys
     from PyQt5.QtWidgets import QApplication

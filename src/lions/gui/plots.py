@@ -1,7 +1,4 @@
-"""
-lions_plots.py - Widget pyqtgraph pour les plots temps reel de LIONS
-Plots dynamiques avec zoom/pan persistant et curseur crosshair.
-"""
+"""Live pyqtgraph plots for LIONS, with persistent zoom/pan and a crosshair cursor, plus the Plotly 3D view."""
 
 import importlib
 
@@ -17,21 +14,19 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QFont, QColor
 
-# OpenGL 3D (optionnel, fallback)
+# OpenGL is optional; it only gates the 3D toolbar action.
 try:
     importlib.import_module('pyqtgraph.opengl')
     HAS_GL = True
 except ImportError:
     HAS_GL = False
 
-# Plotly 3D (prefere)
 try:
     import plotly.graph_objects as _plotly_go
     HAS_PLOTLY = True
 except ImportError:
     HAS_PLOTLY = False
 
-# Qt WebEngine pour afficher Plotly dans la fenetre
 try:
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     HAS_WEBENGINE = True
@@ -39,39 +34,28 @@ except ImportError:
     HAS_WEBENGINE = False
 
 class IntegerAxis(pg.AxisItem):
-    """Axe qui affiche uniquement des valeurs entieres."""
+    """Axis with integer tick labels."""
     def tickStrings(self, values, scale, spacing):
         return [f'{int(round(v))}' for v in values]
 
 
-# Palette de couleurs (fond clair, courbes vives)
 BG_COLOR = '#f0f2f5'
 PLOT_BG = '#ffffff'
 GRID_COLOR = '#c8d0dc'
 TEXT_COLOR = '#2c3e50'
 TITLE_COLOR = '#1a1a2e'
 
-# Couleurs par famille (jusqu'a 10 familles)
 FAMILY_COLORS = [
-    '#1565C0',  # bleu
-    '#d32f2f',  # rouge
-    '#2e7d32',  # vert
-    '#ff6f00',  # orange
-    '#7b1fa2',  # violet
-    '#00838f',  # teal
-    '#c62828',  # rouge fonce
-    '#283593',  # indigo
-    '#558b2f',  # vert lime
-    '#4e342e',  # marron
+    '#1565C0', '#d32f2f', '#2e7d32', '#ff6f00', '#7b1fa2',
+    '#00838f', '#c62828', '#283593', '#558b2f', '#4e342e',
 ]
 
-# Configuration globale pyqtgraph
-# antialias=False pour meilleures performances temps-reel
+# Antialiasing off: too slow for live updates.
 pg.setConfigOptions(antialias=False, background=BG_COLOR, foreground=TEXT_COLOR)
 
 
 class CrosshairOverlay:
-    """Curseur crosshair + affichage des coordonnees sur un PlotItem."""
+    """Crosshair cursor with a coordinate readout on a PlotItem."""
 
     def __init__(self, plot_item):
         self.plot = plot_item
@@ -121,7 +105,7 @@ class CrosshairOverlay:
 
 
 class PlotCanvas(QWidget):
-    """Canvas pyqtgraph avec 6 plots + scatter multi-particules."""
+    """pyqtgraph canvas: six plots, each with the reference particle and a scatter of all particles."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -132,17 +116,14 @@ class PlotCanvas(QWidget):
         self.graphics_widget.setBackground(BG_COLOR)
         layout.addWidget(self.graphics_widget)
 
-        # Limite de rayon pour le plot XY (0 = auto)
+        # Radius limits (mm) for XY, R-theta and R-dphi; 0 means no limit.
         self.rmax_display = 0.0
-        # Limite de rayon pour le plot R-theta (0 = auto/pas de filtre)
         self.rmax_rtheta = 0.0
-        # Limite de rayon pour le plot R-dphi (0 = auto/pas de filtre)
         self.rmax_rdph = 0.0
-        # Filtre dphi pour R-dphi et dphi vs Tour (0,0 = pas de filtre)
+        # dphi window for R-dphi and dphi vs turn; (0, 0) means no filter.
         self.dphi_min = 0.0
         self.dphi_max = 0.0
 
-        # Grille 3x2
         self.plot_xy = self.graphics_widget.addPlot(row=0, col=0)
         self.plot_energy = self.graphics_widget.addPlot(
             row=0, col=1, axisItems={'bottom': IntegerAxis(orientation='bottom')})
@@ -152,40 +133,35 @@ class PlotCanvas(QWidget):
         self.plot_dphw = self.graphics_widget.addPlot(
             row=2, col=1, axisItems={'bottom': IntegerAxis(orientation='bottom')})
 
-        # Style
-        self._style_plot(self.plot_xy, 'Trajectoire XY', 'X (mm)', 'Y (mm)')
-        self._style_plot(self.plot_energy, 'Energie vs Tour', 'Tour', 'Energie (MeV/A)')
+        self._style_plot(self.plot_xy, 'XY trajectory', 'X (mm)', 'Y (mm)')
+        self._style_plot(self.plot_energy, 'Energy vs turn', 'Turn', 'Energy (MeV/A)')
         self._style_plot(self.plot_rtheta, 'R - \u03b8', '\u03b8 (deg)', 'R (mm)')
-        self._style_plot(self.plot_zpz, 'Espace de phase Z - Pz', 'Z (mm)', 'Pz (mrad)')
+        self._style_plot(self.plot_zpz, 'Z - Pz phase space', 'Z (mm)', 'Pz (mrad)')
         self._style_plot(self.plot_rdph, 'R - d\u03c6', 'R (mm)', 'd\u03c6 (deg)')
-        self._style_plot(self.plot_dphw, 'd\u03c6 vs Tour', 'Tour', 'd\u03c6 (deg)')
+        self._style_plot(self.plot_dphw, 'd\u03c6 vs turn', 'Turn', 'd\u03c6 (deg)')
 
-        # Aspect egal pour XY
         self.plot_xy.setAspectLocked(True, ratio=1.0)
 
-        # Legendes (ajoutees dynamiquement quand nbrfam > 1)
+        # Legends are added on the first family when nbrfam > 1.
         self._legends_added = False
 
-        # Items deflecteurs dessines sur plot_xy
         self._deflector_items = []
 
-        # Buffers et courbes par famille (crees dynamiquement)
         self._fam_data = {}    # {k: {'x':[], 'y':[], 'turn':[], ...}}
         self._fam_curves = {}  # {k: {'xy':..., 'energy':..., 'rtheta':..., 'zpz':...}}
 
-        # Crosshairs
         self.crosshairs = []
         for plot in [self.plot_xy, self.plot_energy,
                      self.plot_rtheta, self.plot_zpz,
                      self.plot_rdph, self.plot_dphw]:
             self.crosshairs.append(CrosshairOverlay(plot))
 
-        # Shim de compatibilite pour canvas.fig.savefig()
+        # app.py calls canvas.fig.savefig(), the matplotlib API.
         self.fig = _FigShim(self)
 
     @staticmethod
     def _style_plot(plot_item, title, xlabel, ylabel):
-        """Applique le style a un PlotItem."""
+        """Apply the common style to a PlotItem."""
         plot_item.setTitle(title, color=TITLE_COLOR, size='11pt', bold=True)
         plot_item.setLabel('bottom', xlabel, color=TEXT_COLOR,
                            **{'font-size': '9pt'})
@@ -200,11 +176,11 @@ class PlotCanvas(QWidget):
             axis.setStyle(tickLength=-4)
 
     def _ensure_family(self, k, nbrfam=1):
-        """Cree les buffers et courbes pour la famille k si necessaire."""
+        """Create the buffers and curves of family k on first use."""
         if k in self._fam_data:
             return
 
-        # Ajouter les legendes AVANT les courbes (pour que pyqtgraph les enregistre)
+        # Legends must exist before the curves, or pyqtgraph does not register them.
         if nbrfam > 1 and not self._legends_added:
             self._legends_added = True
             for plot in [self.plot_xy, self.plot_energy,
@@ -216,7 +192,6 @@ class PlotCanvas(QWidget):
         color = FAMILY_COLORS[k % len(FAMILY_COLORS)]
         fam_name = f'Fam {k+1}'
 
-        # Couleur scatter (semi-transparente)
         sc = QColor(color)
         sc.setAlpha(80)
         scatter_brush = pg.mkBrush(sc)
@@ -232,7 +207,7 @@ class PlotCanvas(QWidget):
         }
 
         curves = {}
-        # --- Trajectoire (particule de reference) ---
+        # Reference particle
         curves['xy'] = self.plot_xy.plot(
             [], [], pen=pg.mkPen(color=color, width=0.5),
             name=fam_name)
@@ -257,7 +232,7 @@ class PlotCanvas(QWidget):
             symbolPen=None, symbolBrush=color,
             clipToView=True, name=fam_name)
 
-        # --- Scatter (toutes les particules, semi-transparent) ---
+        # All particles, semi-transparent
         curves['scat_energy'] = self.plot_energy.plot(
             [], [], pen=None, symbol='o', symbolSize=2,
             symbolPen=None, symbolBrush=scatter_brush)
@@ -280,7 +255,7 @@ class PlotCanvas(QWidget):
         self._fam_curves[k] = curves
 
     def append_data(self, data):
-        """Ajoute un point aux buffers sans rafraichir les courbes."""
+        """Buffer one data point without redrawing."""
         k = data.get('family', 0)
         nbrfam = data.get('nbrfam', 1)
         self._ensure_family(k, nbrfam)
@@ -294,7 +269,6 @@ class PlotCanvas(QWidget):
         fd['z'].append(data['z0_mm'])
         fd['pz'].append(data['tpz'])
         fd['dph'].append(data.get('dph', 0.0))
-        # Scatter: accumuler les positions de toutes les particules au fil du temps
         for key in ['scatter_x', 'scatter_y', 'scatter_z', 'scatter_r',
                     'scatter_theta', 'scatter_pz', 'scatter_dph', 'scatter_wmevpa',
                     'scatter_turn']:
@@ -303,12 +277,12 @@ class PlotCanvas(QWidget):
                 fd[key].append(val)
 
     def update_plots(self, data):
-        """Ajoute un point et rafraichit (compatibilite)."""
+        """Buffer one data point and redraw."""
         self.append_data(data)
         self._refresh_all_curves()
 
     def _refresh_all_curves(self):
-        """Rafraichit toutes les courbes a partir des buffers."""
+        """Redraw all curves from the buffers."""
         if not self._fam_data:
             return
 
@@ -320,7 +294,6 @@ class PlotCanvas(QWidget):
             x_arr = np.array(fd['x'], dtype=np.float64)
             y_arr = np.array(fd['y'], dtype=np.float64)
 
-            # XY : filtrer par rmax si defini
             if self.rmax_display > 0:
                 mask = ((np.abs(x_arr) > self.rmax_display) |
                         (np.abs(y_arr) > self.rmax_display))
@@ -330,12 +303,10 @@ class PlotCanvas(QWidget):
             else:
                 curves['xy'].setData(x_arr, y_arr)
 
-            # Energy
             turn_arr = np.array(fd['turn'], dtype=np.float64)
             energy_arr = np.array(fd['energy'], dtype=np.float64)
             curves['energy'].setData(turn_arr, energy_arr)
 
-            # R-theta
             theta_arr = np.array(fd['theta'], dtype=np.float64)
             r_arr = np.array(fd['r'], dtype=np.float64)
             if self.rmax_rtheta > 0:
@@ -344,12 +315,10 @@ class PlotCanvas(QWidget):
             else:
                 curves['rtheta'].setData(theta_arr, r_arr)
 
-            # Z-Pz
             z_arr = np.array(fd['z'], dtype=np.float64)
             pz_arr = np.array(fd['pz'], dtype=np.float64)
             curves['zpz'].setData(z_arr, pz_arr)
 
-            # R-dphi (avec filtre dphi + filtre R)
             dph_arr = np.array(fd['dph'], dtype=np.float64)
             mask_rdph = np.ones(len(r_arr), dtype=bool)
             if self.rmax_rdph > 0:
@@ -358,13 +327,11 @@ class PlotCanvas(QWidget):
                 mask_rdph &= (dph_arr >= self.dphi_min) & (dph_arr <= self.dphi_max)
             curves['rdph'].setData(r_arr[mask_rdph], dph_arr[mask_rdph])
 
-            # dphi vs Tour (avec filtre dphi)
             mask_dphw = np.ones(len(dph_arr), dtype=bool)
             if self.dphi_min != 0.0 or self.dphi_max != 0.0:
                 mask_dphw = (dph_arr >= self.dphi_min) & (dph_arr <= self.dphi_max)
             curves['dphw'].setData(turn_arr[mask_dphw], dph_arr[mask_dphw])
 
-            # === Scatter overlays (toutes les particules, accumule) ===
             sx_list = fd.get('scatter_x', [])
             if sx_list:
                 sx = np.concatenate(sx_list)
@@ -378,7 +345,7 @@ class PlotCanvas(QWidget):
                 sturn_list = fd.get('scatter_turn', [])
                 sturn = np.concatenate(sturn_list) if sturn_list else np.array([])
 
-                # Sous-echantillonnage si trop de points (performance)
+                # Decimate to keep redraws fast.
                 MAX_SCAT = 200000
                 if len(sx) > MAX_SCAT:
                     idx = np.linspace(0, len(sx) - 1, MAX_SCAT, dtype=int)
@@ -388,7 +355,6 @@ class PlotCanvas(QWidget):
                     if len(sturn) > 0:
                         sturn = sturn[idx]
 
-                # XY scatter
                 if self.rmax_display > 0:
                     smask = ((np.abs(sx) <= self.rmax_display) &
                              (np.abs(sy) <= self.rmax_display))
@@ -396,7 +362,6 @@ class PlotCanvas(QWidget):
                 else:
                     curves['scat_xy'].setData(sx, sy)
 
-                # R-theta scatter
                 if self.rmax_rtheta > 0:
                     smask_rt = sr <= self.rmax_rtheta
                     curves['scat_rtheta'].setData(
@@ -404,10 +369,8 @@ class PlotCanvas(QWidget):
                 else:
                     curves['scat_rtheta'].setData(stheta, sr)
 
-                # Z-Pz scatter
                 curves['scat_zpz'].setData(sz, spz)
 
-                # R-dphi scatter (filtre R + filtre dphi)
                 smask_rdph = np.ones(len(sr), dtype=bool)
                 if self.rmax_rdph > 0:
                     smask_rdph &= sr <= self.rmax_rdph
@@ -415,18 +378,15 @@ class PlotCanvas(QWidget):
                     smask_rdph &= (sdph >= self.dphi_min) & (sdph <= self.dphi_max)
                 curves['scat_rdph'].setData(sr[smask_rdph], sdph[smask_rdph])
 
-                # dphi vs Tour scatter (filtre dphi)
                 smask_dphw = np.ones(len(sdph), dtype=bool)
                 if self.dphi_min != 0.0 or self.dphi_max != 0.0:
                     smask_dphw = (sdph >= self.dphi_min) & (sdph <= self.dphi_max)
                 if len(sturn) > 0:
                     curves['scat_dphw'].setData(sturn[smask_dphw], sdph[smask_dphw])
 
-                # Energy vs turn scatter
                 if len(sturn) > 0:
                     curves['scat_energy'].setData(sturn, swmevpa)
 
-        # Ranges globaux (une seule fois apres toutes les familles)
         if self.rmax_display > 0:
             self.plot_xy.setXRange(-self.rmax_display, self.rmax_display,
                                    padding=0)
@@ -438,13 +398,11 @@ class PlotCanvas(QWidget):
             self.plot_rdph.setXRange(0, self.rmax_rdph, padding=0.02)
 
     def clear_plots(self):
-        """Efface toutes les donnees des plots."""
-        # Supprimer les items deflecteurs
+        """Remove all curves, deflectors and legends."""
         for item in self._deflector_items:
             self.plot_xy.removeItem(item)
         self._deflector_items.clear()
 
-        # Supprimer les courbes des plots
         for k, curves in self._fam_curves.items():
             self.plot_xy.removeItem(curves['xy'])
             self.plot_xy.removeItem(curves['scat_xy'])
@@ -461,7 +419,6 @@ class PlotCanvas(QWidget):
         self._fam_data.clear()
         self._fam_curves.clear()
 
-        # Supprimer les legendes
         for plot in [self.plot_xy, self.plot_energy,
                      self.plot_rtheta, self.plot_zpz,
                      self.plot_rdph, self.plot_dphw]:
@@ -478,7 +435,7 @@ class PlotCanvas(QWidget):
         self._legends_added = False
 
     def reset_zoom(self):
-        """Reinitialise le zoom sur tous les plots."""
+        """Reset the zoom on all plots, keeping the radius limits."""
         for plot in [self.plot_xy, self.plot_energy,
                      self.plot_rtheta, self.plot_zpz,
                      self.plot_rdph, self.plot_dphw]:
@@ -494,12 +451,11 @@ class PlotCanvas(QWidget):
             self.plot_rdph.setXRange(0, self.rmax_rdph, padding=0.02)
 
     def draw_deflectors(self, defl_list):
-        """Dessine les deflecteurs sur le plot XY.
+        """Draw the deflectors on the XY plot.
 
-        defl_list : list of dicts, chaque dict contient :
+        defl_list: list of dicts with keys
             rdf_m, xdfi_m, ydfi_m, xdfo_m, ydfo_m, tetdfi_deg, tetdfo_deg
         """
-        # Supprimer les items precedents
         for item in self._deflector_items:
             self.plot_xy.removeItem(item)
         self._deflector_items.clear()
@@ -520,7 +476,7 @@ class PlotCanvas(QWidget):
             tetdfi_deg = defl['tetdfi_deg']
             tetdfo_deg = defl['tetdfo_deg']
 
-            # Angles en radians, gerer le wrap-around
+            # Unwrap so that the exit angle follows the entry angle.
             a1 = tetdfi_deg % 360
             a2 = tetdfo_deg % 360
             if a2 <= a1:
@@ -528,19 +484,19 @@ class PlotCanvas(QWidget):
             a1_rad = np.radians(a1)
             a2_rad = np.radians(a2)
 
-            ext = rdf_mm * 0.15  # extension radiale (15%)
+            ext = rdf_mm * 0.15  # radial depth drawn: 15% of rdf
 
-            # -- Arc interieur a rdf --
+            # Inner arc at rdf
             angles = np.linspace(a1_rad, a2_rad, 100)
             arc_x = rdf_mm * np.cos(angles)
             arc_y = rdf_mm * np.sin(angles)
             item = self.plot_xy.plot(arc_x, arc_y, pen=defl_pen)
             self._deflector_items.append(item)
 
-            # -- Paroi d'entree --
+            # Entry wall
             cos_a1 = np.cos(a1_rad)
             sin_a1 = np.sin(a1_rad)
-            # Trouver t_start : intersection de la droite avec le cercle rdf
+            # t_start: where the wall line crosses the rdf circle.
             b_in = xdfi_mm * cos_a1 + ydfi_mm * sin_a1
             c_in = xdfi_mm**2 + ydfi_mm**2 - rdf_mm**2
             disc_in = b_in**2 - c_in
@@ -556,7 +512,7 @@ class PlotCanvas(QWidget):
             item = self.plot_xy.plot(x_in, y_in, pen=defl_pen)
             self._deflector_items.append(item)
 
-            # -- Paroi de sortie --
+            # Exit wall
             cos_a2 = np.cos(a2_rad)
             sin_a2 = np.sin(a2_rad)
             b_out = xdfo_mm * cos_a2 + ydfo_mm * sin_a2
@@ -574,13 +530,12 @@ class PlotCanvas(QWidget):
             item = self.plot_xy.plot(x_out, y_out, pen=defl_pen)
             self._deflector_items.append(item)
 
-            # -- Arc exterieur (ferme le contour) --
+            # Outer arc, closes the outline
             outer_x = (rdf_mm + ext) * np.cos(angles)
             outer_y = (rdf_mm + ext) * np.sin(angles)
             item = self.plot_xy.plot(outer_x, outer_y, pen=defl_pen_dash)
             self._deflector_items.append(item)
 
-            # -- Label --
             mid_angle = (a1_rad + a2_rad) / 2.0
             label_r = rdf_mm + ext + 40
             label = pg.TextItem(
@@ -592,7 +547,7 @@ class PlotCanvas(QWidget):
             self._deflector_items.append(label)
 
     def export_image(self, path, dpi=150):
-        """Exporte les plots en image."""
+        """Export the plots to SVG, PDF or a raster image."""
         if path.lower().endswith('.svg'):
             from pyqtgraph.exporters import SVGExporter
             exporter = SVGExporter(self.graphics_widget.scene())
@@ -617,7 +572,7 @@ class PlotCanvas(QWidget):
 
 
 class _ToolbarShim:
-    """Shim de compatibilite pour toolbar.home()."""
+    """Provides toolbar.home(), the matplotlib API app.py uses."""
 
     def __init__(self, canvas):
         self._canvas = canvas
@@ -627,7 +582,7 @@ class _ToolbarShim:
 
 
 class _FigShim:
-    """Shim de compatibilite pour fig.savefig()."""
+    """Provides fig.savefig(), the matplotlib API app.py uses."""
 
     def __init__(self, canvas):
         self._canvas = canvas
@@ -637,7 +592,7 @@ class _FigShim:
 
 
 class PlotWidget(QWidget):
-    """Widget combinant le canvas pyqtgraph et les controles de navigation."""
+    """Plot canvas with its control bar."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -649,7 +604,6 @@ class PlotWidget(QWidget):
         self.canvas = PlotCanvas(self)
         self.toolbar = _ToolbarShim(self.canvas)
 
-        # Barre de controle
         ctrl_layout = QHBoxLayout()
         ctrl_layout.setContentsMargins(4, 0, 4, 0)
 
@@ -662,14 +616,14 @@ class PlotWidget(QWidget):
         )
 
         btn_home = QPushButton("\u2922 Unzoom")
-        btn_home.setToolTip("Reinitialiser le zoom sur tous les plots")
+        btn_home.setToolTip("Reset the zoom on all plots")
         btn_home.setStyleSheet(btn_style)
         btn_home.clicked.connect(self.canvas.reset_zoom)
         ctrl_layout.addWidget(btn_home)
 
         ctrl_layout.addSpacing(12)
 
-        lbl = QLabel("R max (mm) :")
+        lbl = QLabel("R max (mm):")
         lbl.setStyleSheet("color: #2c3e50; font-weight: bold; font-size: 10px;")
         ctrl_layout.addWidget(lbl)
 
@@ -679,7 +633,7 @@ class PlotWidget(QWidget):
         self.rmax_spin.setValue(3000)
         self.rmax_spin.setSpecialValueText("Auto")
         self.rmax_spin.setSingleStep(500)
-        self.rmax_spin.setToolTip("0 = auto. Ajustez pour voir l'extraction.")
+        self.rmax_spin.setToolTip("0 = auto. Increase to see the extraction.")
         self.rmax_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; color: #1565C0; "
             "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
@@ -701,8 +655,7 @@ class PlotWidget(QWidget):
 
         ctrl_layout.addSpacing(20)
 
-        # --- R max pour R-theta ---
-        lbl_rt = QLabel("R max R-\u03b8 (mm) :")
+        lbl_rt = QLabel("R max R-\u03b8 (mm):")
         lbl_rt.setStyleSheet("color: #2c3e50; font-weight: bold; font-size: 10px;")
         ctrl_layout.addWidget(lbl_rt)
 
@@ -713,7 +666,7 @@ class PlotWidget(QWidget):
         self.rmax_rtheta_spin.setSpecialValueText("Auto")
         self.rmax_rtheta_spin.setSingleStep(500)
         self.rmax_rtheta_spin.setToolTip(
-            "0 = auto (pas de filtre). Filtre les points R > cette valeur sur le plot R-\u03b8.")
+            "0 = auto (no filter). Hides points with R above this value on the R-\u03b8 plot.")
         self.rmax_rtheta_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; color: #2e7d32; "
             "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
@@ -735,8 +688,7 @@ class PlotWidget(QWidget):
 
         ctrl_layout.addSpacing(20)
 
-        # --- R max pour R-dphi ---
-        lbl_rdph = QLabel("R max R-d\u03c6 (mm) :")
+        lbl_rdph = QLabel("R max R-d\u03c6 (mm):")
         lbl_rdph.setStyleSheet("color: #2c3e50; font-weight: bold; font-size: 10px;")
         ctrl_layout.addWidget(lbl_rdph)
 
@@ -747,7 +699,7 @@ class PlotWidget(QWidget):
         self.rmax_rdph_spin.setSpecialValueText("Auto")
         self.rmax_rdph_spin.setSingleStep(500)
         self.rmax_rdph_spin.setToolTip(
-            "0 = auto (pas de filtre). Filtre les points R > cette valeur sur le plot R-d\u03c6.")
+            "0 = auto (no filter). Hides points with R above this value on the R-d\u03c6 plot.")
         self.rmax_rdph_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; color: #2e7d32; "
             "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
@@ -769,7 +721,6 @@ class PlotWidget(QWidget):
 
         ctrl_layout.addSpacing(20)
 
-        # --- Filtre dphi pour R-dphi et dphi vs W ---
         dph_spin_style = (
             "QDoubleSpinBox { background: #ffffff; color: #7b1fa2; "
             "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
@@ -778,7 +729,7 @@ class PlotWidget(QWidget):
             "  background: #e0e8f0; border: 1px solid #aab5c8; }"
         )
 
-        lbl_dph = QLabel("d\u03c6 :")
+        lbl_dph = QLabel("d\u03c6:")
         lbl_dph.setStyleSheet("color: #2c3e50; font-weight: bold; font-size: 10px;")
         ctrl_layout.addWidget(lbl_dph)
 
@@ -793,7 +744,7 @@ class PlotWidget(QWidget):
         self.dphi_min_spin.setSingleStep(10)
         self.dphi_min_spin.setSuffix("\u00b0")
         self.dphi_min_spin.setToolTip(
-            "d\u03c6 minimum (deg). Si min=max=0, pas de filtre.")
+            "d\u03c6 minimum (deg). No filter when min = max = 0.")
         self.dphi_min_spin.setStyleSheet(dph_spin_style)
         self.dphi_min_spin.valueChanged.connect(self._on_dphi_filter_changed)
         ctrl_layout.addWidget(self.dphi_min_spin)
@@ -809,7 +760,7 @@ class PlotWidget(QWidget):
         self.dphi_max_spin.setSingleStep(10)
         self.dphi_max_spin.setSuffix("\u00b0")
         self.dphi_max_spin.setToolTip(
-            "d\u03c6 maximum (deg). Si min=max=0, pas de filtre.")
+            "d\u03c6 maximum (deg). No filter when min = max = 0.")
         self.dphi_max_spin.setStyleSheet(dph_spin_style)
         self.dphi_max_spin.valueChanged.connect(self._on_dphi_filter_changed)
         ctrl_layout.addWidget(self.dphi_max_spin)
@@ -819,7 +770,6 @@ class PlotWidget(QWidget):
         layout.addLayout(ctrl_layout)
         layout.addWidget(self.canvas)
 
-        # Appliquer les valeurs initiales
         self.canvas.rmax_display = 3000.0
         self.canvas.rmax_rtheta = 3000.0
         self.canvas.rmax_rdph = 3000.0
@@ -861,18 +811,16 @@ class PlotWidget(QWidget):
 
 
 class Plot3DWindow(QDialog):
-    """Fenetre separee pour la vue 3D des trajectoires (Plotly WebGL)."""
+    """Separate window with the 3D trajectory view (Plotly WebGL)."""
 
-    # Couleurs scatter par famille
     SCAT_COLORS = ['#ff0000', '#00cc00', '#ff8000', '#cc00cc', '#00cccc',
                    '#ffcc00', '#0066ff', '#ff3399', '#66ff33', '#9933ff']
-    # Couleurs trajectoire par famille
     TRAJ_COLORS = ['#1565C0', '#d32f2f', '#2e7d32', '#ff6f00', '#7b1fa2',
                    '#00838f', '#c62828', '#283593', '#558b2f', '#4e342e']
 
     def __init__(self, canvas, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("LIONS - Vue 3D")
+        self.setWindowTitle("LIONS - 3D View")
         self.resize(1000, 750)
         self.canvas = canvas
         self.z_scale = 200.0
@@ -888,13 +836,12 @@ class Plot3DWindow(QDialog):
                 msg.append("pip install plotly")
             if not HAS_WEBENGINE:
                 msg.append("pip install PyQtWebEngine")
-            lbl = QLabel("Vue 3D requiert :\n" + "\n".join(msg))
+            lbl = QLabel("The 3D view requires:\n" + "\n".join(msg))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("color: #c62828; font-size: 14px; font-weight: bold;")
             layout.addWidget(lbl)
             return
 
-        # --- Barre de controles ---
         ctrl = QHBoxLayout()
         ctrl.setContentsMargins(4, 0, 4, 0)
 
@@ -913,7 +860,7 @@ class Plot3DWindow(QDialog):
             "QPushButton:hover { background: #c0d0f0; }"
         )
 
-        lbl_z = QLabel("Z scale :")
+        lbl_z = QLabel("Z scale:")
         lbl_z.setStyleSheet("color: #2c3e50; font-weight: bold; font-size: 11px;")
         ctrl.addWidget(lbl_z)
 
@@ -922,7 +869,7 @@ class Plot3DWindow(QDialog):
         self.z_scale_spin.setValue(200)
         self.z_scale_spin.setSingleStep(50)
         self.z_scale_spin.setSuffix("x")
-        self.z_scale_spin.setToolTip("Facteur d'amplification Z")
+        self.z_scale_spin.setToolTip("Z magnification factor")
         self.z_scale_spin.setStyleSheet(_spin_style)
         self.z_scale_spin.valueChanged.connect(self._on_z_scale_changed)
         ctrl.addWidget(self.z_scale_spin)
@@ -938,7 +885,7 @@ class Plot3DWindow(QDialog):
         self.rmin_3d_spin.setValue(0)
         self.rmin_3d_spin.setSingleStep(100)
         self.rmin_3d_spin.setSuffix(" mm")
-        self.rmin_3d_spin.setToolTip("Rayon minimum (0 = pas de limite)")
+        self.rmin_3d_spin.setToolTip("Minimum radius (0 = no limit)")
         self.rmin_3d_spin.setStyleSheet(_spin_style)
         self.rmin_3d_spin.valueChanged.connect(self._on_range_changed)
         ctrl.addWidget(self.rmin_3d_spin)
@@ -952,21 +899,21 @@ class Plot3DWindow(QDialog):
         self.rmax_3d_spin.setValue(0)
         self.rmax_3d_spin.setSingleStep(100)
         self.rmax_3d_spin.setSuffix(" mm")
-        self.rmax_3d_spin.setToolTip("Rayon maximum (0 = pas de limite)")
+        self.rmax_3d_spin.setToolTip("Maximum radius (0 = no limit)")
         self.rmax_3d_spin.setStyleSheet(_spin_style)
         self.rmax_3d_spin.valueChanged.connect(self._on_range_changed)
         ctrl.addWidget(self.rmax_3d_spin)
 
         ctrl.addSpacing(12)
 
-        btn_refresh = QPushButton("\u21bb Rafraichir")
-        btn_refresh.setToolTip("Reconstruire la vue 3D")
+        btn_refresh = QPushButton("\u21bb Refresh")
+        btn_refresh.setToolTip("Rebuild the 3D view")
         btn_refresh.setStyleSheet(_btn_style)
         btn_refresh.clicked.connect(self.refresh_3d)
         ctrl.addWidget(btn_refresh)
 
-        btn_export = QPushButton("\u2913 Exporter HTML")
-        btn_export.setToolTip("Sauvegarder la vue 3D en fichier HTML interactif")
+        btn_export = QPushButton("\u2913 Export HTML")
+        btn_export.setToolTip("Save the 3D view as an interactive HTML file")
         btn_export.setStyleSheet(_btn_style)
         btn_export.clicked.connect(self._on_export)
         ctrl.addWidget(btn_export)
@@ -974,7 +921,6 @@ class Plot3DWindow(QDialog):
         ctrl.addStretch()
         layout.addLayout(ctrl)
 
-        # --- Vue Plotly dans QWebEngineView ---
         self._web = QWebEngineView()
         layout.addWidget(self._web)
 
@@ -989,8 +935,8 @@ class Plot3DWindow(QDialog):
         if not self._available:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Exporter la vue 3D", "lions_3d.html",
-            "HTML interactif (*.html);;PNG (*.png)")
+            self, "Export 3D view", "lions_3d.html",
+            "Interactive HTML (*.html);;PNG (*.png)")
         if not path:
             return
         fig = self._build_figure()
@@ -998,15 +944,15 @@ class Plot3DWindow(QDialog):
             try:
                 fig.write_image(path, width=1600, height=1200, scale=2)
             except Exception:
-                # kaleido pas installe, sauver en HTML
+                # PNG export needs kaleido; fall back to HTML.
                 path = path.rsplit('.', 1)[0] + '.html'
                 fig.write_html(path, include_plotlyjs='cdn')
         else:
             fig.write_html(path, include_plotlyjs='cdn')
-        self.setWindowTitle(f"LIONS - Vue 3D  [Exporte: {path}]")
+        self.setWindowTitle(f"LIONS - 3D View  [Exported: {path}]")
 
     def _filter_by_radius(self, x, y, *arrays):
-        """Filtre les tableaux par Rmin/Rmax. Retourne les tableaux filtres."""
+        """Keep the points with Rmin <= r <= Rmax; return x, y and the arrays, filtered."""
         rmin = self.rmin_3d_spin.value()
         rmax = self.rmax_3d_spin.value()
         if rmin <= 0 and rmax <= 0:
@@ -1020,7 +966,7 @@ class Plot3DWindow(QDialog):
         return tuple(a[mask] for a in (x, y) + arrays)
 
     def _build_figure(self):
-        """Construit la figure Plotly 3D."""
+        """Build the Plotly 3D figure."""
         go = _plotly_go
         fig = go.Figure()
 
@@ -1034,7 +980,7 @@ class Plot3DWindow(QDialog):
             scat_color = self.SCAT_COLORS[k % len(self.SCAT_COLORS)]
             fam_name = f'Fam {k+1}'
 
-            # --- Trajectoire (particule de reference) ---
+            # Reference particle
             x_arr = np.array(fd['x'], dtype=np.float64)
             y_arr = np.array(fd['y'], dtype=np.float64)
             z_arr = np.array(fd['z'], dtype=np.float64) * self.z_scale
@@ -1045,18 +991,18 @@ class Plot3DWindow(QDialog):
                 x=x_arr, y=y_arr, z=z_arr,
                 mode='lines',
                 line=dict(color=traj_color, width=3),
-                name=f'{fam_name} trajectoire',
+                name=f'{fam_name} trajectory',
                 legendgroup=fam_name,
             ))
 
-            # --- Scatter (toutes les particules) ---
+            # All particles
             sx_list = fd.get('scatter_x', [])
             if sx_list:
                 sx = np.concatenate(sx_list)
                 sy = np.concatenate(fd['scatter_y'])
                 sz = np.concatenate(fd['scatter_z']) * self.z_scale
 
-                # Sous-echantillonnage pour Plotly (WebGL gere ~100k points)
+                # WebGL stays responsive up to about 100k points.
                 MAX_SCAT = 80000
                 if len(sx) > MAX_SCAT:
                     idx = np.random.choice(len(sx), MAX_SCAT, replace=False)
@@ -1069,11 +1015,11 @@ class Plot3DWindow(QDialog):
                     x=sx, y=sy, z=sz,
                     mode='markers',
                     marker=dict(size=2, color=scat_color, opacity=0.6),
-                    name=f'{fam_name} paquet',
+                    name=f'{fam_name} bunch',
                     legendgroup=fam_name,
                 ))
 
-        # --- Deflecteurs ---
+        # Deflectors
         for i, defl in enumerate(self._defl_list):
             rdf_mm = defl['rdf_m'] * 1000.0
             tetdfi_deg = defl['tetdfi_deg']
@@ -1087,13 +1033,11 @@ class Plot3DWindow(QDialog):
             ext = rdf_mm * 0.15
             angles = np.linspace(np.radians(a1), np.radians(a2), 80)
 
-            # Arc interieur
             arc_x = rdf_mm * np.cos(angles)
             arc_y = rdf_mm * np.sin(angles)
-            # Arc exterieur (retour)
+            # Outer arc, reversed to close the outline
             out_x = (rdf_mm + ext) * np.cos(angles[::-1])
             out_y = (rdf_mm + ext) * np.sin(angles[::-1])
-            # Fermer le contour
             cx = np.concatenate([arc_x, out_x, arc_x[:1]])
             cy = np.concatenate([arc_y, out_y, arc_y[:1]])
             cz = np.zeros_like(cx)
@@ -1106,7 +1050,7 @@ class Plot3DWindow(QDialog):
                 showlegend=True,
             ))
 
-        # --- Calcul des ticks Z en mm reel ---
+        # Z is drawn scaled; label the ticks in real mm.
         all_z_scaled = []
         for tr in fig.data:
             if tr.z is not None and len(tr.z) > 0:
@@ -1118,7 +1062,6 @@ class Plot3DWindow(QDialog):
             z_all = np.concatenate(all_z_scaled)
             z_real_min = z_all.min() / self.z_scale
             z_real_max = z_all.max() / self.z_scale
-            # Ticks reguliers en mm reel
             z_range = z_real_max - z_real_min
             if z_range > 0:
                 step = z_range / 8.0
@@ -1146,10 +1089,9 @@ class Plot3DWindow(QDialog):
                 gridcolor='#dee2e6', showbackground=True,
             )
 
-        # --- Layout ---
         fig.update_layout(
             title=dict(
-                text='LIONS - Trajectoire 3D  (Z = f(X, Y))',
+                text='LIONS - 3D trajectory  (Z = f(X, Y))',
                 font=dict(size=16, color='#1a1a2e'),
             ),
             scene=dict(
@@ -1174,11 +1116,11 @@ class Plot3DWindow(QDialog):
         return fig
 
     def refresh_3d(self):
-        """Reconstruit et affiche la figure Plotly 3D."""
+        """Rebuild and show the Plotly 3D figure."""
         if not self._available:
             return
         fig = self._build_figure()
-        # Ecrire dans un fichier temporaire (setHtml ne charge pas le CDN)
+        # Through a file: setHtml is limited to 2 MB, smaller than inlined plotly.js.
         tmp_dir = tempfile.gettempdir()
         tmp_path = os.path.join(tmp_dir, '_lions_3d_view.html')
         fig.write_html(tmp_path, include_plotlyjs=True, config={
@@ -1188,13 +1130,13 @@ class Plot3DWindow(QDialog):
         self._web.load(QUrl.fromLocalFile(tmp_path))
 
     def clear_3d(self):
-        """Efface la vue 3D."""
+        """Clear the 3D view."""
         if not self._available:
             return
         self._defl_list = []
         self._web.setHtml('<html><body style="background:#f0f2f5;"></body></html>')
 
     def draw_deflectors_3d(self, defl_list):
-        """Stocke les deflecteurs pour le prochain refresh."""
+        """Store the deflectors for the next refresh."""
         self._defl_list = defl_list or []
 

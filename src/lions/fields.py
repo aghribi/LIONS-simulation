@@ -7,23 +7,23 @@ from .apertures import check_central, check_deflector, check_dipole, check_grid,
 
 
 def add_harmonics(rmin, rmax, nr, ntet, tbz, d2bz, dbzx, dbzy, ncoh, coh, phihar):
-    """Ajoute des harmoniques à la carte de champ."""
+    """Add first and second field harmonics to the map arrays, in place."""
     pi = np.pi
     dr = (rmax - rmin) / (nr - 1.0)
-    dteta = 360.0 / (ntet - 1.0) * pi / 180.0
-    phih1 = phihar[0] * pi / 180.0
-    phih2 = phihar[1] * pi / 180.0
+    dtheta = 360.0 / (ntet - 1.0) * pi / 180.0
+    phase1 = phihar[0] * pi / 180.0
+    phase2 = phihar[1] * pi / 180.0
 
     if ncoh[0] != 0:
         for i in range(nr):
             r = rmin + i * dr
             for j in range(ntet - 1):
-                teta = j * dteta
-                x = r * np.cos(teta)
-                y = r * np.sin(teta)
+                theta = j * dtheta
+                x = r * np.cos(theta)
+                y = r * np.sin(theta)
                 r2 = x**2 + y**2
-                co1 = np.cos(-phih1)
-                si1 = np.sin(-phih1)
+                co1 = np.cos(-phase1)
+                si1 = np.sin(-phase1)
                 s = x * co1 - y * si1
                 pb = coh[0, 0] * s
                 px_val = coh[0, 0] * co1
@@ -50,12 +50,12 @@ def add_harmonics(rmin, rmax, nr, ntet, tbz, d2bz, dbzx, dbzy, ncoh, coh, phihar
         for i in range(nr):
             r = rmin + i * dr
             for j in range(ntet - 1):
-                teta = j * dteta
-                x = r * np.cos(teta)
-                y = r * np.sin(teta)
+                theta = j * dtheta
+                x = r * np.cos(theta)
+                y = r * np.sin(theta)
                 r2 = x**2 + y**2
-                co2 = np.cos(-phih2)
-                si2 = np.sin(-phih2)
+                co2 = np.cos(-phase2)
+                si2 = np.sin(-phase2)
                 s = (x**2 - y**2) * co2 - 2.0 * x * y * si2
                 s2 = 2.0 * x * co2 - 2.0 * y * si2
                 s3 = -2.0 * y * co2 - 2.0 * x * si2
@@ -80,7 +80,7 @@ def add_harmonics(rmin, rmax, nr, ntet, tbz, d2bz, dbzx, dbzy, ncoh, coh, phihar
                 dbzy[i, j] += py_val
                 d2bz[i, j] += p2
 
-    # Périodicité
+    # Periodicity in theta
     tbz[:, ntet - 1] = tbz[:, 0]
     dbzx[:, ntet - 1] = dbzx[:, 0]
     dbzy[:, ntet - 1] = dbzy[:, 0]
@@ -88,7 +88,7 @@ def add_harmonics(rmin, rmax, nr, ntet, tbz, d2bz, dbzx, dbzy, ncoh, coh, phihar
 
 
 def compute_fields(d):
-    """Calcul des champs magnétique et électrique pour toutes les particules."""
+    """Magnetic and electric fields at all particles for the current time."""
     hrhtetm1 = 1.0 / (d.map_dr * d.map_dtheta)
     hrm1 = 1.0 / d.map_dr
     htetm1 = 1.0 / d.map_dtheta
@@ -128,16 +128,16 @@ def compute_fields(d):
     vey2 = np.zeros(d.n_particles)
     vey3 = np.zeros(d.n_particles)
     vey4 = np.zeros(d.n_particles)
-    np_ = d.n_particles
+    n = d.n_particles
 
-    # Calcul de B
-    nbiz = np.count_nonzero((d.x / d.r > 1.0) | (d.x / d.r < -1.0))
-    if nbiz != 0:
-        print(f'nbiz : {nbiz}')
-        for i in range(np_):
-            rap = d.x[i] / d.r[i]
-            if rap > 1.0 or rap < -1.0:
-                print(f'{i} {d.x[i]} {d.y[i]} {d.r[i]} {rap}')
+    # B from the median-plane map, first order in z
+    n_bad = np.count_nonzero((d.x / d.r > 1.0) | (d.x / d.r < -1.0))
+    if n_bad != 0:
+        print(f'particles with |x/r| > 1: {n_bad}')
+        for i in range(n):
+            ratio = d.x[i] / d.r[i]
+            if ratio > 1.0 or ratio < -1.0:
+                print(f'{i} {d.x[i]} {d.y[i]} {d.r[i]} {ratio}')
 
     veca = d.x / d.r
     mask_normal = (veca > -1.0) & (veca < 1.0)
@@ -160,7 +160,7 @@ def compute_fields(d):
     vecd2[:] = vecb - d.map_dtheta
     vecz[:] = d.z * d.z * 0.5
 
-    for k in range(np_):
+    for k in range(n):
         ik = ivec[k]
         jk = jvec[k]
         d.bz[k] = (vecd1[k] * vecd2[k] * (d.bz_map[ik, jk] -
@@ -192,7 +192,7 @@ def compute_fields(d):
     d.by[mask_rle] = 0.0
     d.bz[mask_rle] = d.bz_map[0, 0]
 
-    # Calcul de E au centre
+    # E in the central region
     d.ex[:] = 0.0
     d.ey[:] = 0.0
     d.ez[:] = 0.0
@@ -212,7 +212,7 @@ def compute_fields(d):
         vecp4[m_c] = -vecd1[m_c] * vecb[m_c]
         vecz[m_c] = d.z[m_c]**2 * 0.5
 
-        for k in range(np_):
+        for k in range(n):
             if d.in_central[k]:
                 ik = ivec[k]
                 jk = jvec[k]
@@ -246,10 +246,10 @@ def compute_fields(d):
                              vz * (d.central_d2pot[ik, jk+2] - d.central_d2pot[ik, jk])
                              ) * 0.5 / d.central_dy
 
-        nto = int(d.omega_rf * d.t / (2.0 * np.pi))
-        omhft = d.omega_rf * d.t - nto * 2.0 * np.pi
-        pcright = d.v_dee_right * np.cos(omhft + d.phase_right)
-        pcleft = d.v_dee_left * np.cos(omhft + d.phase_left)
+        n_periods = int(d.omega_rf * d.t / (2.0 * np.pi))
+        rf_phase = d.omega_rf * d.t - n_periods * 2.0 * np.pi
+        pcright = d.v_dee_right * np.cos(rf_phase + d.phase_right)
+        pcleft = d.v_dee_left * np.cos(rf_phase + d.phase_left)
         vecpc[d.x >= 0.0] = pcright
         vecpc[d.x < 0.0] = pcleft
 
@@ -267,28 +267,28 @@ def compute_fields(d):
             vecp3[m_c] * vecb3[m_c] + vecp4[m_c] * vecb4[m_c]
         ) * hx1hy1m1
 
-    # Calcul de E périphérique
+    # E in the outer region
     if (d.n_in_box == d.n_central) and (d.n_dipoles == 0) and (d.n_deflectors == 0) and (d.n_grids == 1):
-        pass  # goto 300
+        pass  # Fortran goto 300
     elif d.n_in_box == d.n_central:
         add_vertical_sorter_field(d)
         add_extraction_fields(d)
         return
     else:
-        dc1 = np.cos(d.dee_half_angle)
-        ds1 = np.sin(d.dee_half_angle)
+        cos_dee = np.cos(d.dee_half_angle)
+        sin_dee = np.sin(d.dee_half_angle)
         mask_nc = ~d.in_central
-        vecx[mask_nc] = np.abs(d.x[mask_nc]) * dc1 + (np.abs(d.y[mask_nc]) - d.gap_offset) * ds1
-        vecy[mask_nc] = -np.abs(d.x[mask_nc]) * ds1 + (np.abs(d.y[mask_nc]) - d.gap_offset) * dc1
+        vecx[mask_nc] = np.abs(d.x[mask_nc]) * cos_dee + (np.abs(d.y[mask_nc]) - d.gap_offset) * sin_dee
+        vecy[mask_nc] = -np.abs(d.x[mask_nc]) * sin_dee + (np.abs(d.y[mask_nc]) - d.gap_offset) * cos_dee
 
         check_outer(d, vecx, vecy)
-        nto = int(d.omega_rf * d.t / (2.0 * np.pi))
-        omhft = d.omega_rf * d.t - nto * 2.0 * np.pi
+        n_periods = int(d.omega_rf * d.t / (2.0 * np.pi))
+        rf_phase = d.omega_rf * d.t - n_periods * 2.0 * np.pi
 
         if d.n_outer > 0:
             if d.n_central == 0:
-                pcright = d.v_dee_right * np.cos(omhft + d.phase_right)
-                pcleft = d.v_dee_left * np.cos(omhft + d.phase_left)
+                pcright = d.v_dee_right * np.cos(rf_phase + d.phase_right)
+                pcleft = d.v_dee_left * np.cos(rf_phase + d.phase_left)
                 vecpc[d.x >= 0.0] = pcright
                 vecpc[d.x < 0.0] = pcleft
 
@@ -305,7 +305,7 @@ def compute_fields(d):
             vecp4[m_p] = -vecd1[m_p] * vecb[m_p]
             vecz[m_p] = d.z[m_p]**2 * 0.5
 
-            for k in range(np_):
+            for k in range(n):
                 if d.in_outer[k]:
                     ik = ivec[k]
                     jk = jvec[k]
@@ -331,9 +331,9 @@ def compute_fields(d):
                                vecz[m_p] * (vecb2[m_p] - vecb3[m_p]))
             ) * hx2hy2m1
 
-            # Rotation inverse
-            vec_tmp = d.ex[m_p] * dc1 - d.ey[m_p] * ds1
-            d.ey[m_p] = d.ex[m_p] * ds1 + d.ey[m_p] * dc1
+            # Back from the gap frame
+            vec_tmp = d.ex[m_p] * cos_dee - d.ey[m_p] * sin_dee
+            d.ey[m_p] = d.ex[m_p] * sin_dee + d.ey[m_p] * cos_dee
             d.ex[m_p] = vec_tmp
 
             d.ez[m_p] = d.z[m_p] * vecpc[m_p] * (
@@ -341,7 +341,7 @@ def compute_fields(d):
                 vecp3[m_p] * vecb3[m_p] + vecp4[m_p] * vecb4[m_p]
             ) * hx2hy2m1
 
-            # Symétries
+            # Symmetries of the other quadrants
             m1 = m_p & (d.x < 0.0) & (d.y > 0.0)
             d.ex[m1] = d.harmonic_sign * d.ex[m1]
             d.ey[m1] = -d.harmonic_sign * d.ey[m1]
@@ -356,15 +356,12 @@ def compute_fields(d):
             m4 = m_p & (d.x < 0.0)
             d.ez[m4] = -d.harmonic_sign * d.ez[m4]
 
-    # Tri vertical
     add_vertical_sorter_field(d)
-
-    # Extraction
     add_extraction_fields(d)
 
 
 def add_vertical_sorter_field(d):
-    """Ajout du test tri vertical."""
+    """Add the vertical sorter Ez; sorter_voltage_seen is its voltage at particle 0."""
     d.sorter_voltage_seen = 0.0
     if d.sorter_gap == 0.0:
         return
@@ -383,7 +380,7 @@ def add_vertical_sorter_field(d):
 
 
 def add_extraction_fields(d):
-    """Calcul de l'extraction."""
+    """Deflector E, dipole B and extraction grid crossings."""
     for i in range(d.n_deflectors):
         check_deflector(d, i)
         if d.n_in_element != 0:
@@ -402,7 +399,6 @@ def add_extraction_fields(d):
             d.by[mask] += d.z[mask] * d.dipole_gradient[i] * (d.y[mask] - d.dipole_y[i]) / vec_dm
             d.bz[mask] += vec1_dm * d.dipole_gradient[i]
 
-    # Grilles d'extraction
     if d.extraction < 0.0 and d.n_grids > 0:
         if d.step >= d.grid_start_step:
             for kg in range(d.n_grids):
@@ -419,7 +415,7 @@ def add_extraction_fields(d):
 
 
 def compute_bfield(d):
-    """Calcul simplifié du champ magnétique (pendant l'initialisation)."""
+    """Magnetic field only, used while building the initial bunch."""
     hrhtet = d.map_dr * d.map_dtheta
     ivec = np.zeros(d.n_particles, dtype=np.int32)
     jvec = np.zeros(d.n_particles, dtype=np.int32)

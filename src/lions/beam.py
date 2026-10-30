@@ -8,7 +8,7 @@ from .fields import compute_bfield
 
 
 def cholesky_upper(m, a):
-    """Décomposition de Cholesky. Retourne R tel que A = R^T * R."""
+    """Cholesky factor: upper-triangular R with A = R^T R (m x m)."""
     r = np.zeros((m, m), dtype=np.float64)
     r[0, 0] = np.sqrt(a[0, 0])
     r[0, 1:m] = a[0, 1:m] / r[0, 0]
@@ -21,7 +21,7 @@ def cholesky_upper(m, a):
 
 
 def sample_unit_ball(m, n_part):
-    """Génère une distribution aléatoire normalisée dans l'hyper-sphère."""
+    """n_part points uniform in the unit m-ball, point 0 at the origin, whitened to unit second moments. Fixed seed 42."""
     np.random.seed(42)
     ps = np.zeros((m, n_part), dtype=np.float64)
 
@@ -39,7 +39,6 @@ def sample_unit_ball(m, n_part):
     ps[:, 1:] = vtab
     ps[:, 0] = 0.0
 
-    # Calcul de la matrice de corrélation
     c = np.zeros((m, m), dtype=np.float64)
     for i in range(m):
         for j in range(m):
@@ -58,7 +57,7 @@ def sample_unit_ball(m, n_part):
 
 
 def phase_space_coords(d):
-    """Calcul des coordonnées dans l'espace de phase."""
+    """Phase-space coordinates of each family relative to its first particle, and sigma matrices."""
     vec = np.zeros(d.n_particles)
     vec1 = np.zeros(d.n_particles)
     vec2 = np.zeros(d.n_particles)
@@ -70,14 +69,14 @@ def phase_space_coords(d):
         rc = -d.mass_c[k] * d.p[i1] / d.charge[i1] / d.bz[i1]
         d.ps_cartesian[0, :nbr] = d.x[i1:i2] - d.x[i1]
         d.ps_cartesian[4, :nbr] = d.y[i1:i2] - d.y[i1]
-        ri1 = np.sqrt(d.x[i1]**2 + d.y[i1]**2)
-        tetai1 = np.arccos(d.x[i1] / ri1)
+        r_ref = np.sqrt(d.x[i1]**2 + d.y[i1]**2)
+        theta_ref = np.arccos(d.x[i1] / r_ref)
         if d.y[i1] < 0.0:
-            tetai1 = 2.0 * np.pi - tetai1
-        pri1 = (d.x[i1] * d.px[i1] + d.y[i1] * d.py[i1]) / ri1
-        tpri1 = np.arcsin(pri1 / d.p[i1])
-        co = np.cos(tetai1 - tpri1)
-        si = np.sin(tetai1 - tpri1)
+            theta_ref = 2.0 * np.pi - theta_ref
+        pr_ref = (d.x[i1] * d.px[i1] + d.y[i1] * d.py[i1]) / r_ref
+        pr_angle_ref = np.arcsin(pr_ref / d.p[i1])
+        co = np.cos(theta_ref - pr_angle_ref)
+        si = np.sin(theta_ref - pr_angle_ref)
         vec[:nbr] = d.ps_cartesian[0, :nbr] * co + d.ps_cartesian[4, :nbr] * si
         d.ps_cartesian[4, :nbr] = -d.ps_cartesian[0, :nbr] * si + d.ps_cartesian[4, :nbr] * co
         d.ps_cartesian[0, :nbr] = vec[:nbr]
@@ -104,19 +103,18 @@ def phase_space_coords(d):
             for j in range(6):
                 d.sigma[i, j] = np.sum(d.ps[i, :nbr] * d.ps[j, :nbr]) / nbr
 
-        tetai1 = tetai1 * 180.0 / np.pi
         d.dc_transform[:] = 0.0
         d.dc_transform[0, 0] = -1.0
         d.dc_transform[1, 1] = -1.0
         for i in range(2, 6):
             d.dc_transform[i, i] = 1.0
-        d.dc_transform[0, 5] = ri1 / d.p[i1]
+        d.dc_transform[0, 5] = r_ref / d.p[i1]
         d.dc_transform[4, 1] = -d.dc_transform[0, 5]
         d.sigma_dc = d.dc_transform @ d.sigma @ d.dc_transform.T
 
 
 def project_on_radial_line(d):
-    """Calcul des coordonnées sur grille."""
+    """Project each particle on the radial line through particle 0 of its family. Returns the curvature radii of the last family."""
     vec = np.zeros(d.n_particles)
     vec1 = np.zeros(d.n_particles)
     vec2 = np.zeros(d.n_particles)
@@ -161,7 +159,7 @@ def project_on_radial_line(d):
 
 
 def projected_phase_space(d):
-    """Calcul sur grille pour corrélations."""
+    """Phase-space coordinates on the radial line through particle 0, for the correlations."""
     nbr = d.family_size[0]
     vec = project_on_radial_line(d)
     d.ps_projected[0, :nbr] = d.proj_offset[:nbr]
@@ -188,7 +186,7 @@ def distribute_bunch(d, sigma_matrices):
         for k in range(d.n_families):
             nbr = d.family_size[k]
             if nbr <= 1:
-                continue  # une seule particule, pas de distribution a appliquer
+                continue  # single particle, nothing to distribute
             ps = sample_unit_ball(m, nbr)
             d.ps[:, :nbr] = ps
             rcor = cholesky_upper(m, sigma_matrices[k])
@@ -204,11 +202,11 @@ def distribute_bunch(d, sigma_matrices):
             rc = -d.mass_c[k] * d.p[i1] / d.charge[i1] / d.bz[i1]
 
             if d.r0[k] > d.central_rmax:
-                print('prise en compte de sqrt(cos(phi))...')
+                print('sqrt(cos(phi)) correction applied')
                 vec4[:nbr] = np.sqrt(np.cos(d.harmonic * d.ps[4, :nbr] / rc))
                 d.ps[0, :nbr] = d.ps[0, :nbr] * vec4[:nbr] - rc * (1.0 - vec4[:nbr])
             else:
-                print('pas de sqrt(cos(phi))...')
+                print('no sqrt(cos(phi)) correction')
 
             vec1[:nbr] = np.cos(d.ps[4, :nbr] / rc)
             vec2[:nbr] = np.sin(d.ps[4, :nbr] / rc)
@@ -255,13 +253,13 @@ def distribute_bunch(d, sigma_matrices):
                 d.pz[i1:i2] *= vec4[:nbr]
 
         if d.bunch_load_file != 'no':
-            print('attention : chargement paquet d ions...')
-            with open(d.bunch_load_file, 'rb') as f26:
+            print('warning: loading the ion bunch')
+            with open(d.bunch_load_file, 'rb') as fbunch:
                 for i in range(d.n_particles):
-                    data = np.fromfile(f26, dtype=np.float64, count=3)
+                    data = np.fromfile(fbunch, dtype=np.float64, count=3)
                     if len(data) == 3:
                         d.x[i], d.y[i], d.z[i] = data
                 for i in range(d.n_particles):
-                    data = np.fromfile(f26, dtype=np.float64, count=3)
+                    data = np.fromfile(fbunch, dtype=np.float64, count=3)
                     if len(data) == 3:
                         d.px[i], d.py[i], d.pz[i] = data
