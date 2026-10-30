@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import synthetic as syn
+from lions.deck import read_deck, write_deck
 
 REPO = Path(__file__).resolve().parent.parent
 W0 = 1.0       # MeV/u
@@ -135,7 +136,7 @@ CASES = {
 }
 
 
-def run_in(directory, cmd, setup, loaded):
+def run_in(directory, cmd, setup, loaded, rewrite):
     directory.mkdir()
     with pytest.MonkeyPatch.context() as mp:
         mp.chdir(directory)
@@ -143,6 +144,8 @@ def run_in(directory, cmd, setup, loaded):
         syn.write_pot_outer('pot2.dat')
         args = ('final.bin',) if loaded is None else ('final.bin', loaded)
         answers, extra = setup(*args)
+        if rewrite:
+            write_deck(read_deck('deck.dat'), 'deck.dat')
     stdin = '\n'.join(['n', 'deck.dat', *answers]) + '\n'
     subprocess.run(cmd, input=stdin, text=True, cwd=directory, check=True, capture_output=True)
     return extra
@@ -157,13 +160,15 @@ def assert_rows_match(path_f, path_p):
         np.testing.assert_allclose(b, a, rtol=1e-6, atol=1e-12, err_msg=path_p.name)
 
 
+@pytest.mark.parametrize('rewrite', [False, True], ids=['deck', 'rewritten'])
 @pytest.mark.parametrize('name', CASES)
-def test_python_matches_fortran(tmp_path, fortran, name):
+def test_python_matches_fortran(tmp_path, fortran, name, rewrite):
+    """rewritten: the deck goes through read_deck and write_deck before both runs."""
     setup = CASES[name]
     loaded = {'correlations': True, 'traps': True}.get(name)
-    extra = run_in(tmp_path / 'f', [str(fortran)], setup, 'bunch_f.bin' if loaded else None)
+    extra = run_in(tmp_path / 'f', [str(fortran)], setup, 'bunch_f.bin' if loaded else None, rewrite)
     run_in(tmp_path / 'p', [sys.executable, '-m', 'lions'], setup,
-           'bunch_py.bin' if loaded else None)
+           'bunch_py.bin' if loaded else None, rewrite)
 
     n = N_BUNCH if loaded else 1
     xf, pf = syn.read_fortran_bunch(tmp_path / 'f' / 'final.bin', n)

@@ -7,7 +7,8 @@ import numpy as np
 
 from .constants import C_LIGHT
 from .beam import phase_space_coords
-from .io import fortran_float, parse_floats, prompt
+from .fortran_text import fortran_float, parse_floats
+from .io import prompt
 
 
 class BidimWriter:

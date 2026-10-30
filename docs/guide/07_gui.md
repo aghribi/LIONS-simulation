@@ -66,7 +66,7 @@ Buttons under the form:
 - Save data file: writes the form as a deck (`InputFormPanel.write_data_file`).
 
 `InputFormPanel.load_data_file` reads a deck with the same line structure as `lions.io.load` and emits `file_loaded`.
-The form does not keep `ficloa ficsto` nor `yomega`: a deck saved from the GUI loses them.
+The form has no fields for `yomega` and `ficloa ficsto`: it keeps the values of the deck last loaded and writes them back.
 
 ## Run sequence
 

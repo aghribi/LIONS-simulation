@@ -50,7 +50,9 @@ The CIME decks in `examples/` name maps and a sigma file that are not in the rep
 | Module | Content | Main names |
 |---|---|---|
 | `lions.state` | All data of a run | `State`, `State.allocate`, array size constants |
-| `lions.io` | Input deck, field map and potential readers, Fortran list-directed reading | `load`, `read_bfield_map`, `read_central_potential`, `read_outer_potential`, `FortranFile`, `fortran_float`, `parse_floats`, `parse_ints`, `prompt` |
+| `lions.deck` | Input deck as a dataclass, reader and writer | `Deck`, `Family`, `Deflector`, `Dipole`, `Grid`, `FieldHarmonic`, `read_deck`, `write_deck` |
+| `lions.io` | State from a deck, field map and potential readers | `load`, `read_bfield_map`, `read_central_potential`, `read_outer_potential`, `prompt` |
+| `lions.fortran_text` | Fortran list-directed text reading | `FortranFile`, `fortran_float`, `parse_floats`, `parse_ints` |
 | `lions.fields` | B and E at the particles, field harmonics | `compute_fields`, `compute_bfield`, `add_harmonics`, `add_vertical_sorter_field`, `add_extraction_fields` |
 | `lions.pusher` | Boris pusher | `boris_push` |
 | `lions.apertures` | Region and element masks, traps | `check_box`, `check_central`, `check_outer`, `check_deflector`, `check_dipole`, `check_grid`, `apply_traps` |

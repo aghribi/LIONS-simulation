@@ -2,7 +2,9 @@
 
 ## Input deck
 
-The input deck is a text file read by `lions.io.load`.
+The input deck is a text file. `lions.deck.read_deck` reads it into a `Deck` dataclass (file units, English names), `lions.deck.write_deck` writes one, and `lions.io.load` sets up the `State` from a `Deck` or a path.
+The GUI form reads and writes decks through the same two functions.
+`write_deck` quotes file names (Fortran list-directed input ends a value at an unquoted `/`) and writes numbers with all their digits, so a read, write, read cycle is exact.
 Field names are those of the Fortran code: they define the file format.
 Each field fills the `State` attribute given in the tables below.
 
@@ -310,7 +312,7 @@ It asks nothing, except answer 3 when `ficv1 = no`.
 | Situation | Behaviour |
 |---|---|
 | Missing deck, map, potential or sigma file | `FileNotFoundError` |
-| Sum of `nbrion` differs from `n` | Message, `sys.exit(1)` |
+| Sum of `nbrion` differs from `n` | `ValueError` |
 | Map grid outside 250 x 721 | `ValueError` |
 | Full map ends before block 4 | `ValueError` |
 | 1/8 map without blocks 3 and 4 | Message, dBz/dx = dBz/dy = 0 |

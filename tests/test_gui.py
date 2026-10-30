@@ -97,3 +97,16 @@ def test_field_viewer_opens_on_deck_maps(app):
     assert names == ['cime700rec.1804.pbob1.lio.dat', 'pot3d.impair.30pilbleu30.620.dat', 'newgap612.dat']
     dialog.close()
     window.close()
+
+
+def test_form_keeps_every_deck_entry(app, tmp_path):
+    """Load and save through the form: gap offset, bunch files and all sections survive."""
+    from lions.deck import read_deck, write_deck
+    from lions.gui.input_form import InputFormPanel
+    from test_deck import full_deck
+    deck = full_deck()
+    write_deck(deck, tmp_path / 'deck.dat')
+    form = InputFormPanel()
+    form.load_data_file(str(tmp_path / 'deck.dat'))
+    form.write_data_file(str(tmp_path / 'saved.dat'))
+    assert read_deck(tmp_path / 'saved.dat') == deck

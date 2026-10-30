@@ -5,7 +5,9 @@
 ```{eval-rst}
 .. automodule:: lions
 .. automodule:: lions.state
+.. automodule:: lions.deck
 .. automodule:: lions.io
+.. automodule:: lions.fortran_text
 .. automodule:: lions.fields
 .. automodule:: lions.pusher
 .. automodule:: lions.apertures

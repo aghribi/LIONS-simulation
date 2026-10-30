@@ -8,7 +8,8 @@ from .apertures import apply_traps, check_box
 from .bidim import BidimWriter, fill_bidims, setup_bidims
 from .diagnostics import write_outputs
 from .fields import compute_fields
-from .io import load, parse_floats, prompt
+from .fortran_text import parse_floats
+from .io import load, prompt
 from .pusher import boris_push
 
 
@@ -89,17 +90,17 @@ def track(d, bidim=None, on_step=None):
         d.outputs.clear()
 
 
-def run(deck_file, swap=False, vertical=None, on_step=None):
+def run(deck, swap=False, vertical=None, on_step=None):
     """Run without prompts or bidims. Returns the final State.
 
-    - deck_file: input deck; its file paths are relative to the current directory.
+    - deck: Deck, or path of an input deck; its file paths are relative to the current directory.
     - swap: swap the bytes of the central potential (big-endian files).
     - vertical: keyword arguments of set_vertical_sorter, None = no vertical sorting.
     - on_step: see track().
     """
     d = State()
     d.swap_bytes = 'y' if swap else 'n'
-    load(d, deck_file)
+    load(d, deck)
     set_vertical_sorter(d, **(vertical or {}))
     setup_bidims(d, None, numbid=0)
     track(d, on_step=on_step)

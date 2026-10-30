@@ -1,6 +1,7 @@
 """Input form for the LIONS simulation: every data file parameter plus the runtime answers."""
 
 import json
+from dataclasses import astuple
 import math
 import os
 from PyQt5.QtWidgets import (
@@ -12,6 +13,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from ..constants import AMU, C_LIGHT, ELECTRON_MASS_U, MEV
+from ..deck import Deck, Deflector, Dipole, Family, FieldHarmonic, Grid, read_deck, write_deck
+from ..fortran_text import parse_floats
 
 
 class CollapsibleSection(QWidget):
@@ -87,6 +90,18 @@ def _make_file_row(default='', browse_cb=None):
     lay.addWidget(edit)
     lay.addWidget(btn)
     return w, edit, btn
+
+
+def _numbers(values):
+    """Values as text that reads back to the same floats."""
+    return ' '.join(repr(float(v)) for v in values)
+
+
+def _rows(text, width, count):
+    """count rows of width floats from a text box, padded with zeros."""
+    rows = [(parse_floats(line) + [0.0] * width)[:width] for line in text.splitlines() if line.strip()]
+    rows += [[0.0] * width for _ in range(count - len(rows))]
+    return rows[:count]
 
 
 def _fortran_fmt(val):
@@ -166,6 +181,7 @@ class InputFormPanel(QWidget):
         self.setMinimumWidth(280)
         self.setMaximumWidth(400)
         self._loading = False  # guards against re-entrant loads
+        self._loaded_deck = None
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -887,434 +903,187 @@ class InputFormPanel(QWidget):
             self._loading = False
 
     def _do_load_data_file(self, path):
-        """Same line structure as lions.io.load()."""
-        from ..io import FortranFile, fortran_float
+        """Fill the form from a deck read by lions.deck.read_deck."""
+        deck = read_deck(path)
+        # Kept for the entries the form does not edit (gap offset, bunch files)
+        self._loaded_deck = deck
 
-        with open(path, 'r') as f_raw:
-            f = FortranFile(f_raw)
+        self.title_edit.setText(deck.title)
+        self.npaspt_spin.setValue(deck.steps_per_turn)
+        self.r1th_spin.setValue(deck.design_r_final)
+        self.ntours_spin.setValue(deck.design_turns)
+        self.fhf_spin.setValue(deck.rf_frequency)
+        self.pothf_spin.setValue(deck.rf_voltage)
+        self.teta1_spin.setValue(deck.dee_half_angle_deg)
+        self.harm_spin.setValue(deck.harmonic)
+        self.dbsb_spin.setValue(deck.db_over_b)
+        self.dphid_spin.setValue(deck.phase_right_deg)
+        self.dphig_spin.setValue(deck.phase_left_deg)
+        self.pothfd_spin.setValue(deck.v_dee_right)
+        self.pothfg_spin.setValue(deck.v_dee_left)
+        for h, n_spin, coef_edit, phase_spin in (
+                (deck.harmonic1, self.ncoh0_spin, self.coh0_edit, self.phihar0_spin),
+                (deck.harmonic2, self.ncoh1_spin, self.coh1_edit, self.phihar1_spin)):
+            n_spin.setValue(0 if h is None else len(h.coefs))
+            coef_edit.setText('' if h is None else _numbers(h.coefs))
+            phase_spin.setValue(0.0 if h is None else h.phase_deg)
 
-            # 1. corps (title)
-            title = f.readline().strip().strip('"').strip("'")
-            self.title_edit.setText(title)
+        self.zmin_spin.setValue(deck.zmin)
+        self.zmax_spin.setValue(deck.zmax)
+        self.rmax1_spin.setValue(deck.central_rmax)
+        self.rex_spin.setValue(deck.extraction)
+        self.tet1ex_spin.setValue(deck.cut_bunch)
+        self.tet2ex_spin.setValue(deck.grids_on)
+        self.eex_spin.setValue(deck.grid_start)
+        self.ndf_spin.setValue(len(deck.deflectors))
+        self.edf_spin.setValue(deck.deflectors[0].e if deck.deflectors else 0.0)
+        self.deflectors_text.setPlainText('\n'.join(_numbers(astuple(e)) for e in deck.deflectors))
+        self.ndm_spin.setValue(len(deck.dipoles))
+        self.magdip_text.setPlainText('\n'.join(_numbers(astuple(m)) for m in deck.dipoles))
+        if deck.grids:
+            self.ngex_spin.setValue(len(deck.grids))
+            self.grids_text.setPlainText('\n'.join(_numbers(astuple(g)) for g in deck.grids))
+            self.ficdebgex_edit.setText(deck.grid_file_prefix)
 
-            # 2. npaspt
-            vals = f.readline().split()
-            self.npaspt_spin.setValue(int(vals[0]))
+        self.nbrfam_spin.setValue(len(deck.families))
+        if deck.n_particles is not None:
+            self.n_total_spin.setValue(deck.n_particles)
+        if len(self.extra_families) < len(deck.families) - 1:
+            self._on_nbrfam_changed(len(deck.families))
+        self._set_family_values(self, deck.families[0])
+        for widget, fam in zip(self.extra_families, deck.families[1:]):
+            self._set_family_values(widget, fam)
 
-            # 3. r1th, ntours
-            vals = f.readline().split()
-            self.r1th_spin.setValue(fortran_float(vals[0]))
-            self.ntours_spin.setValue(int(vals[1]))
+        self.iflcor_spin.setValue(deck.correlations)
+        if deck.correlations != 0:
+            self.ficsig_edit.setText(deck.sigma_file)
+            self.phase_space_edit.setText(deck.phase_space)
+            self.ficcor_edit.setText(deck.correlation_file)
+            self.ficmat_edit.setText(deck.matrix_file)
+            self.ficdc_edit.setText(deck.dc_matrix_file)
+            self._load_sigma_diag(deck.sigma_file, path)
 
-            # 4. fhf, pothf, teta1, harm, dbsb
-            vals = f.readline().split()
-            self.fhf_spin.setValue(fortran_float(vals[0]))
-            self.pothf_spin.setValue(fortran_float(vals[1]))
-            teta1_val = fortran_float(vals[2])
-            self.teta1_spin.setValue(abs(teta1_val))
-            self.harm_spin.setValue(fortran_float(vals[3]))
-            self.dbsb_spin.setValue(fortran_float(vals[4]))
-
-            # 5. dphid, dphig (degrees in the file)
-            vals = f.readline().split()
-            self.dphid_spin.setValue(fortran_float(vals[0]))
-            self.dphig_spin.setValue(fortran_float(vals[1]))
-
-            # 6. pothfd, pothfg (positive in the file, sign flipped by init)
-            vals = f.readline().split()
-            self.pothfd_spin.setValue(fortran_float(vals[0]))
-            self.pothfg_spin.setValue(fortran_float(vals[1]))
-
-            # 7. ncoh[0]
-            vals = f.readline().split()
-            ncoh0 = int(vals[0])
-            self.ncoh0_spin.setValue(ncoh0)
-            if ncoh0 != 0:
-                coh_vals = f.readline().split()
-                self.coh0_edit.setText(' '.join(coh_vals[:ncoh0]))
-                phihar_vals = f.readline().split()
-                self.phihar0_spin.setValue(fortran_float(phihar_vals[0]))
-            else:
-                self.coh0_edit.setText('')
-                self.phihar0_spin.setValue(0.0)
-
-            # 8. ncoh[1]
-            vals = f.readline().split()
-            ncoh1 = int(vals[0])
-            self.ncoh1_spin.setValue(ncoh1)
-            if ncoh1 != 0:
-                coh_vals = f.readline().split()
-                self.coh1_edit.setText(' '.join(coh_vals[:ncoh1]))
-                phihar_vals = f.readline().split()
-                self.phihar1_spin.setValue(fortran_float(phihar_vals[0]))
-            else:
-                self.coh1_edit.setText('')
-                self.phihar1_spin.setValue(0.0)
-
-            # teta1 < 0 means a yomega line follows. The GUI does not edit yomega:
-            # it is skipped and teta1 is kept as an absolute value.
-            if teta1_val < 0:
-                f.readline()  # yomega
-
-            # 9. zmin, zmax, rmax1
-            vals = f.readline().split()
-            self.zmin_spin.setValue(fortran_float(vals[0]))
-            self.zmax_spin.setValue(fortran_float(vals[1]))
-            self.rmax1_spin.setValue(fortran_float(vals[2]))
-
-            # 10. rex, tet1ex, tet2ex, eex
-            vals = f.readline().split()
-            rex = fortran_float(vals[0])
-            tet1ex = fortran_float(vals[1])
-            tet2ex = fortran_float(vals[2])
-            eex = fortran_float(vals[3])
-            self.rex_spin.setValue(rex)
-            self.tet1ex_spin.setValue(tet1ex)
-            self.tet2ex_spin.setValue(tet2ex)
-            self.eex_spin.setValue(eex)
-
-            if rex < 0:
-                ndf = int(f.readline().split()[0])
-                self.ndf_spin.setValue(ndf)
-                defl_lines = []
-                for _ in range(ndf):
-                    line = f.readline().strip()
-                    defl_lines.append(line)
-                self.deflectors_text.setPlainText('\n'.join(defl_lines))
-                # edf_spin mirrors the voltage of the first deflector
-                if ndf > 0 and defl_lines:
-                    try:
-                        edf_val = fortran_float(defl_lines[0].split()[1])
-                        self.edf_spin.setValue(edf_val)
-                    except (IndexError, ValueError):
-                        self.edf_spin.setValue(0.0)
-                else:
-                    self.edf_spin.setValue(0.0)
-
-                ndm = int(f.readline().split()[0])
-                self.ndm_spin.setValue(ndm)
-                mag_lines = []
-                for _ in range(ndm):
-                    line = f.readline().strip()
-                    mag_lines.append(line)
-                self.magdip_text.setPlainText('\n'.join(mag_lines))
-
-                if tet2ex > 0:
-                    ngex = int(f.readline().split()[0])
-                    self.ngex_spin.setValue(ngex)
-                    grid_lines = []
-                    for _ in range(ngex):
-                        line = f.readline().strip()
-                        grid_lines.append(line)
-                    self.grids_text.setPlainText('\n'.join(grid_lines))
-                    ficdebgex = f.readline().strip()
-                    self.ficdebgex_edit.setText(ficdebgex)
-            else:
-                self.ndf_spin.setValue(0)
-                self.edf_spin.setValue(0.0)
-                self.deflectors_text.setPlainText('')
-                self.ndm_spin.setValue(0)
-                self.magdip_text.setPlainText('')
-
-            # 11. nbrfam
-            nbrfam = int(f.readline().split()[0])
-            self.nbrfam_spin.setValue(nbrfam)
-
-            if nbrfam > 1:
-                n_total = int(f.readline().split()[0])
-                self.n_total_spin.setValue(n_total)
-
-            # Family 1
-            vals = f.readline().split()
-            self.nbrion_spin.setValue(int(vals[0]))
-            self.amat_spin.setValue(fortran_float(vals[1]))
-            self.a_mass_spin.setValue(fortran_float(vals[2]))
-            self.qn_spin.setValue(fortran_float(vals[3]))
-
-            vals = f.readline().split()
-            self.r0_spin.setValue(fortran_float(vals[0]))
-            self.teta0_spin.setValue(fortran_float(vals[1]))
-            self.z0_spin.setValue(fortran_float(vals[2]))
-            self.pr0_spin.setValue(fortran_float(vals[3]))
-            self.pz0_spin.setValue(fortran_float(vals[4]))
-            self.w0mev_spin.setValue(fortran_float(vals[5]))
-            self.phi0_spin.setValue(fortran_float(vals[6]))
-
-            # Extra families: nbrfam_spin.setValue already created their widgets
-            for k in range(nbrfam - 1):
-                vals_p = f.readline().split()
-                vals_i = f.readline().split()
-                if k >= len(self.extra_families):
-                    self._on_nbrfam_changed(nbrfam)
-                fw = self.extra_families[k]
-                fw.nbrion_spin.setValue(int(vals_p[0]))
-                fw.amat_spin.setValue(fortran_float(vals_p[1]))
-                fw.a_mass_spin.setValue(fortran_float(vals_p[2]))
-                fw.qn_spin.setValue(fortran_float(vals_p[3]))
-                fw.r0_spin.setValue(fortran_float(vals_i[0]))
-                fw.teta0_spin.setValue(fortran_float(vals_i[1]))
-                fw.z0_spin.setValue(fortran_float(vals_i[2]))
-                fw.pr0_spin.setValue(fortran_float(vals_i[3]))
-                fw.pz0_spin.setValue(fortran_float(vals_i[4]))
-                fw.w0mev_spin.setValue(fortran_float(vals_i[5]))
-                fw.phi0_spin.setValue(fortran_float(vals_i[6]))
-
-            # 12. iflcor
-            iflcor = int(f.readline().split()[0])
-            self.iflcor_spin.setValue(iflcor)
-            if iflcor != 0:
-                ficsig = f.readline().strip()
-                self.ficsig_edit.setText(ficsig)
-                espace = f.readline().strip()
-                self.phase_space_edit.setText(espace)
-                cor_tokens = f.read_tokens(3)
-                self.ficcor_edit.setText(cor_tokens[0])
-                self.ficmat_edit.setText(cor_tokens[1])
-                self.ficdc_edit.setText(cor_tokens[2])
-                self._load_sigma_diag(ficsig, path)
-
-            # 13. nbdt, ifreq
-            vals = f.readline().split()
-            self.nbdt_spin.setValue(int(vals[0]))
-            self.ifreq_spin.setValue(int(vals[1]))
-
-            # 14. ficz, ficxy
-            fic_tokens = f.read_tokens(2)
-            self.ficz_edit.setText(fic_tokens[0])
-            self.ficxy_edit.setText(fic_tokens[1])
-
-            # 15. ficb, ficv1, ficv2
-            fic_tokens = f.read_tokens(3)
-            self.ficb_edit.setText(fic_tokens[0])
-            self.ficv1_edit.setText(fic_tokens[1])
-            self.ficv2_edit.setText(fic_tokens[2])
-
-            # 15b. b_factor (optional, older files omit it)
-            b_factor_found = False
-            try:
-                bf_tokens = f.read_tokens(1)
-                bf_val = fortran_float(bf_tokens[0])
-                self.b_factor_spin.setValue(bf_val)
-                b_factor_found = True
-            except Exception:
-                self.b_factor_spin.setValue(1.0)
-
-        if not b_factor_found:
+        self.nbdt_spin.setValue(deck.n_steps)
+        self.ifreq_spin.setValue(deck.output_every)
+        self.ficz_edit.setText(deck.z_output_file)
+        self.ficxy_edit.setText(deck.xy_output_file)
+        self.ficb_edit.setText(deck.bfield_file)
+        self.ficv1_edit.setText(deck.central_potential_file)
+        self.ficv2_edit.setText(deck.outer_potential_file)
+        if deck.b_factor is not None:
+            self.b_factor_spin.setValue(deck.b_factor)
+        else:
+            self.b_factor_spin.setValue(1.0)
             ficb_path = self.ficb_edit.text().strip()
             if ficb_path and ficb_path != 'no' and os.path.isfile(ficb_path):
                 self._auto_detect_bmax(ficb_path)
+
+    @staticmethod
+    def _set_family_values(widget, fam):
+        widget.nbrion_spin.setValue(fam.size)
+        widget.amat_spin.setValue(fam.atomic_mass)
+        widget.a_mass_spin.setValue(fam.mass_number)
+        widget.qn_spin.setValue(fam.charge_state)
+        widget.r0_spin.setValue(fam.r0)
+        widget.teta0_spin.setValue(fam.theta0_deg)
+        widget.z0_spin.setValue(fam.z0)
+        widget.pr0_spin.setValue(fam.pr0_mrad)
+        widget.pz0_spin.setValue(fam.pz0_mrad)
+        widget.w0mev_spin.setValue(fam.w0_mev_per_u)
+        widget.phi0_spin.setValue(fam.phi0_deg)
+
+    @staticmethod
+    def _family(widget):
+        return Family(widget.nbrion_spin.value(), widget.amat_spin.value(),
+                      widget.a_mass_spin.value(), widget.qn_spin.value(), widget.r0_spin.value(),
+                      widget.teta0_spin.value(), widget.z0_spin.value(), widget.pr0_spin.value(),
+                      widget.pz0_spin.value(), widget.w0mev_spin.value(), widget.phi0_spin.value())
 
     # ================================================================
     # Data file writing
     # ================================================================
 
+    def to_deck(self):
+        """Deck built from the form values."""
+        harmonics = []
+        for n_spin, coef_edit, phase_spin in ((self.ncoh0_spin, self.coh0_edit, self.phihar0_spin),
+                                              (self.ncoh1_spin, self.coh1_edit, self.phihar1_spin)):
+            n = n_spin.value()
+            coefs = (parse_floats(coef_edit.text()) + [0.0] * n)[:n]
+            harmonics.append(FieldHarmonic(coefs, phase_spin.value()) if n else None)
+
+        deflectors, dipoles, grids = [], [], []
+        grid_prefix = ''
+        if self.rex_spin.value() < 0:
+            rows = _rows(self.deflectors_text.toPlainText(), 8, self.ndf_spin.value())
+            if rows:
+                rows[0][1] = self.edf_spin.value()  # the field box overrides deflector 1
+            deflectors = [Deflector(*row) for row in rows]
+            dipoles = [Dipole(*row) for row in _rows(self.magdip_text.toPlainText(), 6,
+                                                     self.ndm_spin.value())]
+            if self.tet2ex_spin.value() > 0:
+                grids = [Grid(*row) for row in _rows(self.grids_text.toPlainText(), 5,
+                                                     self.ngex_spin.value())]
+                grid_prefix = self.ficdebgex_edit.text().strip() or 'grex'
+
+        n_families = self.nbrfam_spin.value()
+        families = [self._family(self)]
+        families += [self._family(w) for w in self.extra_families[:n_families - 1]]
+        families += [self._family(self)] * (n_families - len(families))
+
+        kept = self._loaded_deck
+        return Deck(
+            title=self.title_edit.text(),
+            steps_per_turn=self.npaspt_spin.value(),
+            design_r_final=self.r1th_spin.value(),
+            design_turns=self.ntours_spin.value(),
+            rf_frequency=self.fhf_spin.value(),
+            rf_voltage=self.pothf_spin.value(),
+            dee_half_angle_deg=self.teta1_spin.value(),
+            harmonic=self.harm_spin.value(),
+            db_over_b=self.dbsb_spin.value(),
+            phase_right_deg=self.dphid_spin.value(),
+            phase_left_deg=self.dphig_spin.value(),
+            v_dee_right=self.pothfd_spin.value(),
+            v_dee_left=self.pothfg_spin.value(),
+            zmin=self.zmin_spin.value(),
+            zmax=self.zmax_spin.value(),
+            central_rmax=self.rmax1_spin.value(),
+            families=families,
+            n_particles=self.n_total_spin.value() if n_families > 1 else None,
+            n_steps=self.nbdt_spin.value(),
+            output_every=self.ifreq_spin.value(),
+            z_output_file=self.ficz_edit.text().strip(),
+            xy_output_file=self.ficxy_edit.text().strip(),
+            bfield_file=self.ficb_edit.text().strip() or 'no',
+            central_potential_file=self.ficv1_edit.text().strip() or 'no',
+            outer_potential_file=self.ficv2_edit.text().strip() or 'no',
+            harmonic1=harmonics[0],
+            harmonic2=harmonics[1],
+            gap_offset=kept.gap_offset if kept else None,
+            extraction=self.rex_spin.value(),
+            cut_bunch=self.tet1ex_spin.value(),
+            grids_on=self.tet2ex_spin.value(),
+            grid_start=self.eex_spin.value(),
+            deflectors=deflectors,
+            dipoles=dipoles,
+            grids=grids,
+            grid_file_prefix=grid_prefix,
+            correlations=self.iflcor_spin.value(),
+            sigma_file=self.ficsig_edit.text().strip() or 'no',
+            phase_space=self.phase_space_edit.text().strip() or '6d',
+            correlation_file=self.ficcor_edit.text().strip() or 'no',
+            matrix_file=self.ficmat_edit.text().strip() or 'no',
+            dc_matrix_file=self.ficdc_edit.text().strip() or 'no',
+            b_factor=self.b_factor_spin.value(),
+            bunch_load_file=kept.bunch_load_file if kept else 'no',
+            bunch_save_file=kept.bunch_save_file if kept else 'no',
+        )
+
     def write_data_file(self, path):
-        """Write the GUI values to a data file in the Fortran format."""
-        lines = []
-
-        # 1. corps
-        lines.append(f'"{self.title_edit.text()}"')
-        # 2. npaspt
-        lines.append(str(self.npaspt_spin.value()))
-        # 3. r1th, ntours
-        lines.append(f'{_fortran_fmt(self.r1th_spin.value())} {self.ntours_spin.value()}')
-        # 4. fhf, pothf, teta1, harm, dbsb
-        lines.append(
-            f'{_fortran_fmt(self.fhf_spin.value())} '
-            f'{_fortran_fmt(self.pothf_spin.value())} '
-            f'{_fortran_fmt(self.teta1_spin.value())} '
-            f'{_fortran_fmt(self.harm_spin.value())} '
-            f'{_fortran_fmt(self.dbsb_spin.value())}')
-        # 5. dphid, dphig
-        lines.append(
-            f'{_fortran_fmt(self.dphid_spin.value())} '
-            f'{_fortran_fmt(self.dphig_spin.value())}')
-        # 6. pothfd, pothfg
-        lines.append(
-            f'{_fortran_fmt(self.pothfd_spin.value())} '
-            f'{_fortran_fmt(self.pothfg_spin.value())}')
-
-        # 7. ncoh[0]
-        ncoh0 = self.ncoh0_spin.value()
-        lines.append(str(ncoh0))
-        if ncoh0 != 0:
-            coh0_text = self.coh0_edit.text().strip()
-            if not coh0_text:
-                coh0_text = ' '.join(['0.d0'] * ncoh0)
-            lines.append(coh0_text)
-            lines.append(_fortran_fmt(self.phihar0_spin.value()))
-
-        # 8. ncoh[1]
-        ncoh1 = self.ncoh1_spin.value()
-        lines.append(str(ncoh1))
-        if ncoh1 != 0:
-            coh1_text = self.coh1_edit.text().strip()
-            if not coh1_text:
-                coh1_text = ' '.join(['0.d0'] * ncoh1)
-            lines.append(coh1_text)
-            lines.append(_fortran_fmt(self.phihar1_spin.value()))
-
-        # 9. zmin, zmax, rmax1
-        lines.append(
-            f'{_fortran_fmt(self.zmin_spin.value())} '
-            f'{_fortran_fmt(self.zmax_spin.value())} '
-            f'{_fortran_fmt(self.rmax1_spin.value())}')
-
-        # 10. rex, tet1ex, tet2ex, eex
-        rex = self.rex_spin.value()
-        tet2ex = self.tet2ex_spin.value()
-        lines.append(
-            f'{_fortran_fmt(rex)} '
-            f'{_fortran_fmt(self.tet1ex_spin.value())} '
-            f'{_fortran_fmt(tet2ex)} '
-            f'{_fortran_fmt(self.eex_spin.value())}')
-
-        if rex < 0:
-            ndf = self.ndf_spin.value()
-            lines.append(str(ndf))
-            if ndf > 0:
-                defl_text = self.deflectors_text.toPlainText().strip()
-                if defl_text:
-                    defl_lines_out = []
-                    for idx_dl, dl in enumerate(defl_text.splitlines()):
-                        dl = dl.strip()
-                        if not dl:
-                            continue
-                        # edf_spin overrides the first deflector voltage
-                        if idx_dl == 0:
-                            parts = dl.split()
-                            if len(parts) >= 2:
-                                parts[1] = _fortran_fmt(self.edf_spin.value())
-                            dl = ' '.join(parts)
-                        defl_lines_out.append(dl)
-                    for dl in defl_lines_out:
-                        lines.append(dl)
-                else:
-                    edf_val = _fortran_fmt(self.edf_spin.value())
-                    lines.append(f'0.d0 {edf_val} 0.d0 0.d0 0.d0 0.d0 0.d0 0.d0')
-                    for _ in range(ndf - 1):
-                        lines.append('0.d0 0.d0 0.d0 0.d0 0.d0 0.d0 0.d0 0.d0')
-
-            ndm = self.ndm_spin.value()
-            lines.append(str(ndm))
-            if ndm > 0:
-                mag_text = self.magdip_text.toPlainText().strip()
-                if mag_text:
-                    for ml in mag_text.splitlines():
-                        if ml.strip():
-                            lines.append(ml.strip())
-                else:
-                    for _ in range(ndm):
-                        lines.append('0.d0 0.d0 0.d0 0.d0 0.d0 0.d0')
-
-            if tet2ex > 0:
-                ngex = self.ngex_spin.value()
-                lines.append(str(ngex))
-                # Exactly ngex grid lines, padded with zeros
-                grid_lines_out = []
-                grid_text = self.grids_text.toPlainText().strip()
-                if grid_text:
-                    for gl in grid_text.splitlines():
-                        if gl.strip():
-                            grid_lines_out.append(gl.strip())
-                while len(grid_lines_out) < ngex:
-                    grid_lines_out.append('0.0 0.0 0.0 0.0 0.0')
-                for gl in grid_lines_out[:ngex]:
-                    lines.append(gl)
-                lines.append(self.ficdebgex_edit.text().strip() or 'grex')
-
-        # 11. nbrfam
-        nbrfam = self.nbrfam_spin.value()
-        lines.append(str(nbrfam))
-
-        if nbrfam > 1:
-            lines.append(str(self.n_total_spin.value()))
-
-        # Family 1
-        lines.append(
-            f'{self.nbrion_spin.value()} '
-            f'{_fortran_fmt(self.amat_spin.value())} '
-            f'{_fortran_fmt(self.a_mass_spin.value())} '
-            f'{_fortran_fmt(self.qn_spin.value())}')
-        lines.append(
-            f'{_fortran_fmt(self.r0_spin.value())} '
-            f'{_fortran_fmt(self.teta0_spin.value())} '
-            f'{_fortran_fmt(self.z0_spin.value())} '
-            f'{_fortran_fmt(self.pr0_spin.value())} '
-            f'{_fortran_fmt(self.pz0_spin.value())} '
-            f'{_fortran_fmt(self.w0mev_spin.value())} '
-            f'{_fortran_fmt(self.phi0_spin.value())}')
-
-        # Extra families
-        for k in range(nbrfam - 1):
-            if k < len(self.extra_families):
-                fw = self.extra_families[k]
-                v = fw.get_values()
-            else:
-                # Missing widget: copy family 1
-                v = {
-                    'nbrion': self.nbrion_spin.value(),
-                    'amat': self.amat_spin.value(),
-                    'a_mass': self.a_mass_spin.value(),
-                    'qn': self.qn_spin.value(),
-                    'r0': self.r0_spin.value(),
-                    'teta0': self.teta0_spin.value(),
-                    'z0': self.z0_spin.value(),
-                    'pr0': self.pr0_spin.value(),
-                    'pz0': self.pz0_spin.value(),
-                    'w0mev': self.w0mev_spin.value(),
-                    'phi0': self.phi0_spin.value(),
-                }
-            lines.append(
-                f'{v["nbrion"]} '
-                f'{_fortran_fmt(v["amat"])} '
-                f'{_fortran_fmt(v["a_mass"])} '
-                f'{_fortran_fmt(v["qn"])}')
-            lines.append(
-                f'{_fortran_fmt(v["r0"])} '
-                f'{_fortran_fmt(v["teta0"])} '
-                f'{_fortran_fmt(v["z0"])} '
-                f'{_fortran_fmt(v["pr0"])} '
-                f'{_fortran_fmt(v["pz0"])} '
-                f'{_fortran_fmt(v["w0mev"])} '
-                f'{_fortran_fmt(v["phi0"])}')
-
-        # 12. iflcor
-        iflcor = self.iflcor_spin.value()
-        lines.append(str(iflcor))
-        if iflcor != 0:
-            lines.append(self.ficsig_edit.text().strip())
-            lines.append(self.phase_space_edit.text().strip())
-            lines.append(
-                f'{self.ficcor_edit.text().strip()} '
-                f'{self.ficmat_edit.text().strip()} '
-                f'{self.ficdc_edit.text().strip()}')
-
-        # 13. nbdt, ifreq
-        lines.append(f'{self.nbdt_spin.value()} {self.ifreq_spin.value()}')
-
-        # 14. ficz, ficxy
-        lines.append(self.ficz_edit.text().strip())
-        lines.append(self.ficxy_edit.text().strip())
-
-        # Blank line before the quoted file names
-        lines.append('')
-
-        # 15. ficb, ficv1, ficv2 (single quotes). Empty fields become 'no' so the engine does not try to open them.
-        ficb_val = self.ficb_edit.text().strip() or 'no'
-        ficv1_val = self.ficv1_edit.text().strip() or 'no'
-        ficv2_val = self.ficv2_edit.text().strip() or 'no'
-        lines.append(f"'{ficb_val}'")
-        lines.append(f"'{ficv1_val}'")
-        lines.append(f"'{ficv2_val}'")
-        # 15b. b_factor (magnetic field factor in tesla)
-        lines.append(f'{_fortran_fmt(self.b_factor_spin.value())}')
-
-        with open(path, 'w') as fout:
-            fout.write('\n'.join(lines) + '\n')
-
-        self._log_family_summary(nbrfam)
-
+        """Write the form values as a deck (lions.deck.write_deck)."""
+        write_deck(self.to_deck(), path)
+        self._log_family_summary(self.nbrfam_spin.value())
         return path
 
     def _log_family_summary(self, nbrfam):
@@ -1353,7 +1122,7 @@ class InputFormPanel(QWidget):
         if not text:
             return []
 
-        from ..io import fortran_float
+        from ..fortran_text import fortran_float
         result = []
         for line in text.splitlines():
             line = line.strip()

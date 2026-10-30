@@ -49,6 +49,16 @@ d.x, d.y, d.z, d.px, d.py, d.pz, d.alive   # per particle, SI, p = beta gamma
 d = lions.run('don.120.ref_phi10_mars_2017', on_step=lambda d: d.step < 1000)
 ```
 
+Decks as data: `read_deck` returns a `Deck` dataclass (file units, English names), `write_deck` writes one that the Fortran also reads. `run` and `load` take a `Deck` or a path.
+
+```python
+deck = lions.read_deck('don.120.ref_phi10_mars_2017')
+deck.v_dee_right = deck.v_dee_left = 52e3   # V
+deck.families[0].phi0_deg = -245.0
+d = lions.run(deck)
+lions.write_deck(deck, 'don.modified')
+```
+
 `vertical` takes the keyword arguments of `lions.set_vertical_sorter` (lengths in m, angles in deg); the default is no vertical sorter.
 State names and their Fortran counterparts: `docs/glossary.md`.
 
@@ -63,7 +73,9 @@ The GUI always writes `b_factor`.
 | Path | Content |
 |---|---|
 | `src/lions/state.py` | `State`: all data of a run |
-| `src/lions/io.py` | Input deck (`load`), field map and potential readers, Fortran list-directed reading |
+| `src/lions/deck.py` | `Deck` dataclass, `read_deck`, `write_deck` (engine and GUI) |
+| `src/lions/io.py` | `load`: State from a deck; field map and potential readers |
+| `src/lions/fortran_text.py` | Fortran list-directed text reading |
 | `src/lions/fields.py` | B and E at the particles, field harmonics |
 | `src/lions/pusher.py` | Boris pusher |
 | `src/lions/apertures.py` | Box, central and outer regions, deflectors, dipoles, grids, traps |
@@ -88,15 +100,14 @@ From a read of the Python port against the Fortran source (2026-10-30).
 
 1. **Random bunch differs from the Fortran.** Python seeds the legacy global RNG with 42 inside `sample_unit_ball`. The Fortran seeds the gfortran generator (its seed loop sets all 12 entries to 12). Bunches cannot match particle by particle. Python vs Fortran checks have to be statistical, or start from a single particle or a loaded bunch.
 2. **Saved bunch files are not Fortran-compatible.** The Fortran writes `ficsto` with record markers and reads `ficloa` with them, honouring the byte swap. Python writes and reads raw native doubles and ignores the swap.
-3. **The GUI drops deck entries.** The form does not keep the bunch files (`ficloa ficsto`) nor the skewed-gap offset (`yomega`, read when `teta1 < 0`), so a deck saved from the GUI loses them.
-4. **Losses are counted only when traps are defined.** As in the Fortran, `apply_traps` returns at once without a marker file, so particles beyond zmin/zmax are never flagged lost. The marker file is read only when bidims are on.
-5. **`ficv1 = 'no'` still prompts** for the central grid (`xmin1 xmax1 ymin1 ymax1 nx1 ny1`), so `run` waits on stdin in that case.
-6. **Speed.** Per-particle Python loops in `compute_fields`, `compute_bfield` and `fill_bidims`.
-7. **No bounds check on the central grid.** A particle with r < rmax1 outside the pot1 grid gets a negative index: NumPy wraps it to the far end of the array, the Fortran reads outside it. Both give meaningless fields. The pot1 grid must cover r < rmax1.
-8. **Correlation outputs only partly ported.** With `iflcor != 0`, the Fortran also writes the sigma and grid matrices, the window-filtered matrices (two extra prompts at the end) and the inflector output to `ficmat`, and the dc matrices to `ficdc`. The Python opens these files and leaves them empty.
-9. **`6d` bunch differs from the Fortran.** The Fortran adds the vertical offsets (dz, dpz) of the sampled bunch only when `espace = '3d'` (`lions_2.0_ep.f90` line 498). The Python adds them for `3d` and `6d`. The CIME example deck uses `6d`: the Fortran keeps all particles at z0, the Python spreads them vertically. Which behaviour is intended is open.
-10. **Correlations wrong for families after the first, in both codes.** The orbit radius uses `mass_c[k]` (Fortran `am0c(k)`), the particle array indexed by the family number instead of the family's first particle.
-11. **Untested paths.** Multiple families, the vertical sorter, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
+3. **Losses are counted only when traps are defined.** As in the Fortran, `apply_traps` returns at once without a marker file, so particles beyond zmin/zmax are never flagged lost. The marker file is read only when bidims are on.
+4. **`ficv1 = 'no'` still prompts** for the central grid (`xmin1 xmax1 ymin1 ymax1 nx1 ny1`), so `run` waits on stdin in that case.
+5. **Speed.** Per-particle Python loops in `compute_fields`, `compute_bfield` and `fill_bidims`.
+6. **No bounds check on the central grid.** A particle with r < rmax1 outside the pot1 grid gets a negative index: NumPy wraps it to the far end of the array, the Fortran reads outside it. Both give meaningless fields. The pot1 grid must cover r < rmax1.
+7. **Correlation outputs only partly ported.** With `iflcor != 0`, the Fortran also writes the sigma and grid matrices, the window-filtered matrices (two extra prompts at the end) and the inflector output to `ficmat`, and the dc matrices to `ficdc`. The Python opens these files and leaves them empty.
+8. **`6d` bunch differs from the Fortran.** The Fortran adds the vertical offsets (dz, dpz) of the sampled bunch only when `espace = '3d'` (`lions_2.0_ep.f90` line 498). The Python adds them for `3d` and `6d`. The CIME example deck uses `6d`: the Fortran keeps all particles at z0, the Python spreads them vertically. Which behaviour is intended is open.
+9. **Correlations wrong for families after the first, in both codes.** The orbit radius uses `mass_c[k]` (Fortran `am0c(k)`), the particle array indexed by the family number instead of the family's first particle.
+10. **Untested paths.** Multiple families, the vertical sorter, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
 
 ## Tests
 
