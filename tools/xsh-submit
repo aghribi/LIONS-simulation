@@ -1,0 +1,124 @@
+#!/bin/bash
+# xsh-submit: submit a job script to this site's scheduler (Slurm or HTCondor).
+#
+# Runs on the compute site, in a clone. The site comes from XSH_SITE, else from
+# sites/.site (written by tools/site.sh deploy). Resources come from the job
+# script's "# XSH" header line, for example:
+#   # XSH name=tmci_v22 time=1-00:00:00 ntasks=4 cpus=8 mem=96G signal=B:USR1@300
+# Scheduler options of the site (account, partition, qos) come from sites/<site>.env.
+#
+# Usage:
+#   tools/xsh-submit [--test | --class C] [--time T] [--mem M] [--ntasks N] [--cpus C] [--name N] [--after JOBID] [--dry-run] \
+#                    jobs/<job>.sh [KEY=VALUE ...]
+#   --test     short-queue options of the site (SLURM_OPTS_test)
+#   --class C  options SLURM_OPTS_C of the site (gpu, gpu_v100, ...)
+#   --after    start once job JOBID has ended (Slurm only; used by the auto-resubmit)
+#   KEY=VALUE  exported to the job (job parameters such as INTENSITY=5e10)
+set -euo pipefail
+
+die() { echo "xsh-submit: $*" >&2; exit 1; }
+root="$(cd "$(dirname "$0")/.." && pwd)"
+site="${XSH_SITE:-$(cat "$root/sites/.site" 2>/dev/null || true)}"
+[ -n "$site" ] || die "no site: set XSH_SITE or run tools/site.sh <site> deploy"
+[ -f "$root/sites/$site.env" ] || die "unknown site '$site' (no sites/$site.env)"
+source "$root/sites/$site.env"
+[ -f "$root/sites/$site.local.env" ] && source "$root/sites/$site.local.env"
+
+cls="${XSH_CLASS:-prod}" time="" mem="" ntasks="" cpus="" name="" after="" dry=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --test) cls=test ;;
+    --class) cls="$2"; shift ;;
+    --time) time="$2"; shift ;;
+    --mem) mem="$2"; shift ;;
+    --ntasks) ntasks="$2"; shift ;;
+    --cpus) cpus="$2"; shift ;;
+    --name) name="$2"; shift ;;
+    --after) after="$2"; shift ;;
+    --dry-run) dry=1 ;;
+    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) die "unknown option $1" ;;
+    *) break ;;
+  esac
+  shift
+done
+[ $# -ge 1 ] || die "missing job script"
+script="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; shift
+[ -f "$script" ] || die "no such script: $script"
+codedir="$(dirname "$script")"
+
+# Header resources; command-line options win.
+h_name="" h_time="" h_ntasks=1 h_cpus=1 h_mem="" h_signal=""
+for kv in $(sed -n 's/^# XSH //p' "$script" | head -1); do
+  case "$kv" in
+    name=*|time=*|ntasks=*|cpus=*|mem=*|signal=*) eval "h_${kv%%=*}=\"\${kv#*=}\"" ;;
+    *) die "unknown header field '$kv' in $script" ;;
+  esac
+done
+name="${name:-${h_name:-$(basename "$script" .sh)}}"
+time="${time:-$h_time}"; mem="${mem:-$h_mem}"; h_ntasks="${ntasks:-$h_ntasks}"; h_cpus="${cpus:-$h_cpus}"
+[ -n "$time" ] || die "no time: add time= to the # XSH header or pass --time"
+
+exports=("XSH_SITE=$site" "XSH_CLASS=$cls")
+for kv in "$@"; do
+  [[ "$kv" == *=* ]] || die "job parameter '$kv' is not KEY=VALUE"
+  [[ "$kv" != *,* ]] || die "job parameter '$kv' contains a comma (Slurm --export cannot carry it)"
+  [[ "$kv" != *[[:space:]]* ]] || die "job parameter '$kv' contains a space: pass one KEY=VALUE per argument"
+  exports+=("$kv")
+done
+
+seconds() {   # [D-]HH:MM:SS -> seconds
+  local d=0 t="$1"
+  [[ "$t" == *-* ]] && { d="${t%%-*}"; t="${t#*-}"; }
+  IFS=: read -r hh mm ss <<< "$t"
+  echo $(( d*86400 + 10#$hh*3600 + 10#${mm:-0}*60 + 10#${ss:-0} ))
+}
+megabytes() {   # 96G / 64000M -> MB
+  case "$1" in *G) echo $(( ${1%G} * 1024 )) ;; *M) echo "${1%M}" ;; *) echo "$1" ;; esac
+}
+
+case "$SCHED" in
+slurm)
+  eval "site_opts=(\${SLURM_OPTS_$cls:-})"
+  opts=(--parsable --chdir="$codedir" --job-name="$name"
+        --output="logs/${name}_%j.out" --error="logs/${name}_%j.err"
+        --time="$time" --nodes=1 --ntasks="$h_ntasks" --cpus-per-task="$h_cpus"
+        "${site_opts[@]}")
+  [ -n "$mem" ] && [ -z "${SLURM_NO_MEM:-}" ] && opts+=(--mem="$mem")
+  [ -n "$h_signal" ] && opts+=(--signal="$h_signal")
+  [ -n "$after" ] && opts+=(--dependency="afterany:$after")
+  [ -n "${XSH_MAIL:-}" ] && opts+=(--mail-user="$XSH_MAIL" --mail-type=end,fail)
+  opts+=(--export="ALL,$(IFS=,; echo "${exports[*]}")")
+  if [ "$dry" = 1 ]; then echo sbatch "${opts[@]}" "$script"; exit 0; fi
+  mkdir -p "$codedir/logs"
+  sbatch "${opts[@]}" "$script"
+  ;;
+condor)
+  [ -z "$after" ] || die "--after is not supported on HTCondor; resume with RESUME=<exp_id>"
+  ncpu=$(( h_ntasks * h_cpus ))
+  env_str="XSH_NTASKS=$h_ntasks XSH_CPUS=$h_cpus XSH_JOB_NAME=$name XSH_CONDOR_ID=\$(ClusterId).\$(ProcId) ${exports[*]}"
+  # lxbatch runs jobs from a scratch copy of the executable: start bash in code/ instead.
+  sub="universe = vanilla
+executable = /bin/bash
+arguments = \"-c 'cd $codedir && exec bash $script'\"
+transfer_executable = false
+initialdir = $codedir
+environment = \"$env_str\"
+request_cpus = $ncpu
++MaxRuntime = $(seconds "$time")
+should_transfer_files = NO
+output = logs/${name}_\$(ClusterId).\$(ProcId).out
+error = logs/${name}_\$(ClusterId).\$(ProcId).err
+log = logs/${name}_\$(ClusterId).log"
+  [ -n "$mem" ] && sub="$sub
+request_memory = $(megabytes "$mem")"
+  sub="$sub
+queue"
+  if [ "$dry" = 1 ]; then echo "$sub"; exit 0; fi
+  mkdir -p "$codedir/logs"
+  subfile="$codedir/logs/${name}_$(date +%Y%m%d_%H%M%S).sub"
+  echo "$sub" > "$subfile"
+  condor_submit -terse "$subfile" | head -1 | cut -d. -f1
+  ;;
+*) die "sites/$site.env: SCHED must be slurm or condor, got '${SCHED:-}'" ;;
+esac

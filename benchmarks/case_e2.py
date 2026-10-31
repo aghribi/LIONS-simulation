@@ -5,7 +5,6 @@ Writes case_e2.parquet. MPS has no float64: only the float32 variants run there.
 """
 import argparse
 import contextlib
-import importlib.metadata
 import io
 import platform
 import statistics
@@ -141,7 +140,7 @@ def main(outdir):
     device_name = {'cuda': lambda: torch.cuda.get_device_name(), 'mps': lambda: 'Apple GPU (MPS)',
                    'cpu': lambda: platform.processor() or platform.machine()}[DEVICE]()
     meta = {'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, device {DEVICE}', 'device_name': device_name,
-            'torch': torch.__version__, 'lions': importlib.metadata.version('lions'),
+            'torch': torch.__version__,
             'cpu': platform.processor() or platform.machine(), 'repeats': str(REPEATS),
             **provenance(*inputs), 'machine': platform.platform(), 'python': platform.python_version()}
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e2.parquet')

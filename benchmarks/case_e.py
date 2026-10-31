@@ -5,7 +5,6 @@ usage: uv run --group bench --with torch python benchmarks/case_e.py [outdir]
 Writes case_e.parquet.
 """
 import contextlib
-import importlib.metadata
 import io
 import json
 import math
@@ -222,7 +221,7 @@ def main(outdir):
                 records += [{'case': case, 'steps': n, **row} for row in gradients(load(STEPS[0]), n)]
         print(f'case {case} done', file=sys.stderr)
     meta = {'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
-            'torch': torch.__version__, 'lions': importlib.metadata.version('lions'),
+            'torch': torch.__version__,
             **provenance(), 'machine': platform.platform(), 'python': platform.python_version()}
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e.parquet')
     ram_mb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**20

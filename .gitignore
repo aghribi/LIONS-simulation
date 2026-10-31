@@ -32,3 +32,6 @@ docs/_build/
 
 # Benchmark run outputs
 benchmarks/runs/
+sites/.site
+sites/*.local.env
+jobs/logs/
