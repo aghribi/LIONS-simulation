@@ -32,6 +32,7 @@ STEPS = [360, 720, 1440]
 EVERY = {1: '1/3 deg', 3: '1 deg', 12: '4 deg'}   # master columns per map column (3-sector master)
 TOL = 1e-12
 H = 1e-6            # m, finite-difference step of the Jacobian
+RESIDUAL_MAX = 1e-9   # m, closed-orbit Newton residual above which the run counts as failed
 PAD = 5             # theta nodes wrapped on each side so the periodic spline has no edge
 
 
@@ -124,11 +125,19 @@ def step2(master_dir, outdir):
             w = t['ek_mev'] / species[1]
             for n in STEPS:
                 lt = orbits.LionsTracker(work, w, t['f_rev_hz'], n, species)
-                s, res = orbits.closed_orbit(lt.track, (r0, pr0))
-                m = orbits.jacobian(lt.track, s, H, H * p / r0)
-                qr, qz = orbits.linear_tunes(m)
-                tt, pos, mom = lt.track(np.array([s]), 2.2)
-                cross = orbits.crossings(tt, pos[:, 0], mom[:, 0])
+                try:
+                    s, res = orbits.closed_orbit(lt.track, (r0, pr0))
+                    if res > RESIDUAL_MAX:
+                        raise RuntimeError(f'closed orbit not converged: residual {res:.1e} m')
+                    m = orbits.jacobian(lt.track, s, H, H * p / r0)
+                    qr, qz = orbits.linear_tunes(m)
+                    tt, pos, mom = lt.track(np.array([s]), 2.2)
+                    cross = orbits.crossings(tt, pos[:, 0], mom[:, 0])
+                except Exception as exc:   # a map too coarse for the orbit is a result, recorded as such
+                    records.append({'map': label, 'map_columns': ntet, 'a': t['a'], 'steps_per_turn': n,
+                                    'metric': 'failed', 'value': None, 'unit': f'{type(exc).__name__}: {exc}'[:200]})
+                    print(f"{label} a={t['a']} n={n} failed: {exc}", file=sys.stderr)
+                    continue
                 values = {'r_eo_rel_error': (s[0] / r0 - 1, '1'), 'pr_eo_error_over_p': ((s[1] - pr0) / p, '1'),
                           'turn_time_rel_error': ((cross[1, 0] - cross[0, 0]) * t['f_rev_hz'] - 1, '1'),
                           'qr_error': (qr - q_ref[0], '1'), 'qz_error': (qz - q_ref[1], '1'),

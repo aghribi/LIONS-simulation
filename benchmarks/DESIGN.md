@@ -599,3 +599,6 @@ samples per turn:
 - Prediction (from sections 13 to 15, stated before running): with the bilinear map, a step-dependent scatter;
   at 1/3 deg, closed-orbit errors of 1e-6 or more and tune errors of 1e-4 to 1e-3. Much better than that means the
   case B mechanism needs a second look.
+- Added before the full step 2 run, after the 4 deg map made Newton diverge on the first orbit (r error -10%,
+  residual 2e-3 m, then a particle left the map): a configuration whose closed-orbit residual exceeds 1e-9 m, or
+  that raises, is recorded as failed with its error, and the run continues.
