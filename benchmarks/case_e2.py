@@ -83,10 +83,19 @@ def main(outdir):
     records, inputs = [], []
     dtypes = (torch.float32,) if DEVICE == 'mps' else (torch.float64, torch.float32)
 
-    def add(code, dtype, compiled, mode, n, wall, first):
+    def add(code, dtype, compiled, mode, n, run):
+        """Time run() and record it; a variant that fails (a backend that cannot compile it) is recorded too."""
+        try:
+            wall, first = run()
+            error = None
+        except Exception as exc:
+            wall = first = None
+            error = f'{type(exc).__name__}: {str(exc).strip().splitlines()[-1][:300]}'
+            print(f'{code} {dtype} compiled={compiled} {mode} {n}: {error}', file=sys.stderr)
         records.append({'code': code, 'dtype': dtype, 'compiled': compiled, 'mode': mode, 'particles': n,
                         'steps': STEPS, 'wall_s': wall, 'first_call_s': first,
-                        'particle_steps_per_s': n * STEPS / wall, 'metric': None, 'value': None})
+                        'particle_steps_per_s': n * STEPS / wall if wall else None, 'metric': None, 'value': None,
+                        'error': error})
 
     work = outdir / 'B'
     work.mkdir(exist_ok=True)
@@ -95,7 +104,7 @@ def main(outdir):
         inputs.append(work / 'bmap.dat')
         d = load(360)
         for n in PARTICLES:
-            add('lions', 'float64', False, 'forward', n, *lions_time(n))
+            add('lions', 'float64', False, 'forward', n, lambda: lions_time(n))
             print(f'lions {n} done', file=sys.stderr)
         for dtype in dtypes:
             for compiled in (False, True):
@@ -105,15 +114,14 @@ def main(outdir):
                     state = start(d, n, dtype)
                     with torch.no_grad():
                         add('torch', name, compiled, 'forward', n,
-                            *timed(lambda: port.run(state, 1.0, STEPS)))
+                            lambda: timed(lambda: port.run(state, 1.0, STEPS)))
                     print(f'torch {name} compiled={compiled} {n} done', file=sys.stderr)
                 state = start(d, BACKWARD_PARTICLES, dtype)
 
                 def fwd_bwd():
                     s = torch.tensor(1.0, dtype=dtype, device=DEVICE, requires_grad=True)
                     port.run(state, s, STEPS)[2].sum().backward()
-                add('torch', name, compiled, 'forward+backward', BACKWARD_PARTICLES,
-                    *timed(fwd_bwd))
+                add('torch', name, compiled, 'forward+backward', BACKWARD_PARTICLES, lambda: timed(fwd_bwd))
 
     # each device variant against eager float64 on the CPU, cases B0 and B
     device = DEVICE
@@ -143,7 +151,7 @@ def main(outdir):
                     records.append({'code': 'torch', 'dtype': None, 'compiled': None, 'mode': case,
                                     'particles': BACKWARD_PARTICLES, 'steps': STEPS, 'wall_s': None,
                                     'first_call_s': None, 'particle_steps_per_s': None, 'metric': metric,
-                                    'value': value})
+                                    'value': value, 'error': None})
 
     device_name = {'cuda': lambda: torch.cuda.get_device_name(), 'mps': lambda: 'Apple GPU (MPS)',
                    'cpu': lambda: platform.processor() or platform.machine()}[DEVICE]()
