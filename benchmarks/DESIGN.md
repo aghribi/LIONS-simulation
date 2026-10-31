@@ -399,3 +399,55 @@ One particle, one run per code, 1e4 turns at 360 steps (3.6e6 steps).
   exact invariant over 1e4 turns, bounded oscillation), like OPAL LF2; RK4 does not. One test, planar, one field,
   one amplitude: consistent with symplectic behaviour, not a proof. The LIONS oscillation of L is 14 times
   the LF2 one; not analysed.
+
+## 19. Case E results (decision gate)
+
+Run: `uv run --group bench --with torch python benchmarks/case_e.py`, outputs `case_e.parquet` and
+`case_e_cost.parquet` in `benchmarks/runs/case_e/`. torch 2.15.0, CPU, float64. Run twice: gradients identical,
+cost within 10% except the first 1e3-step checkpointed point (6.1 s, then 2.0 s).
+
+### Port
+Positions and momenta at every step of one turn equal LIONS within 1.5e-16 (A), 3.0e-16 (B0), 1.0e-15 (B)
+relative. Pass.
+
+### Gradients (autograd against central differences, registered steps)
+
+| Case | max relative difference, 360 steps | 3600 steps |
+|---|---|---|
+| A, uniform | 7.5e-5 | 1.5e-3 |
+| B0, smooth gradient | 2.8e-8 | 3.7e-8 |
+| B, 4-sector bilinear map | 2.3e-8 | 7.3e-3 |
+
+- B0: pass.
+- A: fails the 1e-6 criterion on d(phase)/d(pr0) and d(phase)/d(r0) only. These gradients are small
+  (3.0e-5 and 1.1e-3 at 360 steps: the uniform field is isochronous), and the round-off of a central difference
+  on a phase of 6.3 rad with h = 1e-7 is of order 3e-8 absolute. The sweep agrees: the difference falls as h grows
+  (1.7e-6 at h = 1e-4). Every other entry is within 1e-6. Reading, made after the run: the reference is noisy,
+  not the autograd value. A criterion mixing relative and absolute error would pass; it was not registered.
+- B: the prediction of section 17 failed in part. At 360 steps autograd and finite differences agree (2.3e-8).
+  At 3600 steps they differ by 1e-4 to 7e-3 for h from 1e-7 to 1e-4, and agree within 2e-8 for h of 1e-8 and 1e-9.
+  This fits the piecewise-C1 picture of section 15: autograd returns the local derivative of the discrete map;
+  finite differences with h above the spacing of the derivative jumps average over them. Example at 3600 steps:
+  dr/ds = -0.9824 (autograd) and -0.9897 (h = 1e-6). On a bilinear map, a gradient-based optimiser over
+  parameter changes above about 1e-7 sees a derivative that differs from the local one by up to 0.7% after 10 turns.
+
+### Cost (forward plus backward, peak RSS including about 0.4 GB of imports)
+
+| Steps | Particles | no checkpoint | checkpoint every sqrt(N) steps |
+|---|---|---|---|
+| 1e3 | 1 | 0.44 s, 0.42 GB | 2.0 s, 0.52 GB |
+| 1e3 | 1000 | 0.64 s, 0.94 GB | 2.2 s, 0.55 GB |
+| 1e4 | 1 | 4.9 s, 1.8 GB | 16 s, 2.2 GB |
+| 1e4 | 1000 | 8.1 s, 5.9 GB | 19 s, 2.3 GB |
+| 1e5 | 1 | skipped, 18 GB extrapolated | 184 s, 5.6 GB |
+| 1e5 | 1000 | skipped, 59 GB extrapolated | 212 s, 6.0 GB |
+
+- The memory guard (skip a configuration extrapolated past half the RAM) was added after registration.
+- Without checkpointing, memory is about 140 kB per step for one particle: the autograd graph of about 60 small
+  operations per step dominates, not the tensor data. Checkpointing helps with 1000 particles (5.9 to 2.3 GB at
+  1e4 steps) and not with one.
+- Time per step (forward, recompute, backward) is about 1.8 ms at 1e5 steps, set by Python dispatch of small
+  operations; 1000 particles cost little more than one. A compiled step (`torch.compile`, or JAX `lax.scan`)
+  is the obvious lever; not measured.
+- CIME scale for reference [UNVERIFIED for a CIME deck]: the step counts per turn and turn counts of a CIME run
+  set N; at 360 steps per turn, 1e5 steps is about 280 turns.
