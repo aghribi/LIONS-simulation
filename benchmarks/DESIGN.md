@@ -539,3 +539,25 @@ Case G1 implementation notes (before any tracking):
   LIONS takes -Bz (counterclockwise travel); d2Bz = 0, as in OPAL (no effect on linear tunes).
 - Environment: `benchmarks/g1_maps.py` is a uv script with pinned numpy 1.26.4 and scipy 1.13.1 (FROM_ORBIT uses
   `numpy.trapz`).
+
+## 22. Case E2 results (CPU, Apple GPU, A100; H100 pending)
+
+Runs: M3 CPU and MPS locally (`benchmarks/runs/case_e2_cpu`, `case_e2_mps`), A100 on Jean-Zay (job 1791641, image
+lions-sim-58392b29f72a, torch 2.15.0+cu132, code 501c88f). Median of 3 after a warm-up; plain LIONS timed on the CPU
+of the same node. Throughput ratio to plain LIONS on the same node:
+
+| Hardware | best float64, 1e3 particles | best float64, 1e5 particles | float32 compiled, 1e5 | compiled forward+backward, 1e3 |
+|---|---|---|---|---|
+| M3 CPU | 6.7 | 15.7 | 15.1 | 0.71 s |
+| Apple GPU (MPS) | no float64 | no float64 | 150 | fails (InductorError) |
+| A100 (Jean-Zay) | 5.0 | 267 | 267 | 2.49 s |
+
+- Go criterion (section 20): met. Compiled float64 reaches 267 times plain LIONS at 1e5 particles on the A100
+  (6.6e8 particle-steps/s), and 15.7 times on the M3 CPU. At 1e3 particles no device reaches 10.
+- A100 wall time is 0.52 to 0.55 s for 3600 steps whatever the particle count (1 to 1e5): launch-bound, so the
+  throughput keeps rising with the batch; 1e5 is not the ceiling.
+- float32 gives no speed gain on the A100 (same wall time) and loses accuracy: r 1.2e-5, phase 1.8e-4 rad after
+  10 turns against CPU float64, as on MPS; CPU float32 gives 1.3e-7. GPU float64 against CPU float64: 2e-14 in r,
+  1.6e-13 rad in phase, compiled or not.
+- Gradients at 1e3 particles are faster on the CPU (0.71 s) than on the A100 (2.49 s): small batches are latency-bound.
+- The plain LIONS baseline is 2.3 to 2.6 times slower on the Jean-Zay node than on the M3.
