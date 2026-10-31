@@ -29,6 +29,10 @@ docs = [
     "myst-parser>=3",
     "furo>=2024.1.29",
 ]
+gpu = [
+    "pyarrow>=25.0.1",
+    "torch>=2.15.0 ; python_full_version >= '3.11'",
+]
 
 [project.scripts]
 lions = "lions.cli:main"

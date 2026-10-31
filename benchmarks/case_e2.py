@@ -1,14 +1,14 @@
 """Case E2: speed spike of the case E PyTorch port against plain LIONS (DESIGN.md section 20). Throwaway.
 
-usage: uv run --group bench --with torch python benchmarks/case_e2.py [outdir]
-Writes case_e2.parquet.
+usage: uv run --group gpu python benchmarks/case_e2.py [outdir] [--device cpu|mps|cuda]
+Writes case_e2.parquet. MPS has no float64: only the float32 variants run there.
 """
+import argparse
 import contextlib
 import importlib.metadata
 import io
 import platform
 import statistics
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,20 +23,23 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 
 import lions  # noqa: E402
 import synthetic as syn  # noqa: E402
-from case_b import B0  # noqa: E402
+from provenance import provenance  # noqa: E402
+from fields_b import B0  # noqa: E402
 from case_e import W, Port, initial, load, write_case  # noqa: E402
 
 STEPS = 3600
 PARTICLES = [1, 1000, 100_000]
 BACKWARD_PARTICLES = 1000
 REPEATS = 3
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+DEVICE = 'cpu'
 
 
 def make_port(d, dtype, compiled):
     port = Port(d)
     port.maps = [m.to(DEVICE, dtype) for m in port.maps]
     if compiled:
+        # a fresh cache per variant: past the recompile limit dynamo falls back to eager without saying so
+        torch._dynamo.reset()
         port.step = torch.compile(port.step, dynamic=False)
     return port
 
@@ -51,6 +54,8 @@ def timed(fn):
     def sync():
         if DEVICE == 'cuda':
             torch.cuda.synchronize()
+        elif DEVICE == 'mps':
+            torch.mps.synchronize()
     t0 = time.perf_counter()
     fn()
     sync()
@@ -73,9 +78,8 @@ def lions_time(n):
 
 def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
-    commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                            text=True).stdout.strip()
-    records = []
+    records, inputs = [], []
+    dtypes = (torch.float32,) if DEVICE == 'mps' else (torch.float64, torch.float32)
 
     def add(code, dtype, compiled, mode, n, wall, first):
         records.append({'code': code, 'dtype': dtype, 'compiled': compiled, 'mode': mode, 'particles': n,
@@ -86,11 +90,12 @@ def main(outdir):
     work.mkdir(exist_ok=True)
     with contextlib.chdir(work):
         write_case('B')
+        inputs.append(work / 'bmap.dat')
         d = load(360)
         for n in PARTICLES:
             add('lions', 'float64', False, 'forward', n, *lions_time(n))
             print(f'lions {n} done', file=sys.stderr)
-        for dtype in (torch.float64, torch.float32):
+        for dtype in dtypes:
             for compiled in (False, True):
                 port = make_port(d, dtype, compiled)
                 name = str(dtype).removeprefix('torch.')
@@ -114,8 +119,11 @@ def main(outdir):
         cw.mkdir(exist_ok=True)
         with contextlib.chdir(cw):
             write_case(case)
+            inputs.append(cw / 'bmap.dat')
             d = load(360)
             out = {}
+            if DEVICE == 'mps':
+                continue    # no float64 reference on MPS
             for dtype, compiled in ((torch.float64, False), (torch.float64, True), (torch.float32, False)):
                 with torch.no_grad():
                     r, _, phase = make_port(d, dtype, compiled).run(start(d, BACKWARD_PARTICLES, dtype), 1.0, STEPS)
@@ -130,13 +138,19 @@ def main(outdir):
                                     'first_call_s': None, 'particle_steps_per_s': None, 'metric': metric,
                                     'value': value})
 
-    meta = {'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, device {DEVICE}',
+    device_name = {'cuda': lambda: torch.cuda.get_device_name(), 'mps': lambda: 'Apple GPU (MPS)',
+                   'cpu': lambda: platform.processor() or platform.machine()}[DEVICE]()
+    meta = {'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, device {DEVICE}', 'device_name': device_name,
             'torch': torch.__version__, 'lions': importlib.metadata.version('lions'),
             'cpu': platform.processor() or platform.machine(), 'repeats': str(REPEATS),
-            'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version()}
+            **provenance(*inputs), 'machine': platform.platform(), 'python': platform.python_version()}
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e2.parquet')
 
 
 if __name__ == '__main__':
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'benchmarks' / 'runs' / 'case_e2'
-    main(out.resolve())
+    parser = argparse.ArgumentParser()
+    parser.add_argument('outdir', nargs='?', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_e2')
+    parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
+    args = parser.parse_args()
+    DEVICE = args.device
+    main(args.outdir.resolve())

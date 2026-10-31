@@ -29,7 +29,8 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 
 import lions  # noqa: E402
 import synthetic as syn  # noqa: E402
-from case_b import B0, MAP, write_field  # noqa: E402
+from provenance import provenance  # noqa: E402
+from fields_b import B0, MAP, write_field  # noqa: E402
 
 torch.set_default_dtype(torch.float64)
 W, Z0 = 1.0, 1e-3                       # MeV, m
@@ -206,8 +207,6 @@ def cost_point(n, particles, ckpt):
 
 def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
-    commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                            text=True).stdout.strip()
     records, cost = [], []
     for case in ('A', 'B0', 'B'):
         work = outdir / case
@@ -224,7 +223,7 @@ def main(outdir):
         print(f'case {case} done', file=sys.stderr)
     meta = {'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
             'torch': torch.__version__, 'lions': importlib.metadata.version('lions'),
-            'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version()}
+            **provenance(), 'machine': platform.platform(), 'python': platform.python_version()}
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e.parquet')
     ram_mb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**20
     for n in COST_STEPS:

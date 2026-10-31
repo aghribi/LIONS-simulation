@@ -466,3 +466,13 @@ Question: can the PyTorch port of case E beat plain LIONS throughput by 10 times
   variant at least 10 times plain LIONS at 1e3 or 1e5 particles, on the hardware where it would run.
 - float32: maximum relative difference of r and absolute difference of phase against float64 after 3600 steps,
   cases B0 and B. Report only: its eligibility is judged later against the calibration needs.
+
+Amendments to section 20, before the reruns:
+- First CPU run (2026-10-31): the float32 compiled variant ran at eager speed with no compile time, and the
+  compiled-against-eager check gave exactly 0: torch fell back to eager after its recompile limit. Harness bug,
+  fixed by resetting the compiler cache per variant. Those numbers are discarded; the float64 rows are kept
+  for reference only and the CPU run is repeated.
+- Devices: `--device cpu|mps|cuda`. MPS runs the float32 variants only (no float64 on MPS), so it cannot meet the
+  go criterion; it is reported as a float32 throughput. The plain LIONS baseline runs on the CPU of the same node.
+- Sites: CC-IN2P3 (H100, V100) and Jean-Zay (A100 or H100), from the site clones in the container of
+  `environment/`; CRIANN when reachable.

@@ -6,7 +6,6 @@ Writes case_d.parquet. OPAL runs in Docker; outdir must be visible to Docker.
 import contextlib
 import importlib.metadata
 import platform
-import subprocess
 import sys
 from pathlib import Path
 
@@ -20,9 +19,11 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 
 import RF_Track as rft  # noqa: E402
 import synthetic as syn  # noqa: E402
+from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
 from case_a import opal_version  # noqa: E402
-from case_b import B0, K, R0, b_b0, exact_b0, lions_state, write_field  # noqa: E402
+from case_b import exact_b0, lions_state  # noqa: E402
+from fields_b import B0, K, R0, b_b0, write_field  # noqa: E402
 
 W = 1.0             # MeV
 STEPS = 360
@@ -52,8 +53,6 @@ def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {'lions': importlib.metadata.version('lions'), 'opal': opal_version(),
                 'rf_track': str(rft.RF_TRACK_VERSION)}
-    commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                            text=True).stdout.strip()
     records = []
 
     def add(code, integrator, values):
@@ -83,7 +82,7 @@ def main(outdir):
         'case': f'D2: B0 field Bz = {B0} (1 - {K} (r - {R0})) T, {W} MeV proton, r_eo + {OFFSET} m, z = 0, '
                 f'{TURNS} turns at {STEPS} steps per turn',
         'rf_track_tolerance': str(TOL),
-        'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version(),
+        **provenance(), 'machine': platform.platform(), 'python': platform.python_version(),
         **{f'version_{k}': v for k, v in versions.items()}})
     pq.write_table(table, outdir / 'case_d.parquet')
     return table

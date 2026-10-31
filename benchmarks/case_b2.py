@@ -6,7 +6,6 @@ Writes case_b2.parquet. OPAL runs in Docker; outdir must be visible to Docker.
 import contextlib
 import importlib.metadata
 import platform
-import subprocess
 import sys
 from pathlib import Path
 
@@ -23,9 +22,11 @@ import lions.apertures  # noqa: E402
 import lions.fields  # noqa: E402
 import RF_Track as rft  # noqa: E402
 import synthetic as syn  # noqa: E402
+from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
 from case_a import opal_version  # noqa: E402
-from case_b import B0, R0, EPS, ENERGIES, STEPS, MAP, lions_state, exact_b0, orbit_metrics  # noqa: E402
+from case_b import ENERGIES, STEPS, lions_state, exact_b0, orbit_metrics  # noqa: E402
+from fields_b import B0, R0, EPS, MAP  # noqa: E402
 
 K_GRADIENT = 0.5    # 1/m
 TOL = 1e-12
@@ -86,8 +87,6 @@ def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {'lions': importlib.metadata.version('lions'), 'opal': opal_version(),
                 'rf_track': str(rft.RF_TRACK_VERSION), 'exact': None}
-    commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                            text=True).stdout.strip()
     records = []
 
     def add(case, code, integrator, w, n, values):
@@ -131,7 +130,7 @@ def main(outdir):
                 f'B-smooth k = 0 (RF-Track, closed form), B-gradient k = {K_GRADIENT} /m',
         'map': f"r = {MAP['rmin']} to {MAP['rmax']} m, {MAP['nr']} rows, {NTHETA} columns over 360 deg",
         'rf_track_tolerance': str(TOL),
-        'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version(),
+        **provenance(), 'machine': platform.platform(), 'python': platform.python_version(),
         **{f'version_{k}': v for k, v in versions.items() if v is not None}})
     pq.write_table(table, outdir / 'case_b2.parquet')
     return table

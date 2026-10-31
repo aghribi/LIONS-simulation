@@ -7,7 +7,6 @@ import contextlib
 import importlib.metadata
 import io
 import platform
-import subprocess
 import sys
 from pathlib import Path
 
@@ -24,41 +23,17 @@ import lions.apertures  # noqa: E402
 import lions.fields  # noqa: E402
 import RF_Track as rft  # noqa: E402
 import synthetic as syn  # noqa: E402
+from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
 from case_a import opal_version  # noqa: E402
+from fields_b import B0, EPS, K, MAP, R0, b_b0, write_field  # noqa: E402
 
-B0 = -1.0                               # T, LIONS sign for protons
-K, R0 = 0.5, 0.15                       # 1/m, m: case B0 gradient
-EPS = 0.3                               # case B flutter
 ENERGIES = [1.0, 2.0, 3.0, 4.0, 5.0]    # MeV
 STEPS = [360, 720, 1440]
 RFT_TOLERANCES = [1e-9, 1e-12]
 NTHETA = {'B0': [361], 'B': [361, 721]}
-MAP = dict(rmin=0.05, rmax=0.6, nr=111)
 H = 1e-6                                # m, finite-difference step of the Jacobian
 FFT_TURNS, FFT_OFFSET = 256, 1e-4       # LIONS second tune instrument, case B0
-
-
-def bz_b0(r, t):
-    return B0 * (1 - K * (r - R0)) + 0 * t
-
-
-def write_field(case, ntet):
-    syn.write_pot_central('pot1.bin')
-    syn.write_pot_outer('pot2.dat')
-    if case == 'B0':
-        syn.write_bmap('bmap.dat', bz=bz_b0, dbzx=lambda r, t: -K * B0 * np.cos(t) + 0 * r,
-                       dbzy=lambda r, t: -K * B0 * np.sin(t) + 0 * r, ntet=ntet, **MAP)
-    else:
-        syn.write_bmap('bmap.dat', bz=lambda r, t: B0 * (1 + EPS * np.cos(4 * t)),
-                       dbzx=lambda r, t: 4 * EPS * B0 * np.sin(t) * np.sin(4 * t) / r,
-                       dbzy=lambda r, t: -4 * EPS * B0 * np.cos(t) * np.sin(4 * t) / r, ntet=ntet, **MAP)
-
-
-def b_b0(x, y, z):
-    """Case B0 field in the LIONS frame (m, T), first order in z."""
-    r = np.hypot(x, y)
-    return z * -K * B0 * x / r, z * -K * B0 * y / r, bz_b0(r, 0.0)
 
 
 def lions_state(w, n, nbrion=1):
@@ -125,8 +100,6 @@ def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {'lions': importlib.metadata.version('lions'), 'opal': opal_version(),
                 'rf_track': str(rft.RF_TRACK_VERSION), 'exact': None}
-    commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                            text=True).stdout.strip()
     records = []
 
     def add(case, ntet, code, integrator, tol, w, n, values):
@@ -178,7 +151,7 @@ def main(outdir):
                 'protons, theta = 0 section',
         'map': f"r = {MAP['rmin']} to {MAP['rmax']} m, {MAP['nr']} rows, 0 to 360 deg",
         'fd_step_m': str(H), 'fft_turns': str(FFT_TURNS), 'fft_offset_m': str(FFT_OFFSET),
-        'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version(),
+        **provenance(), 'machine': platform.platform(), 'python': platform.python_version(),
         **{f'version_{k}': v for k, v in versions.items() if v is not None}})
     pq.write_table(table, outdir / 'case_b.parquet')
     return table

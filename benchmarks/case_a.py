@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 
 import lions  # noqa: E402
 import synthetic as syn  # noqa: E402
+from provenance import provenance  # noqa: E402
 import convert  # noqa: E402
 
 OPAL_IMAGE = 'lions-bench/opal:2024.1.0'
@@ -174,8 +175,6 @@ def main(outdir):
     import RF_Track as rft
     versions = {'lions': importlib.metadata.version('lions'),
                 'opal': opal_version(), 'rf_track': str(rft.RF_TRACK_VERSION)}
-    commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                            text=True).stdout.strip()
     records = []
 
     def add(code, integrator, n, tol, m):
@@ -201,7 +200,7 @@ def main(outdir):
     table = pa.Table.from_pylist(records).replace_schema_metadata({
         'case': 'A: uniform Bz = -1 T, 1 MeV proton, one turn, no E',
         'units': 'value: dimensionless relative quantities (unit column)',
-        'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version(),
+        **provenance(), 'machine': platform.platform(), 'python': platform.python_version(),
         **{f'version_{k}': v for k, v in versions.items()}})
     pq.write_table(table, outdir / 'case_a.parquet')
     return table
