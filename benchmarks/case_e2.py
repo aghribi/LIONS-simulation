@@ -139,7 +139,7 @@ def main(outdir):
                 DEVICE = dev
                 with torch.no_grad():
                     r, _, phase = make_port(d, dtype, compiled).run(start(d, BACKWARD_PARTICLES, dtype), 1.0, STEPS)
-                out[(dev, dtype, compiled)] = r.double().cpu(), phase.double().cpu()
+                out[(dev, dtype, compiled)] = r.cpu().double(), phase.cpu().double()
             DEVICE = device
             ref_r, ref_phase = out[('cpu', torch.float64, False)]
             for (dev, dtype, compiled), (r, phase) in out.items():
