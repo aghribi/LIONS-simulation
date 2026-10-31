@@ -117,7 +117,7 @@ def main(outdir):
                     add(case, 'rf_track', 'rkf45', w, n, m)
                     if not run['lions_opal']:
                         continue
-                    lt = orbits.LionsTracker('.', w, B0, n)
+                    lt = orbits.LionsTracker('.', w, syn.revolution_frequency(w, B0), n)
                     s, m = orbit_metrics(lt.track, guess, p, rho)
                     add(case, 'lions', 'boris', w, n, m)
                     for integ in ('LF2', 'RK4'):

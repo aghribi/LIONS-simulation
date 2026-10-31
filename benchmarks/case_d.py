@@ -68,7 +68,7 @@ def main(outdir):
         f_rev = d.rf.frequency / d.rf.harmonic
         state = np.array([exact_b0(p, mass, charge)['r_eo'][0] + OFFSET, 0.0, 0.0, 0.0])
 
-        t, pos, mom = orbits.LionsTracker('.', W, B0, STEPS).track(state, TURNS)
+        t, pos, mom = orbits.LionsTracker('.', W, syn.revolution_frequency(W, B0), STEPS).track(state, TURNS)
         add('lions', 'boris', metrics(t, pos[:, 0], mom[:, 0], q_over_mc))
         print('lions done', file=sys.stderr)
         for integ in ('LF2', 'RK4'):

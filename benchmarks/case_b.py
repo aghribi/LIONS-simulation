@@ -133,7 +133,7 @@ def main(outdir):
                             add(case, ntet, 'rf_track', 'rkf45', tol, w, None,
                                 orbit_metrics(rt.track, guess, p, rho)[1])
                     for n in STEPS:
-                        lt = orbits.LionsTracker('.', w, B0, n)
+                        lt = orbits.LionsTracker('.', w, syn.revolution_frequency(w, B0), n)
                         s, m = orbit_metrics(lt.track, guess, p, rho)
                         if case == 'B0' and n == STEPS[-1]:
                             m |= fft_tunes(lt.track, s)

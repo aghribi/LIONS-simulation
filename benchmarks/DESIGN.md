@@ -587,3 +587,15 @@ samples per turn:
   conversion (sign, direction, theta origin) and the references agree.
 - FROM_ORBIT tunes are good to 2e-5 (Qr) and 2e-6 (Qz); the difference does not move with sampling, so it belongs
   to its tune formula. G1 references: the prescribed orbits and isochronism, and the RF-Track tunes on the spline.
+
+### G1 step 2: LIONS on the FROM_ORBIT 3-sector map (registered before running)
+- Map: the master nodes at 1/3, 1 and 4 deg (every 1, 3, 12 columns of the master), r 0.40 to 2.00 m by 1 cm,
+  360 deg with the endpoint; Bz = -B(FROM_ORBIT), dBz/dx and dBz/dy from the exact derivative grids, d2Bz = 0.
+- Particle: the FROM_ORBIT mass and charge (H2+, 2 x 938.272 MeV, charge 1), given to LIONS as an atomic mass
+  such that AMU (A - m_e q) c^2 equals it; RF frequency = f_rev of the references, harmonic 1.
+- Steps per turn: 360, 720, 1440. Orbits a = 0.14, 0.24, 0.35.
+- Metrics: closed-orbit r and pr at theta = 0 against the prescribed orbit; one-turn time against 1 / f_rev;
+  Qr, Qz against the RF-Track tunes of step 1 (2880 samples); det(M) - 1; spread across steps.
+- Prediction (from sections 13 to 15, stated before running): with the bilinear map, a step-dependent scatter;
+  at 1/3 deg, closed-orbit errors of 1e-6 or more and tune errors of 1e-4 to 1e-3. Much better than that means the
+  case B mechanism needs a second look.

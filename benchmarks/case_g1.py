@@ -1,10 +1,12 @@
 """Case G1: codes against FROM_ORBIT manufactured solutions (DESIGN.md section 21).
 
-usage: uv run --group bench python benchmarks/case_g1.py MASTER_DIR [outdir]
+usage: uv run --group bench python benchmarks/case_g1.py MASTER_DIR [--step 1|2] [--outroot DIR]
 MASTER_DIR holds master.h5 and truth.parquet from benchmarks/g1_maps.py.
-Step 1 (this script so far): precision of the references, RF-Track on a quintic spline of the exact map.
+Step 1: precision of the references, RF-Track on a quintic spline of the exact map.
+Step 2 (--step 2): LIONS on the bilinear map at several azimuthal spacings.
 """
 import argparse
+import contextlib
 import platform
 import sys
 from pathlib import Path
@@ -19,12 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
+import lions.constants as lc  # noqa: E402
 import RF_Track as rft  # noqa: E402
 import synthetic as syn  # noqa: E402
 import orbits  # noqa: E402
 from provenance import provenance  # noqa: E402
 
 SAMPLES = [1440, 2880]
+STEPS = [360, 720, 1440]
+EVERY = {1: '1/3 deg', 3: '1 deg', 12: '4 deg'}   # master columns per map column (3-sector master)
 TOL = 1e-12
 H = 1e-6            # m, finite-difference step of the Jacobian
 PAD = 5             # theta nodes wrapped on each side so the periodic spline has no edge
@@ -74,6 +79,74 @@ def interpolation_error(grids, attrs):
     return float(np.max(np.abs(approx / exact - 1)))
 
 
+def write_lions_map(grids, attrs, every):
+    """bmap.dat in the working directory: master nodes every `every` columns, full turn with the endpoint."""
+    n_sec, nth = int(attrs['sector_count']), grids['bz'].shape[1]
+    if nth % every:
+        raise ValueError(f'{nth} master columns per sector are not a multiple of {every}')
+    ntet = n_sec * nth // every + 1
+    cols = (np.arange(ntet) * every) % nth
+    th = attrs['theta_step_rad'] * every * np.arange(ntet)
+    r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])
+    bz, dr, dt = (-grids[k][:, cols] for k in ('bz', 'dbz_dr', 'dbz_dtheta'))
+    dbzx = np.cos(th) * dr - np.sin(th) / r[:, None] * dt
+    dbzy = np.sin(th) * dr + np.cos(th) / r[:, None] * dt
+    syn.write_pot_central('pot1.bin')
+    syn.write_pot_outer('pot2.dat')
+    syn.write_bmap('bmap.dat', bz=lambda *_: bz, dbzx=lambda *_: dbzx, dbzy=lambda *_: dbzy,
+                   rmin=r[0], rmax=r[-1], nr=len(r), ntet=ntet)
+    return ntet
+
+
+def lions_species(mass_ev, charge):
+    """(atomic mass, mass number, charge) whose LIONS ion mass AMU (A - m_e q) is mass_ev."""
+    atomic_mass = mass_ev * lc.E_CHARGE / (lc.AMU * lc.C_LIGHT**2) + lc.ELECTRON_MASS_U * charge
+    return atomic_mass, round(atomic_mass), charge
+
+
+def step2(master_dir, outdir):
+    grids, attrs = load_master(master_dir / 'master.h5')
+    truth = pq.read_table(master_dir / 'truth.parquet').to_pylist()
+    ref = pq.read_table(outdir.parent / 'step1' / 'case_g1_step1.parquet').to_pylist()
+    q_rft = {(r['a'], r['metric']): r['value'] for r in ref if r['samples'] == max(SAMPLES)}
+    species = lions_species(float(attrs['mass_ev']), float(attrs['charge_e']))
+    records = []
+    for every, label in EVERY.items():
+        work = outdir / f'map_every{every}'
+        work.mkdir(parents=True, exist_ok=True)
+        with contextlib.chdir(work):
+            ntet = write_lions_map(grids, attrs, every)
+        for t in truth:
+            p = np.sqrt(t['gamma']**2 - 1)
+            r0, pr0 = t['r_theta0_m'], p * t['pr_over_p_theta0']
+            q_true = [np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi) for q in (t['qr'], t['qz'])]
+            q_ref = [q_true[0] + q_rft[(t['a'], 'qr_error')], q_true[1] + q_rft[(t['a'], 'qz_error')]]
+            w = t['ek_mev'] / species[1]
+            for n in STEPS:
+                lt = orbits.LionsTracker(work, w, t['f_rev_hz'], n, species)
+                s, res = orbits.closed_orbit(lt.track, (r0, pr0))
+                m = orbits.jacobian(lt.track, s, H, H * p / r0)
+                qr, qz = orbits.linear_tunes(m)
+                tt, pos, mom = lt.track(np.array([s]), 2.2)
+                cross = orbits.crossings(tt, pos[:, 0], mom[:, 0])
+                values = {'r_eo_rel_error': (s[0] / r0 - 1, '1'), 'pr_eo_error_over_p': ((s[1] - pr0) / p, '1'),
+                          'turn_time_rel_error': ((cross[1, 0] - cross[0, 0]) * t['f_rev_hz'] - 1, '1'),
+                          'qr_error': (qr - q_ref[0], '1'), 'qz_error': (qz - q_ref[1], '1'),
+                          'det_error': (orbits.symplectic_error(m)[1], '1'), 'residual': (res, 'm')}
+                for k, (v, u) in values.items():
+                    records.append({'map': label, 'map_columns': ntet, 'a': t['a'], 'steps_per_turn': n,
+                                    'metric': k, 'value': float(v), 'unit': u})
+                print(f"{label} a={t['a']} n={n} " + ' '.join(f'{k}={v[0]:+.2e}' for k, v in values.items()),
+                      file=sys.stderr)
+    meta = {'case': 'G1 step 2: LIONS on the bilinear FROM_ORBIT map', 'master': str(master_dir),
+            **{f'master_{k}': str(v) for k, v in attrs.items()}, 'species': repr(species), 'fd_step_m': str(H),
+            'tune_reference': f'RF-Track step 1, {max(SAMPLES)} samples per turn',
+            **provenance(master_dir / 'master.h5', master_dir / 'truth.parquet',
+                         outdir.parent / 'step1' / 'case_g1_step1.parquet'),
+            'machine': platform.platform(), 'python': platform.python_version()}
+    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g1_step2.parquet')
+
+
 def main(master_dir, outdir):
     outdir.mkdir(parents=True, exist_ok=True)
     grids, attrs = load_master(master_dir / 'master.h5')
@@ -118,6 +191,8 @@ def main(master_dir, outdir):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('master_dir', type=Path)
-    parser.add_argument('outdir', nargs='?', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g1' / 'step1')
+    parser.add_argument('--step', type=int, choices=(1, 2), default=1)
+    parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g1')
     args = parser.parse_args()
-    main(args.master_dir.resolve(), args.outdir.resolve())
+    out = args.outroot.resolve() / f'step{args.step}'
+    (main if args.step == 1 else step2)(args.master_dir.resolve(), out)

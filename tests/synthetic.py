@@ -103,8 +103,10 @@ def write_pot_outer(path, pot=None, xmin=-1.0, xmax=1.0, ymin=-1.0, ymax=1.0, nx
 
 def write_deck(path, *, fhf, r0, w0, npaspt=360, turns=10, v_dee=0.0, teta1=20.0,
                harm=1.0, z0=0.0, pr0=0.0, pz0=0.0, phi0=0.0, rmax1=0.0001, nbrion=1,
-               extraction=('1 0 0 0',), correlations=('0',), tail=()):
-    """Proton deck, one family. Outputs z.out, xy.out.
+               extraction=('1 0 0 0',), correlations=('0',), tail=(), species=(HYDROGEN, 1, 1)):
+    """One-family deck, protons by default. Outputs z.out, xy.out.
+
+    species: (atomic mass in u, mass number, charge state).
 
     extraction, correlations: raw deck lines from 'rex tet1ex tet2ex eex' and from 'iflcor'.
     """
@@ -112,7 +114,7 @@ def write_deck(path, *, fhf, r0, w0, npaspt=360, turns=10, v_dee=0.0, teta1=20.0
         "'synthetic'", f'{npaspt}', f'0.25 {turns}',
         f'{fhf:.17g} {-v_dee:.17g} {teta1} {harm} 0.0', '0 0', f'{v_dee:.17g} {v_dee:.17g}',
         '0', '0', f'-0.1 0.1 {rmax1}', *extraction, '1',
-        f'{nbrion} {HYDROGEN} 1 1', f'{r0:.17g} 0 {z0:.17g} {pr0:.17g} {pz0:.17g} {w0:.17g} {phi0:.17g}',
+        f'{nbrion} {species[0]} {species[1]} {species[2]}', f'{r0:.17g} 0 {z0:.17g} {pr0:.17g} {pz0:.17g} {w0:.17g} {phi0:.17g}',
         *correlations, f'{turns * npaspt} {npaspt}', 'z.out xy.out',
         "'bmap.dat' 'pot1.bin' 'pot2.dat'",
         *tail,
