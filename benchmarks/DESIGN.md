@@ -73,11 +73,19 @@ No quantitative CIME requirement was found (repo, iRIS project folder; the ag-ra
   - adaptive codes (RF-Track `rkf45`, `rk2`): error at or below the requested tolerance.
 - Correction made before any run: the first draft asked for 1e-8 at 1440 steps, which a second-order integrator cannot reach (2.4e-6 expected).
 ### B. Synthetic 4-sector static field (equilibrium orbits, tunes)
-- Field: Bz = B0 (1 + eps cos 4 theta), analytic derivatives, d2Bz = 0.
-- Metrics: equilibrium orbit radius at theta = 0, Qr and Qz, at 5 energies.
-- Method: two-particle method (reference on the equilibrium orbit, one offset by 1e-4 m in r or z), FFT of the offset over 200 turns; OPAL tune mode as a second instrument.
-- Success: |Delta Q| < 1e-4 between codes at the converged step; equilibrium radius within 1e-6 relative.
-
+- Field: Bz = B0 (1 + eps cos 4 theta), B0 = -1 T (LIONS sign for protons), eps = 0.3, d2Bz = 0;
+  analytic dBz/dx, dBz/dy for LIONS. Map: r = 0.05 to 0.6 m, dr = 5 mm, 1 deg.
+  eps = 0.3 gives a flutter of eps^2 / 2 = 0.045, so Qz of order 0.2 with no radial gradient.
+- Energies: 1, 2, 3, 4, 5 MeV protons (rho from 0.14 to 0.32 m at 1 T).
+- Section: theta = 0 (y = 0, x > 0). State at the section from 4-point Lagrange interpolation in time of
+  full-step positions and momenta (LIONS momenta are at half steps: the full-step value is the mean of
+  the two neighbours).
+- Equilibrium orbit: Newton on (r, pr) at the section, one-turn map, finite-difference Jacobian.
+- Tunes: particles offset by 1e-4 m in r or in z from the equilibrium orbit, 256 turns; the frequency of
+  the Hann-windowed turn-by-turn signal, refined by maximising the windowed DFT (golden section).
+  OPAL tune mode as a second instrument if its output can be read.
+- Steps per turn: 360, 720, 1440; the comparison uses 1440 and the convergence across the three.
+- Success: |Delta Q| < 1e-4 between codes at 1440 steps; equilibrium radius within 1e-6 relative.
 ### C. Acceleration through two dees (gap model)
 - Field: case A or B plus two tanh gaps (left and right dee), V_dee set per dee.
 - Metrics: energy gain per turn, RF phase per turn (phase slip), orbit centre drift, over 50 turns.
@@ -148,3 +156,23 @@ Against the criteria of section 5:
 Amendments, made after seeing the first results (a new analysis, not a pass/fail change):
 - Added the phase metric: the radius metric is blind for LF2. The phase lag of LIONS Boris and OPAL LF2 matches (n - 1)(w dt - 2 atan(w dt / 2)) / (2 pi), 2.54e-5 at 360 steps.
 - Harness bug found and fixed before tabulating: `on_step` also runs at step 0, so the first LIONS run recorded n + 1 points; it showed as a first-order phase error.
+
+## 11. Case B, exploratory runs (not the registered analysis)
+
+1 MeV proton, 4-sector field on the 1 deg x 5 mm map, closed orbit at the theta = 0 section.
+
+| Code | 360 steps | 720 | 1440 |
+|---|---|---|---|
+| LIONS Boris, r_eo [m] | 0.1467722813 | 0.1467734041 | 0.1467638793 |
+| OPAL RK4, r_eo [m] | 0.1467728119 | 0.1467604137 | 0.1467624669 |
+| LIONS, det(M_rr) - 1 | -6.6e-5 | +2.8e-4 | +2.6e-5 |
+| LIONS, det(M_zz) - 1 | +5.4e-9 | +6.9e-10 | -1.8e-10 |
+
+- Neither code converges smoothly in dt; RK4 does not show order 4. The radial one-turn map has det errors of 1e-5 to 3e-4 that do not shrink with dt; the vertical block is clean.
+- Competing explanations: (H1) the bilinear interpolation in theta makes Bz continuous with kinks every map column, and the step grid aliases with the map grid; (H2) an error in the benchmark harness; (H3) an error in the codes.
+- Discriminating run: Bz = B0 (1 - 0.5 (r - 0.15)), linear in r and constant in theta, so bilinear interpolation is exact and the field is smooth. Closed orbit known in closed form (p / q = |B0| r (1 - 0.5 (r - 0.15))).
+  LIONS: r_eo error +4.13e-5, +1.03e-5, +2.58e-6 (order 2.00); det(M_rr) - 1 = -1.0e-7, -1.1e-8, -1.2e-9; Qr = 0.96341, Qz = 0.26803, both matching sqrt(1 - n) and sqrt(n) for n = 0.0718.
+  This rules out H2 for LIONS and supports H1. H3 is not tested for OPAL on the smooth field yet.
+- Consequence: a 1e-6 orbit tolerance is out of reach on a bilinear 1 deg map for any integrator, and one-turn Jacobians straddle kinks. The same holds for gradients in case E.
+- Harness bugs found on the way and fixed: the radius array used by `compute_fields` was stale in the harness (it is refreshed by `check_box`); full-step momenta are now a half Boris kick of p(k - 1/2), the exact inverse of the start, so the recorded map is conjugate to the Boris map.
+- LIONS bug found on the way, fixed in its own commit: theta = 2 pi exactly for y < 0 with x / r rounding to 1, one column past the map (IndexError on 721-column maps).
