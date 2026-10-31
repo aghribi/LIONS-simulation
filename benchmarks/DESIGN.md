@@ -298,3 +298,35 @@ parity check, written for 1e-13 T on all components, failed at 4.9e-5 T).
   same size as in case B at the same energy, so the spread itself falls by the ratio of det(M_rr - I).
   A spread that does not fall rejects H4 as the amplifier. det(M) - 1 is reported; neither hypothesis
   predicts a change.
+
+## 15. Case B discriminating runs, results
+
+Run: `uv run --group bench python benchmarks/case_b2.py`, output `benchmarks/runs/case_b2/case_b2.parquet`.
+Field parity at the map nodes: Bz within 1.1e-15 T, Bx and By at 0.92 of the bound.
+
+### B-smooth (RF-Track, closed form, 1 MeV, Qr fractional 0.0060 as in case B)
+- Spread across sampling (360, 720, 1440): r_eo 1.9e-9 m, Qr 2.0e-7, Qz 2.8e-10. det(M) - 1: 1.0e-7, 1.2e-8, 9.0e-10.
+- Against the registered thresholds: Qr passes; r_eo is 1.9e-9 m against 1e-9 m; det(M) - 1 passes at 1440
+  only and falls with the sampling (the section interpolation). The scatter is 4 orders of magnitude below
+  LIONS and OPAL on the map (1e-5 m, 1e-3 in Qr) with the same near-integer tune.
+
+### B-gradient (Qr fractional 0.03 to 0.10, det(M_rr - I) 0.037 to 0.40, 26 to 280 times case B)
+- RF-Track: r_eo spread 4e-11 to 1.7e-9 m, Qr spread below 1.8e-7, det(M) - 1 at 1440 steps 1e-9 to 1e-8.
+- LIONS: r_eo spread 1.4e-6 to 1.7e-5 m (case B: 9.5e-6 to 2.1e-5 m), Qr spread 2e-4 to 2.5e-3.
+  OPAL LF2: 7.7e-7 to 1.1e-5 m; RK4: 3.0e-7 to 2.1e-6 m. det(M) - 1 from 8e-6 to 1.4e-2 for the map codes.
+- Spread times det(M_rr - I): case B 1.3e-8 to 6.2e-8 m; B-gradient 8e-8 to 6.6e-6 m. Not the same size.
+  The spread falls by 1.3 (LIONS) to 55 (OPAL RK4), short of the conditioning ratio.
+
+### Reading
+- H4 (near-integer tune as the amplifier) is rejected by its own prediction: the spread does not follow the
+  conditioning, and RF-Track is clean at the same near-integer tune.
+- The map is the source: same field, same harness, same tunes, clean without the map and scattered with it.
+  H1' (kinks at any spacing) is consistent with all observations so far; it is not shown directly.
+  A candidate mechanism, not tested: with kinks, the discrete one-turn map is only piecewise C1 in the initial
+  conditions (its derivative jumps each time a step point crosses a kink line), so finite-difference Jacobians
+  and Newton iterations see noise at every step size and h. This is the same reason AD gradients on the
+  bilinear map are expected to disagree with finite differences in case E.
+- What would change this: a smooth (bicubic or spline) map interpolation in LIONS giving a clean B-gradient
+  run. That changes LIONS results; it stays a decision for the user and O. Kamalou.
+- Map bias against the closed form (1 deg, 5 mm), B-gradient: Qz low by 4e-5 to 6e-5 in all three map codes; Qr differs
+  by up to 1e-3 at 1440 steps.
