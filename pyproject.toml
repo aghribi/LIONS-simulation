@@ -17,6 +17,10 @@ dependencies = [
 gl = ["PyOpenGL>=3.1", "PyQtWebEngine>=5.15", "plotly>=5"]
 
 [dependency-groups]
+bench = [
+    "pyarrow>=25.0.1",
+    "rf-track>=2.7.4",
+]
 dev = [
     "pytest>=9.2.0",
 ]
