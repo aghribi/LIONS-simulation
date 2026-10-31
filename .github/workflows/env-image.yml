@@ -3,7 +3,7 @@
 name: env-image
 on:
   push:
-    paths: [environment/**, pyproject.toml, uv.lock, tools/env-hash, .github/workflows/env-image.yml]
+    paths: [environment/**, tools/env-hash, .github/workflows/env-image.yml]
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,5 +1,5 @@
 #!/bin/sh
-# env-hash: 12-character hash of the image recipe (Dockerfile, pyproject.toml, uv.lock): the image tag.
+# env-hash: 12-character hash of the image recipe (Dockerfile, requirements.gpu.txt): the image tag.
 root="$(cd "$(dirname "$0")/.." && pwd)"
 if command -v sha256sum >/dev/null; then sum="sha256sum"; else sum="shasum -a 256"; fi
-cat "$root/environment/Dockerfile" "$root/pyproject.toml" "$root/uv.lock" | $sum | cut -c1-12
+cat "$root/environment/Dockerfile" "$root/environment/requirements.gpu.txt" | $sum | cut -c1-12
