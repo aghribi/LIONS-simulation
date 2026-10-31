@@ -482,3 +482,47 @@ Amendments to section 20, before the reruns:
   for CPU float32.
 - V100 excluded: torch 2.15.0+cu132 has no kernels for sm_70 ("no kernel image is available", CC gpu_v100, job
   62922802). GPU runs: CC H100 and Jean-Zay A100.
+
+## 21. Case G: benchmarks on external machine maps (approved 2026-10-31)
+
+Questions: (G1) how large is the map-interpolation error of LIONS against an exact answer, and does a smooth
+interpolation remove the noise floor of section 15? (G2) do LIONS closed orbits and tunes on a real machine agree
+with an independent code (FIXPO) as well as OPAL does?
+
+Sources (fetched into the git-ignored `benchmarks/external/`, pinned, sha256 recorded in each run):
+- FROM_ORBIT, TRIUMF, GPL-3.0, gitlab.triumf.ca/tplanche/from-orbit at d338aa4. Generates isochronous median-plane
+  maps from prescribed closed-orbit shapes and computes the tunes from the orbit geometry. Map generation uses its
+  core module only (numpy, scipy, ndsplines); CYCLOPS, closed source, is not needed. Isolated environment (it imports
+  `numpy.trapz`, absent from recent numpy).
+- PSI Ring 590 MeV, OPALX-project.github.io at 7ed8895, `Examples/Cyclotron/`: map S03AV (TYPE RING: per radius,
+  Bz and three azimuthal derivatives; r 1900 to 4700 mm by 20 mm, 45 deg sector by 1/3 deg, 8-fold), FIXPO static
+  equilibrium orbits `ic.dat` (E, r, pr; 72 to 530 MeV by 2 MeV) and tunes `refsol.dat`. No licence: internal use
+  only, never committed or redistributed without PSI's permission.
+
+### G1. Manufactured solutions (FROM_ORBIT)
+- Maps: the published 3-sector (ideal) and 10-sector examples, whose tunes are published against CYCLOPS
+  tracking (Cyclotrons 2019 FRB01 and later). A 4-sector, CIME-like variant only afterwards, labelled as our own
+  construction, if the published cases behave.
+- Truth: the prescribed closed-orbit shapes r(theta) and constant revolution frequency (isochronism) at each
+  orbit; FROM_ORBIT geometric tunes. The fidelity of the geometric tunes is checked first with RF-Track on a
+  smooth (spline) interpolation of the generated map; that check sets the usable precision of the truth.
+- Variables: map spacing in theta (LIONS limit 721 columns), interpolation (LIONS bilinear as it is; bicubic in
+  the benchmark harness only, LIONS unchanged), steps per turn.
+- Metrics: closed-orbit radius error against r(theta) at theta = 0, revolution-frequency deviation, Qr and Qz
+  against the truth, det(M) - 1, spread across steps.
+- Codes: LIONS, OPAL (CARBONCYCL), RF-Track (spline interpolation, reference).
+
+### G2. PSI Ring against FIXPO
+- Conversion: RING format to a full 360 deg LIONS map (Bz, d2Bz/dr2, dBz/dx, dBz/dy) by 8-fold replication at
+  the native 1/3 deg (1081 columns: the LIONS map limit is raised, no resampling), and to OPAL (native RING reader).
+  Radial derivatives from the map by a stated scheme; azimuthal derivatives from the file.
+- Energies: the 230 FIXPO energies for LIONS; every 20 MeV for OPAL and RF-Track.
+- Metrics: equilibrium-orbit r and pr at the FIXPO reference azimuth, Qr and Qz, against FIXPO.
+- Criterion: LIONS minus FIXPO no larger than OPAL minus FIXPO plus the interpolation floor measured in G1.
+- Unknowns to settle from the files before running: the azimuth of the FIXPO orbits, map units (kG implied by
+  the OPAL reader), whether trim coil TC1 is in the FIXPO data.
+
+- PSI files: internal benchmarks only; A. Ghribi asks PSI colleagues for permission to redistribute.
+
+### Out of scope here
+Acceleration in the PSI Ring (RF cavities): it needs the gap model of case C. Later.

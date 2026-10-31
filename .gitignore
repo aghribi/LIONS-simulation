@@ -35,3 +35,4 @@ benchmarks/runs/
 sites/.site
 sites/*.local.env
 jobs/logs/
+benchmarks/external/
