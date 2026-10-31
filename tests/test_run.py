@@ -75,7 +75,7 @@ def test_on_step_stops_and_closes_files(workdir):
     assert not d.outputs.open
 
 
-@pytest.mark.parametrize('ntet', [361, 721])
+@pytest.mark.parametrize('ntet', [361, 721, 1081])
 def test_field_just_below_the_x_axis(workdir, ntet):
     """theta = 2 pi - arccos(1) = 2 pi for a tiny negative y must read map column 0, not ntet."""
     syn.write_bmap('bmap.dat', lambda r, t: -1.0 - 0.1 * np.sin(t), ntet=ntet)

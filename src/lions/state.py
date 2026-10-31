@@ -13,7 +13,9 @@ import numpy as np
 # neighbours up to i + 2 and j + 1, and the zero padding is part of the results.
 CENTRAL_NX, CENTRAL_NY = 500, 300
 OUTER_NX, OUTER_NY = 50, 1000
-MAP_NR, MAP_NTHETA = 250, 721
+# MAP_NTHETA is above the Fortran 721 so that 1/3 deg full maps (1081 columns, PSI Ring) fit; smaller maps
+# read the same values, the extra columns are padding.
+MAP_NR, MAP_NTHETA = 250, 1081
 MAX_BIDIMS = 10
 MAX_BARY = 10800
 
