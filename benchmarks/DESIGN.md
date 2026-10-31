@@ -273,3 +273,28 @@ Unexplained:
   - Neither explains the det(M) - 1 of 1e-4 alone; B0 gives 1e-9 with the same harness.
 - Discriminating runs, not registered yet: RF-Track on the closed-form 4-sector field (no map, no kinks); the same
   4-sector field with a radial gradient that moves Qr away from 1.
+
+## 14. Case B discriminating runs (registered before running)
+
+Field family: Bz = B0 g(r) f(theta), g = 1 - k (r - r0), f = 1 + eps cos 4 theta, B0 = -1 T, r0 = 0.15 m, eps = 0.3.
+Off the plane, first order in z: dBz/dx = B0 (-k f cos theta + 4 eps g sin 4 theta sin theta / r),
+dBz/dy = B0 (-k f sin theta - 4 eps g sin 4 theta cos theta / r) (k = 0 gives the case B expressions).
+RF-Track uses the closed form; parity with LIONS is checked at the map nodes in theta, random r, z up to 5 mm:
+Bz within 1e-13 T (exact there); Bx, By within the linear-in-r interpolation error of g(r) / r,
+|z| dr^2 eps |B0| (1 + k r0) / r_i^3 with r_i the inner node of the cell (derived here; found when the first
+parity check, written for 1e-13 T on all components, failed at 4.9e-5 T).
+
+### B-smooth: no map
+- RF-Track `rkf45`, tolerance 1e-12, closed-form field with k = 0, 1 MeV only (the energies of case B are
+  scaled copies), sampling at 360, 720, 1440 points per turn.
+- If the map kinks are the source of the scatter (H1'), RF-Track shows none: r_eo spread across sampling
+  below 1e-9 m, Qr spread below 1e-6, det(M) - 1 below 1e-8. LIONS-like scatter (above 1e-6 m) rejects H1'
+  and points at the harness or at the conditioning alone.
+
+### B-gradient: Qr away from 1
+- k = 0.5 /m, same map grid as case B (bilinear in r exact, kinks in theta kept). Energies 1 to 5 MeV.
+  LIONS Boris, OPAL LF2 and RK4 at 360, 720, 1440 steps; RF-Track `rkf45` at 1e-12 with the same sampling.
+- If the near-integer tune is the amplifier (H4), the r_eo spread across steps times det(M_rr - I) is of the
+  same size as in case B at the same energy, so the spread itself falls by the ratio of det(M_rr - I).
+  A spread that does not fall rejects H4 as the amplifier. det(M) - 1 is reported; neither hypothesis
+  predicts a change.
