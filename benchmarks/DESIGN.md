@@ -449,5 +449,5 @@ relative. Pass.
 - Time per step (forward, recompute, backward) is about 1.8 ms at 1e5 steps, set by Python dispatch of small
   operations; 1000 particles cost little more than one. A compiled step (`torch.compile`, or JAX `lax.scan`)
   is the obvious lever; not measured.
-- CIME scale for reference [UNVERIFIED for a CIME deck]: the step counts per turn and turn counts of a CIME run
-  set N; at 360 steps per turn, 1e5 steps is about 280 turns.
+- Scale: 1e5 steps at 360 steps per turn is about 280 turns. The steps per turn and turn count of the CIME deck
+  are not checked here.
