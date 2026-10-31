@@ -220,3 +220,56 @@ Already seen before this registration: the LIONS B0 values at 1 MeV in section 1
 - Map spacing study, LIONS only: 1 deg (361 columns) and 0.5 deg (721 columns, the LIONS maximum), 5 mm radial.
   Prediction of H1: the spread across steps falls with the azimuthal spacing, by about 4 from 1 deg to 0.5 deg
   if it follows the O(dtheta^2) interpolation error. A spread that does not fall weakens H1.
+
+## 13. Case B0 and B results
+
+Run: `uv run --group bench python benchmarks/case_b.py`, output `benchmarks/runs/case_b/case_b.parquet`.
+Deterministic single particles, one instrument per code (two for LIONS tunes). Errors relative to the exact values.
+
+### B0
+Field parity: Bz within 3.3e-16 T, Bx and By within 8.1e-8 T (bound 9.5e-8 T).
+
+| Code | r_eo error 360 / 720 / 1440 (1 to 5 MeV) | order | Richardson | Qr, Qz error at 1440 |
+|---|---|---|---|---|
+| LIONS Boris | 3.8e-5 to 4.1e-5 / 9.5e-6 to 1.0e-5 / 2.4e-6 to 2.6e-6 | 2.000 | 1.5e-11 to 2.9e-11 | 2e-8, -3.2e-6 to -5.3e-6 |
+| OPAL LF2 | 3.0e-6 to 7.7e-6 / 7.6e-7 to 1.9e-6 / 2.1e-7 to 5.0e-7 | 1.88 to 2.12 | -3.0e-8 to +2.8e-8 | 2e-8, 1.8e-7 to 4.2e-7 |
+| OPAL RK4 | constant in steps: +2.2e-8, -2.9e-8, -3.0e-8, +2.8e-8, +1.6e-8 | n/a | same as LF2 | 3e-9, 7e-9 |
+| RF-Track rkf45 | -1.8e-12 to -3.3e-12 | | | 6e-10, 6e-13 |
+
+Against the criteria of section 12:
+- Order: LIONS and OPAL LF2 pass. OPAL RK4 fails by the letter: its error does not change with the step
+  (changes of 3e-10 between 360 and 1440), so no order can be measured above the 1e-10 threshold.
+- Richardson within 1e-7: pass for all fixed-step codes.
+- Tunes within 1e-4 at 1440 steps: pass for all. LIONS Qz is low by 3e-6 to 5e-6, consistent with the
+  chord estimate of section 12.
+- RF-Track at 1e-12: r_eo within 3.3e-12, tunes within 6e-10. Pass. Tolerances 1e-9 and 1e-12 give identical
+  numbers: the integrator step is capped by the sampling interval (period / 1440), where the local error is
+  already below 1e-12.
+- LIONS FFT tunes against Jacobian tunes: within 3e-7. Pass.
+
+Unexplained:
+- OPAL carries an energy-dependent offset of 1.6e-8 to 3.0e-8 in r_eo, the same in LF2 and RK4, with changing sign.
+  It is the RK4 error and the LF2 Richardson residual. Single-precision field storage is ruled out (`BfieldData`
+  holds doubles, OPAL-2024.1.0 source). Not tested: input parsing of RINIT/PRINIT, the internal
+  dBz/dr evaluation, the momentum conversion.
+- OPAL LF2 errors are 5 to 14 times smaller than LIONS Boris and grow with energy, where LIONS decreases.
+  Both are second order. Kick-drift-kick and drift-kick-drift differ at O(dt^2); not analysed further.
+
+### B (report only)
+- The field does not depend on r, so orbits at different energies are scaled copies: Qr, Qz and det(M) - 1
+  are the same at all energies for a given code and step count (observed). The five energies add no information.
+- Fractional Qr is 0.005 to 0.007 (Qr close to 1). Spread across steps per code: r_eo 1e-5 to 5e-5 m, Qr 1.1e-3
+  to 1.7e-3, Qz 5e-5 (Boris, LF2) and 1e-6 (RK4). Spread across codes at 1440 steps: r_eo 2e-6 to 4e-6 m,
+  Qr 5e-4 to 9e-4. det(M) - 1 from 3e-5 to 6e-4, no trend with steps.
+- Map spacing (LIONS): the spread across steps at 0.5 deg over the spread at 1 deg is 1.5 for r_eo and 0.93 to 1.03
+  for Qr and Qz. H1 predicted about 0.25. The prediction failed: the step-to-step scatter is not set by the
+  azimuthal map spacing, so H1 as stated is weakened.
+- Rival explanations still open:
+  - (H4) conditioning: with Qr close to 1, the closed-orbit Newton matrix M - I has det of about
+    (2 pi 0.006)^2 = 1.4e-3, so map errors of 1e-8 become orbit errors of 1e-5, and the trace gives
+    dQ = d(trace) / (4 pi sin 2 pi Q), an amplification of about 2 at Q = 0.006.
+  - (H1') kinks in theta at any spacing: a second-order integrator crossing derivative jumps; finer maps give more,
+    smaller kinks, and the total need not fall.
+  - Neither explains the det(M) - 1 of 1e-4 alone; B0 gives 1e-9 with the same harness.
+- Discriminating runs, not registered yet: RF-Track on the closed-form 4-sector field (no map, no kinks); the same
+  4-sector field with a radial gradient that moves Qr away from 1.
