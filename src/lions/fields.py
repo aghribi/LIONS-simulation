@@ -148,6 +148,8 @@ def compute_fields(d):
     d.bunch.theta[mask_lem1] = np.arccos(-1.0)
     mask_yneg = d.bunch.y < 0.0
     d.bunch.theta[mask_yneg] = 2.0 * np.pi - d.bunch.theta[mask_yneg]
+    # y < 0 with x / r rounding to 1 gives exactly 2 pi, one column past the map
+    d.bunch.theta[d.bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
 
     ivec[:] = 0
     jvec[:] = 0
@@ -409,6 +411,7 @@ def compute_bfield(bunch, field):
     vecz = np.zeros(bunch.n_particles)
     bunch.theta = np.arccos(np.clip(bunch.x / bunch.r, -1.0, 1.0))
     bunch.theta[bunch.y < 0.0] = 2.0 * np.pi - bunch.theta[bunch.y < 0.0]
+    bunch.theta[bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
 
     mask = bunch.in_box
     ivec[mask] = ((bunch.r[mask] - field.rmin) / field.dr).astype(np.int32)

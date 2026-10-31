@@ -1,10 +1,15 @@
 """lions.run on a uniform magnetic field with zero electric fields (1 MeV proton)."""
+import contextlib
+import io
 import os
 
 import numpy as np
 import pytest
 
+import lions
 import synthetic as syn
+from lions.apertures import check_box
+from lions.fields import compute_bfield, compute_fields
 
 W0 = 1.0  # MeV/u
 
@@ -68,3 +73,22 @@ def test_on_step_stops_and_closes_files(workdir):
     d = syn.quiet_run('deck.dat', on_step=lambda d: d.run.step < 100)
     assert d.run.step == 100
     assert not d.outputs.open
+
+
+@pytest.mark.parametrize('ntet', [361, 721])
+def test_field_just_below_the_x_axis(workdir, ntet):
+    """theta = 2 pi - arccos(1) = 2 pi for a tiny negative y must read map column 0, not ntet."""
+    syn.write_bmap('bmap.dat', lambda r, t: -1.0 - 0.1 * np.sin(t), ntet=ntet)
+    syn.write_deck('deck.dat', fhf=syn.revolution_frequency(W0, -1.0),
+                   r0=syn.larmor_radius(W0, -1.0), w0=W0, turns=1)
+    d = lions.State()
+    d.run.swap_bytes = 'n'
+    with contextlib.redirect_stdout(io.StringIO()):
+        lions.load(d, 'deck.dat')
+    d.bunch.y[:] = -1e-300
+    check_box(d.bunch, d.field, d.box)
+    compute_fields(d)
+    assert d.bunch.bz[0] == pytest.approx(-1.0, rel=1e-12)
+    d.bunch.bz[:] = 0.0
+    compute_bfield(d.bunch, d.field)
+    assert d.bunch.bz[0] == pytest.approx(-1.0, rel=1e-12)
