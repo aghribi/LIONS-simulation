@@ -561,3 +561,14 @@ of the same node. Throughput ratio to plain LIONS on the same node:
   1.6e-13 rad in phase, compiled or not.
 - Gradients at 1e3 particles are faster on the CPU (0.71 s) than on the A100 (2.49 s): small batches are latency-bound.
 - The plain LIONS baseline is 2.3 to 2.6 times slower on the Jean-Zay node than on the M3.
+
+### G1 step 1: precision of the FROM_ORBIT references (registered before running)
+- Instrument: RF-Track `rkf45`, tolerance 1e-12, on a quintic spline (r, theta; periodic in theta) of the exact
+  master map, with Br = z dBz/dr and Btheta = (z / r) dBz/dtheta from splines of the exact derivative grids.
+  Sampled 1440 and 2880 times per turn.
+- Interpolation error of the spline, estimated before tracking: the spline built on every second node, evaluated
+  at the skipped nodes against the master; the master's own spline error is below that estimate.
+- Metrics per orbit (3-sector, a = 0.14, 0.24, 0.35): closed-orbit r and pr at theta = 0 against the prescribed
+  orbit; one-turn time against 1 / f_rev (isochronism); Qr, Qz (one-turn Jacobian, folded) against FROM_ORBIT.
+- Reading: no pass/fail. The RF-Track to FROM_ORBIT differences, if larger than the interpolation and tolerance
+  effects, are the precision of the references and become the floor for every code in G1.
