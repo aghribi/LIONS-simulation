@@ -90,7 +90,7 @@ def main(outdir):
             error = None
         except Exception as exc:
             wall = first = None
-            error = f'{type(exc).__name__}: {str(exc).strip().splitlines()[-1][:300]}'
+            error = f'{type(exc).__name__}: {str(exc).strip().splitlines()[0][:300]}'
             print(f'{code} {dtype} compiled={compiled} {mode} {n}: {error}', file=sys.stderr)
         records.append({'code': code, 'dtype': dtype, 'compiled': compiled, 'mode': mode, 'particles': n,
                         'steps': STEPS, 'wall_s': wall, 'first_call_s': first,
