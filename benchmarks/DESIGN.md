@@ -330,3 +330,50 @@ Field parity at the map nodes: Bz within 1.1e-15 T, Bx and By at 0.92 of the bou
   run. That changes LIONS results; it stays a decision for the user and O. Kamalou.
 - Map bias against the closed form (1 deg, 5 mm), B-gradient: Qz low by 4e-5 to 6e-5 in all three map codes; Qr differs
   by up to 1e-3 at 1440 steps.
+
+## 16. Case D amendment (registered before running)
+
+Changes to section 5 D, from sections 13 to 15:
+- Case B is dropped from D: on the bilinear map the discrete one-turn map scatters at 1e-4 in det(M) - 1 for
+  reasons unrelated to symplecticity. D uses fields without kinks in the plane: B0.
+- The one-turn Jacobian does not discriminate. A symplectic integrator gives an exactly symplectic step map,
+  but the section crossing (4-point Lagrange in time) is not symplectic and its error is O(dt^4), the order of
+  the RK4 truncation error. At 1440 steps both are below the finite-difference floor (det(M) - 1 of 1e-9 in
+  section 13). The B0 Jacobian metrics of section 13 (symplectic_error, det_error) are reported as they are;
+  no new short-term runs.
+- The discriminating test is long-term: interpolation errors do not feed back into the tracking, integration
+  errors that are not symplectic accumulate.
+
+### D2. Long-term invariant in B0
+- B0 is azimuthally symmetric in the plane (bilinear map exact in Bz, z = 0), so the canonical angular momentum
+  is an exact invariant of the continuous motion. In LIONS units (p = beta gamma), derived here:
+  L = x py - y px + (q / (m c)) B0 ((1 + k r0) r^2 / 2 - k r^3 / 3).
+- One particle, 1 MeV, z = pz = 0, r = r_eo + 1e-3 m, pr = 0 at the theta = 0 section; 1e4 turns at 360 steps
+  per turn (largest step, strongest effect).
+- Codes: LIONS Boris, OPAL LF2 and RK4, RF-Track `rkf45` at 1e-12 sampled 360 times per turn.
+- Metrics, from L and abs(p) at every sample: secular relative change of L over the 1e4 turns (least-squares
+  slope times the duration, over abs(L0)); max abs(L - L0) / abs(L0); relative change of abs(p).
+- Classification rule: secular change below 1e-9 is "no drift detected" (round-off bound for 3.6e6 steps).
+- Predictions: Boris and LF2 conserve abs(p) exactly in a pure B field and show no drift in L, with a bounded
+  oscillation of O((w dt)^2). RK4 shrinks abs(p) by (2 pi)^6 / (144 n^5) = 7.1e-11 per turn (section 10),
+  7e-7 over 1e4 turns, and L drifts at the same order. RF-Track drifts at the level of its tolerance.
+- Off-plane motion is excluded: the first-order off-plane field of LIONS and OPAL is not divergence free at
+  O(z^2), so no exact invariant exists for the model at finite z.
+
+## 17. Case E amendment (registered before running)
+
+- Port: LIONS `compute_bfield` (bilinear map, z terms) and `boris_push` with E = 0, to PyTorch, float64, CPU
+  (MPS has no float64). Throwaway, in `benchmarks/case_e.py`, run with `uv run --group bench --with torch`.
+- Validation first: the port reproduces LIONS positions and momenta at every step over one turn (360 steps,
+  1 MeV, cases A, B0 and B) within 1e-13 relative. Nothing else runs until this holds.
+- Outputs: r, pr and the unwrapped phase atan2(y, x) after N steps.
+- Parameters: map scale s (multiplies every map array), initial r0, initial pr0.
+  V_dee and phi0 are deferred: the spike has no electric field, and the gap model is benchmarked in case C first.
+- Gradients: reverse-mode autograd against central finite differences, fixed steps 1e-6 (relative) for s,
+  1e-7 m for r0, 1e-7 for pr0; a sweep of 1e-4 to 1e-9 is reported alongside, not used to choose.
+- Success: agreement within 1e-6 relative on A and B0, for N = 360 and 3600 steps.
+  B (bilinear 4-sector map): report only. Prediction from section 15: autograd and finite differences disagree
+  at every step size, at a level comparable to the det(M) - 1 scatter (1e-4).
+- Cost: N = 1e3, 1e4, 1e5 steps, 1 and 1000 particles, with and without `torch.utils.checkpoint` over segments of
+  sqrt(N) steps. Wall time of forward plus backward and peak RSS, one subprocess per configuration.
+- Decision gate: the numbers go to the user before any differentiable backend is built.
