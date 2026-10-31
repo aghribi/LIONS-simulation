@@ -572,3 +572,18 @@ of the same node. Throughput ratio to plain LIONS on the same node:
   orbit; one-turn time against 1 / f_rev (isochronism); Qr, Qz (one-turn Jacobian, folded) against FROM_ORBIT.
 - Reading: no pass/fail. The RF-Track to FROM_ORBIT differences, if larger than the interpolation and tolerance
   effects, are the precision of the references and become the floor for every code in G1.
+
+G1 step 1 results (3-sector, `benchmarks/runs/case_g1/step1/case_g1_step1.parquet`). Spline on every second node:
+8.7e-7 at the skipped nodes (full-grid spline about 64 times smaller for a quintic). Identical at 1440 and 2880
+samples per turn:
+
+| a (Ek, H2+) | r_eo error | pr_eo error / p | turn time error | Qr RF-Track - FROM_ORBIT | Qz RF-Track - FROM_ORBIT |
+|---|---|---|---|---|---|
+| 0.14 (19 MeV) | -6e-14 | -4e-13 | -7e-14 | -1.30e-5 | +1.36e-6 |
+| 0.24 (58 MeV) | -2.0e-9 | +1.9e-9 | -2.7e-10 | -2.05e-5 | +1.69e-6 |
+| 0.35 (130 MeV) | +2e-13 | -1e-13 | +5e-14 | +6.3e-7 | +7.5e-7 |
+
+- The prescribed closed orbits and isochronism are reproduced to 1e-13 (2e-9 at a = 0.24): the map, the LIONS-frame
+  conversion (sign, direction, theta origin) and the references agree.
+- FROM_ORBIT tunes are good to 2e-5 (Qr) and 2e-6 (Qz); the difference does not move with sampling, so it belongs
+  to its tune formula. G1 references: the prescribed orbits and isochronism, and the RF-Track tunes on the spline.
