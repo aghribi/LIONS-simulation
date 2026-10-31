@@ -1,9 +1,10 @@
-"""One-turn maps at the theta = 0 section, closed orbits and tunes, for LIONS and OPAL-cycl.
+"""One-turn maps at the theta = 0 section, closed orbits and tunes, for LIONS, OPAL-cycl and RF-Track.
 
 Section state: (r, pr, z, pz) at y = 0, x > 0, momenta in beta gamma; the total momentum p is fixed.
 Each code returns full-step trajectories (t, pos, mom); the section crossing is interpolated in time
 with a 4-point Lagrange polynomial.
 """
+import concurrent.futures
 import contextlib
 import io
 import subprocess
@@ -11,6 +12,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import RF_Track as rft
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
@@ -141,6 +143,8 @@ class OpalTracker:
         self.workdir.mkdir(parents=True, exist_ok=True)
         convert.write_opal_carbon(self.workdir / 'bmap_carbon.dat', field)
         (self.workdir / 'part.dat').write_text('1\n0 0 0 0 0 0\n')
+        self.workers = int(subprocess.run(['docker', 'info', '--format', '{{.NCPU}}'], capture_output=True,
+                                          text=True, check=True).stdout)
 
     def track_one(self, state, turns, tag='run'):
         r, pr, z, pz = state
@@ -173,10 +177,63 @@ STOP;
         return t, pos, mom
 
     def track(self, states, turns):
-        out = [self.track_one(s, turns, tag=f'p{i}') for i, s in enumerate(np.atleast_2d(states))]
-        steps = min(len(o[0]) for o in out)
-        return (out[0][0][:steps], np.stack([o[1][:steps] for o in out], axis=1),
-                np.stack([o[2][:steps] for o in out], axis=1))
+        with concurrent.futures.ThreadPoolExecutor(self.workers) as pool:
+            out = list(pool.map(lambda a: self.track_one(a[1], turns, tag=f'p{a[0]}'),
+                                enumerate(np.atleast_2d(states))))
+        return stack_runs(out)
+
+
+class _UserField(rft.UserField):
+    """RF-Track field from b(x, y, z) -> (Bx, By, Bz) in T, LIONS frame and metres.
+
+    RF-Track calls get_field in the element frame, z from 0 at the entrance; the element is centred on Z = 0.
+    """
+
+    def __init__(self, length, b):
+        super().__init__(length)
+        self.b, self.half_mm = b, length * 1e3 / 2
+
+    def get_field(self, x, y, z, t):
+        pos, _ = convert.from_rftrack([x, 0.0, y, 0.0, z - self.half_mm, 0.0], 1.0)
+        return [0.0, 0.0, 0.0], list(convert.to_rftrack_field(self.b(*pos[0])))
+
+
+class RFTrackTracker:
+    """RF-Track `Volume` around a static magnetic field b(x, y, z), one particle per run.
+
+    The volume spans |y| < half_size (RF-Track Z); positions are sampled samples_per_turn times per
+    nominal period.
+    """
+
+    def __init__(self, b, half_size, mass_kg, p, period_s, samples_per_turn, tol, algorithm='rkf45'):
+        self.mass_mev = mass_kg * syn.C**2 / syn.QE / 1e6
+        self.p, self.tol, self.algorithm = p, tol, algorithm
+        self.period_mm = period_s * syn.C * 1e3
+        self.dt_mm = self.period_mm / samples_per_turn
+        self.volume = rft.Volume()
+        self.volume.add(_UserField(2 * half_size, b), 0.0, 0.0, -half_size)
+
+    def track_one(self, state, turns):
+        pos, mom = initial_vectors(state, self.p)
+        opt = rft.TrackingOptions()
+        opt.dt_mm = opt.tt_dt_mm = self.dt_mm
+        opt.t_max_mm = turns * self.period_mm
+        opt.odeint_algorithm = self.algorithm
+        opt.odeint_epsabs = opt.odeint_epsrel = self.tol
+        self.volume.track(rft.Bunch6dT(self.mass_mev, 1.0, 1.0, convert.to_rftrack(pos, mom, self.mass_mev)), opt)
+        tt = self.volume.get_transport_table('%t %mean_X %mean_Px %mean_Y %mean_Py %mean_Z %mean_Pz')
+        pos, mom = convert.from_rftrack(tt[:, 1:], self.mass_mev)
+        return tt[:, 0] * 1e-3 / syn.C, pos, mom
+
+    def track(self, states, turns):
+        return stack_runs([self.track_one(s, turns) for s in np.atleast_2d(states)])
+
+
+def stack_runs(out):
+    """Single-particle runs [(t, pos, mom)] to (t, pos, mom) of shape (steps, n, 3), cut to the shortest."""
+    steps = min(len(o[0]) for o in out)
+    return (out[0][0][:steps], np.stack([o[1][:steps] for o in out], axis=1),
+            np.stack([o[2][:steps] for o in out], axis=1))
 
 
 def section_series(t, pos, mom):

@@ -171,8 +171,52 @@ Amendments, made after seeing the first results (a new analysis, not a pass/fail
 - Neither code converges smoothly in dt; RK4 does not show order 4. The radial one-turn map has det errors of 1e-5 to 3e-4 that do not shrink with dt; the vertical block is clean.
 - Competing explanations: (H1) the bilinear interpolation in theta makes Bz continuous with kinks every map column, and the step grid aliases with the map grid; (H2) an error in the benchmark harness; (H3) an error in the codes.
 - Discriminating run: Bz = B0 (1 - 0.5 (r - 0.15)), linear in r and constant in theta, so bilinear interpolation is exact and the field is smooth. Closed orbit known in closed form (p / q = |B0| r (1 - 0.5 (r - 0.15))).
-  LIONS: r_eo error +4.13e-5, +1.03e-5, +2.58e-6 (order 2.00); det(M_rr) - 1 = -1.0e-7, -1.1e-8, -1.2e-9; Qr = 0.96341, Qz = 0.26803, both matching sqrt(1 - n) and sqrt(n) for n = 0.0718.
+  LIONS: r_eo relative error +4.13e-5, +1.03e-5, +2.58e-6 (order 2.00); det(M_rr) - 1 = -1.0e-7, -1.1e-8, -1.2e-9; Qr = 0.96341, Qz = 0.26803, both matching sqrt(1 - n) and sqrt(n) for n = 0.0718.
   This rules out H2 for LIONS and supports H1. H3 is not tested for OPAL on the smooth field yet.
 - Consequence: a 1e-6 orbit tolerance is out of reach on a bilinear 1 deg map for any integrator, and one-turn Jacobians straddle kinks. The same holds for gradients in case E.
 - Harness bugs found on the way and fixed: the radius array used by `compute_fields` was stale in the harness (it is refreshed by `check_box`); full-step momenta are now a half Boris kick of p(k - 1/2), the exact inverse of the start, so the recorded map is conjugate to the Boris map.
 - LIONS bug found on the way, fixed in its own commit: theta = 2 pi exactly for y < 0 with x / r rounding to 1, one column past the map (IndexError on 721-column maps).
+
+## 12. Case B amendment (registered after section 11, before the B0 runs of OPAL and RF-Track)
+
+Section 11 showed that the case B criteria cannot be met on a bilinear map by any integrator. Case B is split in two.
+Already seen before this registration: the LIONS B0 values at 1 MeV in section 11. Nothing else.
+
+### B0. Smooth radial gradient (integrator parity, exact references)
+- Field: Bz = B0 (1 - k (r - r0)), B0 = -1 T, k = 0.5 /m, r0 = 0.15 m, d2Bz = 0,
+  dBz/dx = -k B0 x / r, dBz/dy = -k B0 y / r. Same map grid as case B (5 mm, 1 deg).
+  Bz: bilinear interpolation is exact in LIONS and OPAL. Off the plane, OPAL derives Br = z dBz/dr (5-point
+  difference, exact here) and Btheta = 0. LIONS interpolates dBz/dx and dBz/dy bilinearly in theta: the
+  horizontal field follows the chord of (cos theta, sin theta), off by at most k |B0| |z| dtheta^2 / 8
+  (9.5e-8 T at z = 5 mm), which shifts Qz by about 1e-5 relative (derived here).
+  RF-Track: `UserField` with the closed form, checked against LIONS `compute_bfield` at random points
+  (r in the map, z up to 5 mm) before any run: Bz within 1e-13 T and Bx, By within the chord bound are a
+  precondition.
+- Energies: 1, 2, 3, 4, 5 MeV protons. Section theta = 0, as case B.
+- Exact references, derived here: closed orbit at pr = 0 with p / q = |B0| r (1 - k (r - r0));
+  field index n = k r / (1 - k (r - r0)); linear tunes Qr = sqrt(1 - n), Qz = sqrt(n)
+  (azimuthal symmetry, field linear in z off the plane, static B so gamma is constant).
+  Tunes are compared as fractional parts folded into [0, 0.5], the range of the trace and of the FFT.
+- Codes: LIONS Boris, OPAL LF2 and RK4 at 360, 720, 1440 steps per turn;
+  RF-Track `rkf45` at tolerances 1e-9 and 1e-12 (absolute and relative), sampled at 1440 points per turn.
+- Tunes: trace of the 2x2 blocks of the one-turn Jacobian (central differences, 1e-6 m and 1e-6 p / rho).
+  Second instrument for LIONS at 1440 steps: FFT tune of 256 turns at 1e-4 m offsets (section 5).
+- Success:
+  - fixed-step codes: the closed-orbit error converges at order 2 (Boris, LF2) or at least 3.8 (RK4)
+    between 720 and 1440 steps, measured where the error exceeds 1e-10 relative;
+  - Richardson extrapolation of r_eo from 720 and 1440 steps with the nominal order: within 1e-7 relative
+    of the exact radius (field, conversion and section interpolation, independent of dt);
+  - tunes within 1e-4 of the exact values at 1440 steps, for every fixed-step code;
+  - RF-Track at 1e-12: r_eo within 1e-8 relative, tunes within 1e-5 (finite differences of an adaptive
+    integrator carry noise of order tolerance / step);
+  - LIONS FFT tunes within 1e-4 of the Jacobian tunes.
+- Dropped for fixed-step codes: the 1e-6 relative orbit criterion of section 5. A second-order integrator
+  gives 2.6e-6 relative at 1440 steps here (LIONS in section 11), as in case A.
+
+### B. 4-sector field on the bilinear map (report only, no pass/fail)
+- Field, energies, codes and steps as in section 5; tunes from the one-turn Jacobian.
+- Reported: r_eo, Qr, Qz, det(M) - 1 per code and step count; spread across codes at fixed steps and
+  across steps for each code.
+- Map spacing study, LIONS only: 1 deg (361 columns) and 0.5 deg (721 columns, the LIONS maximum), 5 mm radial.
+  Prediction of H1: the spread across steps falls with the azimuthal spacing, by about 4 from 1 deg to 0.5 deg
+  if it follows the O(dtheta^2) interpolation error. A spread that does not fall weakens H1.
