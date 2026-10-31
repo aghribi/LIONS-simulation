@@ -232,6 +232,52 @@ class RFTrackTracker:
         return stack_runs([self.track_one(s, turns) for s in np.atleast_2d(states)])
 
 
+class BorisTracker:
+    """The LIONS Boris step (magnetic field only) in numpy, with a pluggable field(x, y, z) -> (Bx, By, Bz) in T.
+
+    Same conventions as LionsTracker: momenta in beta gamma at half steps, started by a backward half kick at x0,
+    recorded at full steps after a forward half kick, so one-turn maps are comparable with LIONS step for step.
+    """
+
+    def __init__(self, field, mass_kg, charge_c, p, f_rev_hz, steps_per_turn):
+        self.field, self.p, self.n = field, p, steps_per_turn
+        self.dt = 1 / (f_rev_hz * steps_per_turn)
+        self.bcoef = charge_c * self.dt / 2 / mass_kg      # LIONS boris_b_coef
+        self.c_dt = syn.C * self.dt
+
+    def kick(self, pos, mom, fraction):
+        """Boris rotation of mom over fraction x dt with the field at pos (LIONS boris_push with E = 0)."""
+        bx, by, bz = self.field(*pos.T)
+        gamma = np.sqrt(1 + (mom**2).sum(axis=1))
+        vec = fraction * self.bcoef / gamma
+        a1, a2, a3 = vec * bx, vec * by, vec * bz
+        v1, v2, v3 = a1 * a1, a2 * a2, a3 * a3
+        vec = 1.0 / (1.0 + v1 + v2 + v3)
+        s12 = a1 * a2
+        s21, s12 = s12 - a3, s12 + a3
+        s13 = a1 * a3
+        s31, s13 = s13 + a2, s13 - a2
+        s23 = a2 * a3
+        s32, s23 = s23 - a1, s23 + a1
+        px, py, pz = mom.T
+        v4, v5, v6 = vec * (0.0 + 2.0 * px), vec * (0.0 + 2.0 * py), vec * (0.0 + 2.0 * pz)
+        return np.column_stack([px - (v2 + v3) * v4 + s12 * v5 + s13 * v6,
+                                py + s21 * v4 - (v1 + v3) * v5 + s23 * v6,
+                                pz + s31 * v4 + s32 * v5 - (v1 + v2) * v6])
+
+    def track(self, states, turns):
+        pos, mom = initial_vectors(states, self.p)
+        half = self.kick(pos, mom, -0.5)
+        steps = int(np.ceil(turns)) * self.n
+        out_pos, out_mom = [pos], [mom]
+        for _ in range(steps):
+            half = self.kick(pos, half, 1.0)
+            pos = pos + self.c_dt * half / np.sqrt(1 + (half**2).sum(axis=1))[:, None]
+            out_pos.append(pos)
+            out_mom.append(self.kick(pos, half, 0.5))
+        return np.arange(steps + 1) * self.dt, np.array(out_pos), np.array(out_mom)
+
+
 def stack_runs(out):
     """Single-particle runs [(t, pos, mom)] to (t, pos, mom) of shape (steps, n, 3), cut to the shortest."""
     steps = min(len(o[0]) for o in out)

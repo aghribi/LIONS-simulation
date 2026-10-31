@@ -620,3 +620,16 @@ first, interrupted run exactly). Errors against the references, 360 / 720 / 1440
   phase studies on CIME maps [estimate, not simulated].
 - Not yet separated: integrator error and interpolation error. Step 3 does that with the same Boris step on a
   smooth interpolation.
+
+### G1 step 3: integrator against interpolation (registered before running)
+- Instrument: a numpy Boris tracker with the LIONS step (same rotation formulas, positions in m, momenta beta gamma,
+  momentum at half steps, start by a backward half kick, full-step momenta by a forward half kick), with a
+  pluggable field.
+- 3a, validation: with the LIONS bilinear field (same nodes, dBz/dx and dBz/dy maps, same weights) it must
+  reproduce LionsTracker on the 1 deg map: one turn from the reference orbit at 360 steps within 1e-12 relative
+  (theta from atan2 here, arccos in LIONS). Nothing else runs until this holds.
+- 3b: the same tracker and node sets (1/3 and 1 deg) with bicubic and quintic splines (periodic in theta) of
+  Bz, dBz/dr, dBz/dtheta; steps 360, 720, 1440; metrics and references as step 2.
+- Reading: if the smooth fields converge at second order to the references (as B0 did in section 13), the step 2
+  floor and scatter belong to the bilinear interpolation, and the bicubic numbers measure what a smooth LIONS
+  interpolation would give. If the scatter stays, the cause is elsewhere.
