@@ -480,3 +480,5 @@ Amendments to section 20, before the reruns:
   variant (float64 eager and compiled, float32 eager; float32 only on MPS) is compared with it. Reason: a smoke test
   gave MPS float32 against CPU float64 a difference of 5.4e-6 in r after 360 steps, against 1.3e-7 after 3600 steps
   for CPU float32.
+- V100 excluded: torch 2.15.0+cu132 has no kernels for sm_70 ("no kernel image is available", CC gpu_v100, job
+  62922802). GPU runs: CC H100 and Jean-Zay A100.
