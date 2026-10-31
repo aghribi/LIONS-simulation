@@ -65,8 +65,9 @@ class Port:
     def __init__(self, d):
         f = d.field
         self.maps = [torch.tensor(a) for a in (f.bz, f.d2bz, f.dbzdx, f.dbzdy)]
-        self.rmin, self.dr, self.dtheta = f.rmin, f.dr, f.dtheta
-        self.bcoef, self.c_dt = d.bunch.boris_b_coef[0], d.run.c_dt
+        # Python floats: MPS has no float64, so numpy float64 scalars cannot enter its tensors
+        self.rmin, self.dr, self.dtheta = float(f.rmin), float(f.dr), float(f.dtheta)
+        self.bcoef, self.c_dt = float(d.bunch.boris_b_coef[0]), float(d.run.c_dt)
 
     def fields(self, x, y, z, s):
         r = torch.sqrt(x * x + y * y)
