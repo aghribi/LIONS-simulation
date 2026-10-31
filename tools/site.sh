@@ -77,6 +77,22 @@ setup)
     [ -z "${IMAGE_INSTALL:-}" ] || remote "set -e
 ${CONTAINER_SETUP:-}
 [ -f '$IMAGE_DIR/$image' ] || $IMAGE_INSTALL '$dest'"
+  elif [ "${IMAGE_VIA:-}" = laptop ]; then   # the site cannot fetch the image layers: pull here, build there
+    if ! ssh -o BatchMode=yes "$SSH" "test -f '$IMAGE_DIR/$image'"; then
+      tar="$(mktemp -d)/lions-sim-$hash.tar"
+      docker pull -q --platform linux/amd64 "$registry:$hash" >/dev/null
+      docker save "$registry:$hash" -o "$tar"
+      sum="$(shasum -a 256 "$tar" | cut -d' ' -f1)"
+      remote "mkdir -p '$IMAGE_DIR' '$XSH_RESULTS'"
+      scp -q "$tar" "$SSH:$IMAGE_DIR/${image%.sif}.tar"
+      rm -f "$tar"
+      remote "set -e
+${CONTAINER_SETUP:-}
+cd '$IMAGE_DIR'
+[ \"\$(sha256sum '${image%.sif}.tar' | cut -d' ' -f1)\" = '$sum' ] || { echo 'archive checksum differs' >&2; exit 6; }
+$CONTAINER build '$image' 'docker-archive://${image%.sif}.tar'
+rm '${image%.sif}.tar'"
+    fi
   else
     remote "set -e
 ${CONTAINER_SETUP:-}
