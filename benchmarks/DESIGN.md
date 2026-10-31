@@ -602,3 +602,21 @@ samples per turn:
 - Added before the full step 2 run, after the 4 deg map made Newton diverge on the first orbit (r error -10%,
   residual 2e-3 m, then a particle left the map): a configuration whose closed-orbit residual exceeds 1e-9 m, or
   that raises, is recorded as failed with its error, and the run continues.
+
+G1 step 2 results (`benchmarks/runs/case_g1/step2/case_g1_step2.parquet`; the 1/3 and 1 deg rows reproduce the
+first, interrupted run exactly). Errors against the references, 360 / 720 / 1440 steps per turn, over the three orbits:
+
+| Map | r_eo | pr_eo / p | turn time | Qr | Qz | det(M) - 1 |
+|---|---|---|---|---|---|---|
+| 1/3 deg | 4.8e-5 to 5.8e-5 / 1.5e-5 to 1.7e-5 / 4.1e-6 to 6.9e-6 | -5.5e-5 to -6.7e-5 / -2.0e-5 to -2.4e-5 / -1.0e-5 to -1.3e-5 | 2.5e-6 to 3.7e-6 at 1440 | 3.5e-5 to 5.4e-4, no trend in steps | -2.0e-5 to -7.5e-5 | 9e-7 to 3.7e-3 |
+| 1 deg | 5.9e-5 to 6.9e-5 / 1.5e-5 to 3.5e-5 / 4.8e-6 to 2.6e-5 | -9.3e-5 to -1.1e-4 / about -6e-5 / about -5e-5 | 2.2e-6 to 1.5e-5 at 1440 | 2.2e-4 to 1.6e-3 | -1.1e-4 to -4.2e-4 | 1.5e-4 to 1.6e-2 |
+| 4 deg | closed orbit not found (9 of 9: residual 7e-4 to 9e-3 m, or particle lost) | | | | | |
+
+- Prediction of step 2 confirmed: closed-orbit errors of 4e-6 to 7e-5, tune errors up to 1.6e-3, det(M) - 1 erratic.
+- The closed orbit converges more slowly than second order at 1/3 deg (ratios 3.3 and 2.4 per halving) and stalls at
+  1 deg (pr error near -5e-5 at all steps): a map floor that grows with the azimuthal spacing.
+- Isochronism: the turn time is off by 2e-6 to 1.5e-5 at 1440 steps on an exactly isochronous field. Over 500 turns
+  at harmonic h this is an RF phase slip of order 2 pi h x 500 x 1e-5 rad (about 1.8 deg per unit h): relevant for
+  phase studies on CIME maps [estimate, not simulated].
+- Not yet separated: integrator error and interpolation error. Step 3 does that with the same Boris step on a
+  smooth interpolation.
