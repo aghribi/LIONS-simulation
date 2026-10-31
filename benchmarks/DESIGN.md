@@ -451,3 +451,18 @@ relative. Pass.
   is the obvious lever; not measured.
 - Scale: 1e5 steps at 360 steps per turn is about 280 turns. The steps per turn and turn count of the CIME deck
   are not checked here.
+
+## 20. Case E2: speed spike (registered before running)
+
+Question: can the PyTorch port of case E beat plain LIONS throughput by 10 times, and is float32 usable?
+- Variants of the case E port: eager (case E), `torch.compile` of the step (fields and Boris push), each in float64
+  and float32. CPU on this machine. GPU (IN2P3) once access is set up: same script, reported separately.
+- Field: case B map (1 deg), 1 MeV protons, 3600 steps.
+- Throughput: particle-steps per second, forward only, at 1, 1e3 and 1e5 particles; forward plus backward
+  (gradient of the summed phase with respect to the map scale) at 1e3 particles. Compile time reported apart.
+  Median of 3 repetitions after one warm-up.
+- Baseline: plain LIONS (`lions.run`, output files included) at the same particle counts, same machine.
+- Go criterion for building the backend (section 19 recommendation): forward throughput of the best float64
+  variant at least 10 times plain LIONS at 1e3 or 1e5 particles, on the hardware where it would run.
+- float32: maximum relative difference of r and absolute difference of phase against float64 after 3600 steps,
+  cases B0 and B. Report only: its eligibility is judged later against the calibration needs.
