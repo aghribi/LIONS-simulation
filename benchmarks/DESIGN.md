@@ -633,3 +633,34 @@ first, interrupted run exactly). Errors against the references, 360 / 720 / 1440
 - Reading: if the smooth fields converge at second order to the references (as B0 did in section 13), the step 2
   floor and scatter belong to the bilinear interpolation, and the bicubic numbers measure what a smooth LIONS
   interpolation would give. If the scatter stays, the cause is elsewhere.
+
+G1 step 3 results (`benchmarks/runs/case_g1/step3/case_g1_step3.parquet`, code 197648c).
+- 3a passed: the numpy Boris tracker on the LIONS bilinear field reproduces LionsTracker over one turn to 4.7e-15.
+- 3b: absolute errors against the references, range over the three orbits and both splines (bicubic, quintic),
+  360 / 720 / 1440 steps per turn. The 1/3 and 1 deg maps give the same numbers except det(M) - 1:
+
+| Metric | 360 | 720 | 1440 | ratio per halving |
+|---|---|---|---|---|
+| r_eo | 4.5e-5 to 5.7e-5 | 1.1e-5 to 1.4e-5 | 2.8e-6 to 3.6e-6 | 4.00 |
+| pr_eo / p | 4.7e-5 to 5.9e-5 | 1.2e-5 to 1.5e-5 | 2.9e-6 to 3.7e-6 | 4.00 |
+| turn time | 3.5e-5 to 3.9e-5 | 8.7e-6 to 9.8e-6 | 2.2e-6 to 2.4e-6 | 4.00 |
+| Qr | 4.5e-6 to 1.4e-5 | 1.2e-6 to 3.5e-6 | 2.9e-7 to 8.7e-7 | 3.7 to 4.0 |
+| Qz | 2.2e-6 to 5.5e-5 | 5.3e-7 to 1.4e-5 | 1.2e-7 to 3.6e-6 | 3.9 to 4.5 |
+| det(M) - 1, 1/3 deg | 4.6e-7 to 7.6e-7 | 7.5e-8 to 1.0e-7 | 1.1e-8 to 2.0e-8 | 3.2 to 370 (both maps) |
+| det(M) - 1, 1 deg | 5.8e-7 to 2.3e-6 | 7.1e-8 to 2.9e-7 | 8.0e-10 to 1.5e-8 | |
+
+- Bicubic and quintic agree to 4e-4 relative in orbit and turn time, and to 8 to 14% in the tunes (differences of
+  order 1e-7). The remaining error is that of the Boris step: the spline interpolation error is below it.
+- Against step 2: the same step on the same nodes, with the bilinear field replaced by a spline, removes the floor
+  and the scatter. Tune errors fall from up to 1.6e-3 to at most 5.5e-5 (360 steps), det(M) - 1 from up to 1.6e-2
+  to at most 2.3e-6, and the 1 deg map behaves as the 1/3 deg one. The interpolation is the only change, so on this
+  map the step 2 floor and scatter are attributed to the bilinear interpolation. At 360 steps and 1/3 deg the
+  closed-orbit errors of step 2 and step 3 are close (4.8e-5 to 5.8e-5 against 4.5e-5 to 5.7e-5): there the
+  integrator dominates.
+- det(M) - 1 does not converge at a clean order and differs by up to a factor 3 between the two splines. Not
+  separated: the finite-difference Jacobian (1e-6 m), spline derivative noise, and the Boris step being exactly
+  volume-preserving only in a uniform field. It stays at or below 2.3e-6.
+- Isochronism with a smooth field is limited by the step: 2.2e-6 at 1440 steps. The phase-slip estimate of step 2
+  therefore holds in part for any field interpolation at that step count [estimate, not simulated].
+- Scope: one map (3-sector, ideal), three orbits, one turn. Changing the LIONS interpolation changes results and
+  breaks Fortran bit-identity: decision for A. Ghribi and O. Kamalou.
