@@ -377,3 +377,25 @@ Changes to section 5 D, from sections 13 to 15:
 - Cost: N = 1e3, 1e4, 1e5 steps, 1 and 1000 particles, with and without `torch.utils.checkpoint` over segments of
   sqrt(N) steps. Wall time of forward plus backward and peak RSS, one subprocess per configuration.
 - Decision gate: the numbers go to the user before any differentiable backend is built.
+
+## 18. Case D2 results
+
+Run: `uv run --group bench python benchmarks/case_d.py`, output `benchmarks/runs/case_d/case_d.parquet`.
+One particle, one run per code, 1e4 turns at 360 steps (3.6e6 steps).
+
+| Code, integrator | L secular change | max abs(L - L0) / abs(L0) | abs(p) change |
+|---|---|---|---|
+| LIONS Boris | -4.6e-11 | 1.1e-6 | +4.9e-15 |
+| OPAL LF2 | -3.6e-12 | 7.8e-8 | -1.0e-13 |
+| OPAL RK4 | -1.47e-6 | 1.47e-6 | -7.18e-7 |
+| RF-Track rkf45, 1e-12 | +2.0e-8 | 2.0e-8 | +9.7e-9 |
+
+- Boris and LF2: no drift detected (below 1e-9), abs(p) conserved to round-off; L oscillates with a bounded
+  amplitude (1.1e-6 for Boris, 7.8e-8 for LF2, the same as over the first 20 turns of the smoke test).
+- RK4: abs(p) falls by 7.18e-7, predicted 7.1e-7; L drifts monotonically by 1.5e-6.
+- RF-Track: monotonic drift of 2e-8 in L and 1e-8 in abs(p), at the level set by the tolerance accumulated
+  over 3.6e6 steps.
+- Answer to Q2 on this test: the LIONS Boris step behaves as a symplectic integrator (no secular drift of an
+  exact invariant over 1e4 turns, bounded oscillation), like OPAL LF2; RK4 does not. One test, planar, one field,
+  one amplitude: consistent with symplectic behaviour, not a proof. The LIONS oscillation of L is 14 times
+  the LF2 one; not analysed.
