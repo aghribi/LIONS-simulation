@@ -34,6 +34,8 @@ DEVICE = 'cpu'
 
 
 def make_port(d, dtype, compiled):
+    # int x float promotes to the default dtype; case_e sets float64, which MPS cannot hold
+    torch.set_default_dtype(dtype)
     port = Port(d)
     port.maps = [m.to(DEVICE, dtype) for m in port.maps]
     if compiled:
@@ -76,6 +78,7 @@ def lions_time(n):
 
 
 def main(outdir):
+    global DEVICE   # the accuracy section runs the CPU reference, then restores the device
     outdir.mkdir(parents=True, exist_ok=True)
     records, inputs = [], []
     dtypes = (torch.float32,) if DEVICE == 'mps' else (torch.float64, torch.float32)
@@ -112,7 +115,10 @@ def main(outdir):
                 add('torch', name, compiled, 'forward+backward', BACKWARD_PARTICLES,
                     *timed(fwd_bwd))
 
-    # float32 and compiled results against eager float64, cases B0 and B
+    # each device variant against eager float64 on the CPU, cases B0 and B
+    device = DEVICE
+    variants = [(torch.float32, False)] if device == 'mps' else [(torch.float64, False), (torch.float64, True),
+                                                                 (torch.float32, False)]
     for case in ('B0', 'B'):
         cw = outdir / case
         cw.mkdir(exist_ok=True)
@@ -121,15 +127,17 @@ def main(outdir):
             inputs.append(cw / 'bmap.dat')
             d = load(360)
             out = {}
-            if DEVICE == 'mps':
-                continue    # no float64 reference on MPS
-            for dtype, compiled in ((torch.float64, False), (torch.float64, True), (torch.float32, False)):
+            for dev, dtype, compiled in [('cpu', torch.float64, False)] + [(device, *v) for v in variants]:
+                DEVICE = dev
                 with torch.no_grad():
                     r, _, phase = make_port(d, dtype, compiled).run(start(d, BACKWARD_PARTICLES, dtype), 1.0, STEPS)
-                out[(dtype, compiled)] = r.double().cpu(), phase.double().cpu()
-            ref_r, ref_phase = out[(torch.float64, False)]
-            for key, label in (((torch.float64, True), 'compiled_float64'), ((torch.float32, False), 'float32')):
-                r, phase = out[key]
+                out[(dev, dtype, compiled)] = r.double().cpu(), phase.double().cpu()
+            DEVICE = device
+            ref_r, ref_phase = out[('cpu', torch.float64, False)]
+            for (dev, dtype, compiled), (r, phase) in out.items():
+                if (dev, dtype, compiled) == ('cpu', torch.float64, False):
+                    continue
+                label = f"{dev}_{str(dtype).removeprefix('torch.')}{'_compiled' if compiled else ''}"
                 for metric, value in ((f'{label}_r_max_rel', ((r - ref_r).abs() / ref_r).max().item()),
                                       (f'{label}_phase_max_abs_rad', (phase - ref_phase).abs().max().item())):
                     records.append({'code': 'torch', 'dtype': None, 'compiled': None, 'mode': case,

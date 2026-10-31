@@ -71,8 +71,12 @@ echo "deployed $BRANCH $(git describe --tags --always) to $(hostname -s):$dir"'
 setup)
   if [ -n "${IMAGE_FROM:-}" ]; then   # no runtime on the login nodes: copy the image from another site
     src_ssh="$(source "$root/sites/$IMAGE_FROM.env"; echo "$SSH")"; src_dir="$(source "$root/sites/$IMAGE_FROM.env"; echo "$IMAGE_DIR")"
-    remote "mkdir -p '$IMAGE_DIR' '$XSH_RESULTS'"
-    ssh -o BatchMode=yes "$SSH" "test -f '$IMAGE_DIR/$image'" || scp -3 -q "$src_ssh:$src_dir/$image" "$SSH:$IMAGE_DIR/$image"
+    dest="${IMAGE_STAGE:-$IMAGE_DIR}/$image"
+    remote "mkdir -p '$XSH_RESULTS' '${IMAGE_STAGE:-$IMAGE_DIR}'"
+    ssh -o BatchMode=yes "$SSH" "test -f '$IMAGE_DIR/$image' || test -f '$dest'" || scp -3 -q "$src_ssh:$src_dir/$image" "$SSH:$dest"
+    [ -z "${IMAGE_INSTALL:-}" ] || remote "set -e
+${CONTAINER_SETUP:-}
+[ -f '$IMAGE_DIR/$image' ] || $IMAGE_INSTALL '$dest'"
   else
     remote "set -e
 ${CONTAINER_SETUP:-}

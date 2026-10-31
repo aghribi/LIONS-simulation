@@ -476,3 +476,7 @@ Amendments to section 20, before the reruns:
   go criterion; it is reported as a float32 throughput. The plain LIONS baseline runs on the CPU of the same node.
 - Sites: CC-IN2P3 (H100, V100) and Jean-Zay (A100 or H100), from the site clones in the container of
   `environment/`; CRIANN when reachable.
+- Accuracy reference, amended before the site and MPS runs: eager float64 on the CPU for every device; each device
+  variant (float64 eager and compiled, float32 eager; float32 only on MPS) is compared with it. Reason: a smoke test
+  gave MPS float32 against CPU float64 a difference of 5.4e-6 in r after 360 steps, against 1.3e-7 after 3600 steps
+  for CPU float32.
