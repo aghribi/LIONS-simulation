@@ -7,6 +7,7 @@
 #   tools/site.sh <site> submit [opts] jobs/<job>.sh [KEY=VALUE ...]   (options: tools/xsh-submit --help)
 #   tools/site.sh <site> status               your jobs in the site queue
 #   tools/site.sh <site> logs <jobid>         tail of the job's output and error logs
+#   tools/site.sh <site> index [--dry-run]    rebuild the site's run index (<results root>/run_index.parquet)
 #   tools/site.sh <site> fetch <path>         copy <path> under the site results root to benchmarks/runs/sites/<site>/
 #
 # deploy and submit refuse a dirty or unpushed laptop branch; submit also refuses
@@ -15,7 +16,7 @@ set -euo pipefail
 
 die() { echo "site.sh: $*" >&2; exit 1; }
 root="$(cd "$(dirname "$0")/.." && pwd)"
-[ $# -ge 2 ] || { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+[ $# -ge 2 ] || { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 site="$1" cmd="$2"; shift 2
 [ -f "$root/sites/$site.env" ] || die "unknown site '$site' (no sites/$site.env)"
 source "$root/sites/$site.env"
@@ -106,6 +107,14 @@ logs)
   [ $# -ge 1 ] || die "usage: tools/site.sh $site logs <jobid>"
   remote "$cd_copy
 for f in jobs/logs/*_$1.out jobs/logs/*_$1.err; do [ -f \"\$f\" ] && { echo \"== \$f\"; tail -n 40 \"\$f\"; }; done; true"
+  ;;
+index)
+  # Inside the image (pyarrow); through a blocking srun where login nodes cannot run containers.
+  args=""; [ $# -gt 0 ] && args="$(printf '%q ' "$@")"
+  remote "set -e
+$cd_copy
+${CONTAINER_SETUP:-}
+${COMPUTE_ONLY_RUNTIME:+srun ${SLURM_OPTS_test:-} --ntasks=1 --time=00:10:00 }$CONTAINER exec --bind \$PWD,$CLONE,$XSH_RESULTS $IMAGE_DIR/$image python benchmarks/build_run_index.py '$XSH_RESULTS' --site $site $args"
   ;;
 fetch)
   [ $# -ge 1 ] || die "usage: tools/site.sh $site fetch <path under $XSH_RESULTS>"
