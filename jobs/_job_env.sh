@@ -18,7 +18,7 @@ _binds="$XSH_ROOT,$CLONE,$XSH_RESULTS${TMPDIR:+,$TMPDIR}"   # CLONE: git data of
 _nv=""; command -v nvidia-smi >/dev/null && nvidia-smi -L >/dev/null 2>&1 && _nv="--nv"
 python() { "$CONTAINER" exec $_nv --bind "$_binds" "$XSH_IMAGE" python "$@"; }
 
-export XSH_SITE XSH_RESULTS
+export XSH_SITE XSH_RESULTS XSH_ROOT
 export XSH_JOB_ID="${SLURM_JOB_ID:-local}"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export PYTHONPATH="$XSH_ROOT/src" PYTHONUNBUFFERED=1
