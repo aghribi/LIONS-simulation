@@ -222,6 +222,10 @@ def main(outdir):
             for n in STEPS:
                 records += [{'case': case, 'steps': n, **row} for row in gradients(load(STEPS[0]), n)]
         print(f'case {case} done', file=sys.stderr)
+    meta = {'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
+            'torch': torch.__version__, 'lions': importlib.metadata.version('lions'),
+            'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version()}
+    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e.parquet')
     ram_mb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**20
     for n in COST_STEPS:
         for particles in COST_PARTICLES:
@@ -236,14 +240,11 @@ def main(outdir):
                     continue
                 res = subprocess.run([sys.executable, __file__, '--cost', str(n), str(particles), str(int(ckpt))],
                                      capture_output=True, text=True)
-                cost.append(json.loads(res.stdout) if res.returncode == 0 else
+                # the RF-Track import prints a banner on stdout: the result is the last line
+                cost.append(json.loads(res.stdout.strip().splitlines()[-1]) if res.returncode == 0 else
                             {'steps': n, 'particles': particles, 'checkpoint': ckpt, 'wall_s': None,
                              'peak_rss_mb': None, 'error': res.stderr[-300:]})
                 print(cost[-1], file=sys.stderr)
-    meta = {'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
-            'torch': torch.__version__, 'lions': importlib.metadata.version('lions'),
-            'git_commit': commit, 'machine': platform.platform(), 'python': platform.python_version()}
-    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e.parquet')
     pq.write_table(pa.Table.from_pylist(cost).replace_schema_metadata(meta), outdir / 'case_e_cost.parquet')
 
 
