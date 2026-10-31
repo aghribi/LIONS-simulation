@@ -231,8 +231,8 @@ def main(outdir):
         for particles in COST_PARTICLES:
             for ckpt in (False, True):
                 # memory grows linearly in steps without checkpointing: skip a point extrapolated past half the RAM
-                prev = [c for c in cost if c['particles'] == particles and c['checkpoint'] == ckpt and c['peak_rss_mb']]
-                if prev and prev[-1]['peak_rss_mb'] * n / prev[-1]['steps'] > ram_mb / 2:
+                prev = [c for c in cost if c['particles'] == particles and not c['checkpoint'] and c['peak_rss_mb']]
+                if not ckpt and prev and prev[-1]['peak_rss_mb'] * n / prev[-1]['steps'] > ram_mb / 2:
                     cost.append({'steps': n, 'particles': particles, 'checkpoint': ckpt, 'wall_s': None,
                                  'peak_rss_mb': None,
                                  'error': f"skipped: extrapolated {prev[-1]['peak_rss_mb'] * n / prev[-1]['steps']:.0f} MB"
@@ -241,7 +241,7 @@ def main(outdir):
                 res = subprocess.run([sys.executable, __file__, '--cost', str(n), str(particles), str(int(ckpt))],
                                      capture_output=True, text=True)
                 # the RF-Track import prints a banner on stdout: the result is the last line
-                cost.append(json.loads(res.stdout.strip().splitlines()[-1]) if res.returncode == 0 else
+                cost.append({'error': None, **json.loads(res.stdout.strip().splitlines()[-1])} if res.returncode == 0 else
                             {'steps': n, 'particles': particles, 'checkpoint': ckpt, 'wall_s': None,
                              'peak_rss_mb': None, 'error': res.stderr[-300:]})
                 print(cost[-1], file=sys.stderr)
