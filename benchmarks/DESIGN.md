@@ -526,3 +526,16 @@ Sources (fetched into the git-ignored `benchmarks/external/`, pinned, sha256 rec
 
 ### Out of scope here
 Acceleration in the PSI Ring (RF cavities): it needs the gap model of case C. Later.
+
+Case G1 implementation notes (before any tracking):
+- The map is the exact field of the orbit family (FROM_ORBIT `def_B`: root finding for a(r, theta), then
+  B = brho(a) curv(a, theta) / r_inf), with dBz/dr and dBz/dtheta by central differences (1e-6 m, 1e-6 rad).
+  FROM_ORBIT's own `write_field_map` fits a(r, theta) with a smoothing spline: on the 3-sector example at 1 deg it
+  departs from the exact field by up to 9.7e-5 (median 5.7e-6, 118 nodes), too large for a reference. Observed once.
+- Orbits: indices 1 to 3 of the example grid (3-sector: a = 0.14, 0.24, 0.35; 19, 58, 130 MeV H2+). The centre
+  (a = 0.004) is degenerate and the outermost orbit (a = 0.425) bounds the region where the field is defined, so
+  no map can surround it.
+- Map: r 0.40 to 2.00 m by 1 cm, 360 points per 120 deg sector (1/3 deg); coarser maps are subsets of its nodes.
+  LIONS takes -Bz (counterclockwise travel); d2Bz = 0, as in OPAL (no effect on linear tunes).
+- Environment: `benchmarks/g1_maps.py` is a uv script with pinned numpy 1.26.4 and scipy 1.13.1 (FROM_ORBIT uses
+  `numpy.trapz`).
