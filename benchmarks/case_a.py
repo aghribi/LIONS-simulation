@@ -9,6 +9,7 @@ import contextlib
 import importlib.metadata
 import io
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -86,6 +87,17 @@ def run_lions(n, rho):
     return m
 
 
+def opal_version():
+    """OPAL version and git revision, as printed by the image."""
+    log = subprocess.run(['docker', 'run', '--rm', OPAL_IMAGE, 'opal', '--version-full'],
+                         capture_output=True, text=True).stdout
+    version = re.search(r'Version (\S+)', log)
+    rev = re.search(r'git rev\. (\w+)', log)
+    if not (version and rev):
+        raise RuntimeError(f'cannot read the OPAL version from {OPAL_IMAGE}')
+    return f'{version.group(1)} ({rev.group(1)})'
+
+
 def run_opal(n, d, pos, mom, mass_kg, workdir):
     mass_gev = mass_kg * syn.C**2 / syn.QE / 1e9
     pc_gev = np.linalg.norm(mom[0]) * mass_gev
@@ -161,7 +173,7 @@ def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
     import RF_Track as rft
     versions = {'lions': importlib.metadata.version('lions'),
-                'opal': '2024.1', 'rf_track': str(rft.RF_TRACK_VERSION)}
+                'opal': opal_version(), 'rf_track': str(rft.RF_TRACK_VERSION)}
     commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
                             text=True).stdout.strip()
     records = []
