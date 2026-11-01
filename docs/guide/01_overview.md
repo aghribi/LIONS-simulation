@@ -75,7 +75,7 @@ Fixed sizes inherited from the Fortran module, defined in `lions.state`:
 |---|---|---|
 | `CENTRAL_NX`, `CENTRAL_NY` | 500, 300 | Central potential grid |
 | `OUTER_NX`, `OUTER_NY` | 50, 1000 | Outer potential grid |
-| `MAP_NR`, `MAP_NTHETA` | 250, 721 | Magnetic map grid (r, theta) |
+| `MAP_NR`, `MAP_NTHETA` | 250, 1081 | Magnetic map grid (r, theta) |
 | `MAX_BIDIMS` | 10 | Bidim histogram scalings |
 | `MAX_BARY` | 10800 | Orbit-centre barycentre buffer |
 

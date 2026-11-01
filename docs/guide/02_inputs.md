@@ -185,7 +185,7 @@ Row i is the radius `rmin + i * dr`, `dr = (rmax - rmin) / (nr - 1)`.
 - **Full map** (`ntheta != 91`): columns cover 0 to 360 deg, `dtheta = 360 / (ntheta - 1)` deg.
 - **1/8 map** (`ntheta = 91`): columns cover 45 deg down to 0 deg in 0.5 deg steps (the column order is reversed on reading). The map is extended to 721 columns over 360 deg by the 8-fold symmetry. Blocks 3 and 4, read as (a, b), become dBz/dx = (a + b) / sqrt(2) and dBz/dy = (a - b) / sqrt(2) on 0 to 45 deg before the extension.
 
-Limits: `1 < nr <= 250`, `1 < ntheta <= 721`.
+Limits: `1 < nr <= 250`, `1 < ntheta <= 1081` (the Fortran stops at 721).
 A 1/8 map without blocks 3 and 4 is accepted with dBz/dx = dBz/dy = 0: Bx = By = 0 and the motion stays in the median plane.
 A full map that ends early raises `ValueError`.
 
@@ -313,7 +313,7 @@ It asks nothing, except answer 3 when `ficv1 = no`.
 |---|---|
 | Missing deck, map, potential or sigma file | `FileNotFoundError` |
 | Sum of `nbrion` differs from `n` | `ValueError` |
-| Map grid outside 250 x 721 | `ValueError` |
+| Map grid outside 250 x 1081 | `ValueError` |
 | Full map ends before block 4 | `ValueError` |
 | 1/8 map without blocks 3 and 4 | Message, dBz/dx = dBz/dy = 0 |
 | Central potential header outside 500 x 300 | `ValueError` (check the byte swap) |
