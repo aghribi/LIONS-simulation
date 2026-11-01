@@ -117,7 +117,7 @@ def sweep(outdir, runs, name, case):
     """runs: (row, integrator, steps, fd). Failures are recorded, as in G2."""
     records = []
     for row, integrator, steps, fd in runs:
-        energy, r_ic, pr_ic, qr_ref, qz_ref = row
+        energy, r_ic, pr_ic, qr_ref, qz_ref = map(float, row)
         base = {'code': 'opalx', 'integrator': integrator, 'steps_per_turn': steps, 'fdstep': fd,
                 'energy_mev': float(energy), 'qr_half_integer_band': bool(386 <= energy <= 430)}
         try:
@@ -149,7 +149,7 @@ def step_b(outdir):
 def step_s(outdir):
     rows = fixpo()
     rows = np.vstack([rows[::10], rows[-1]])
-    triples = ','.join(f'{e / 1000!r},{r / 1000!r},{pr / 1000!r}' for e, r, pr, _, _ in rows)
+    triples = ','.join(f'{e / 1000!r},{r / 1000!r},{pr / 1000!r}' for e, r, pr, _, _ in rows.tolist())
     code = run_opalx(outdir, 'tunes', f'''FS0: FIELDSOLVER, TYPE=NONE, NX=16, NY=16, NZ=16;
 BEAM0: BEAM, PARTICLE=PROTON, NALLOC=1, BCHARGE=1.602176634e-19, SOURCES=SOURCES0, CHARGE=1, TUNEINITIAL={{{triples}}};
 TRACK, LINE=MYCYCL, BEAM=BEAM0, MAXSTEPS={TURNS * STEPS}, DT={HARMONIC / F_RF / STEPS!r}, STEPSPERTURN={STEPS};
