@@ -1030,3 +1030,22 @@ Validation, LIONS bilinear against the numpy bilinear tracker (atan2), on the 10
   orbit after one turn equal between the two azimuths within 1e-12 relative (same smooth map).
 - Prediction: the 1/h noise falls to the harness rounding level (1e-8 or below at h = 1e-6 m).
 - Cost: LIONS with azimuth=atan2 against the default, 1e5 particles, PSI map.
+
+Case H phase 2b results (`benchmarks/runs/case_h/case_h_azimuth.parquet`, code 54dde70). max |dM_rr| of LIONS
+bilinear against the numpy bilinear tracker, at h = 1e-4 / 1e-6 / 1e-7 m:
+
+| Map | azimuth arccos | azimuth atan2 |
+|---|---|---|
+| 10-sector 1 deg, a = 0.8863, 2880 steps | 2.6e-9 / 1.5e-6 / 1.6e-6 | 2.1e-9 / 4.5e-7 / 6.8e-6 |
+| PSI, 292 MeV, 1440 steps | 1.5e-9 / 4.7e-8 / 1.0e-6 | 1.8e-10 / 6.7e-9 / 2.9e-8 |
+
+- One turn, atan2 against arccos: 1.7e-14 and 2.1e-14 relative (same map, criterion met).
+- Noise criterion (10 times lower at h = 1e-6 m) not met: 3.4 times (10-sector), 7 times (PSI). At h = 1e-7 m atan2
+  is 35 times lower on the PSI map and 4 times higher on the 10-sector map. Prediction (1e-8 or below) failed.
+- Reading [hypothesis, not tested]: on the bilinear field a second source remains. The one-turn map is only
+  piecewise smooth (the field gradient jumps at cell edges), so finite-difference probes that straddle an edge mix
+  two slopes; atan2 removes the rounding part only. On the C1 Hermite field the same change removed the noise 200
+  times (phase 2). A test: the step scan at a closed orbit moved across a cell edge.
+- Cost: 1.28e-7 against 1.20e-7 s per particle-step (1e5 particles, PSI map): +7%.
+- The option is kept as implemented (exact azimuth at theta near 0 and pi, `tests/test_run.py`); its benefit for
+  derivative measurements on the bilinear field is partial.
