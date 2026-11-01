@@ -43,8 +43,12 @@ Gaps to close before levels 3 to 5 (not built):
   It must reach parity with LIONS on these, validated as in Lecture §7 (field parity, then tracking parity).
 - The CIME field map is needed for the CIME scenarios. **D1**: the CIME map `cime700rec.1804.pbob1.lio.dat` and the CIME
   decks may be used for training once available.
-- Field model: `interpolation=hermite` for tune and Jacobian work (Lecture §9); the bilinear default for Fortran
-  reproduction.
+- Field model: `interpolation=hermite` for every tier that tracks a map (T1, T2, T3), scores and training data included. On the PSI
+  map the bilinear default gives excursions of up to 4 mm from a closed-orbit launch in 100 coasting turns, against at most 0.8 um with
+  Hermite (`benchmarks/DESIGN.md` section 25, step 2d). The bilinear default stays for reproducing Fortran results, and for a Lab
+  scenario that shows this effect, labelled as such.
+- The PyTorch port is bilinear only: T2 needs the Hermite field, validated against LIONS `interpolation=hermite`. Its effect on autograd
+  gradients has not been measured.
 
 ## 4. Levels
 
