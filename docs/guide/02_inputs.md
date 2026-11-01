@@ -58,6 +58,7 @@ Each field fills the `State` attribute given in the tables below.
 | 20 | `ficv2` | text | `files.outer_potential` | | `'newgap612.dat'` |
 | 21 | `b_factor` | T | `field.b_factor` | optional | `1.56d0` |
 | 22 | `ficloa ficsto` | text | `files.bunch_load`, `files.bunch_save` | optional, default `no no` | `no bunch.bin` |
+| 23 | `interpolation=` | text | `field.interpolation` (`Deck.field_interpolation`) | optional, Python only, default `bilinear` | `interpolation=hermite` |
 
 Lines 12 and 13 repeat for each family, in the order 12, 13, 12, 13, ...
 Lines 14b and 14c are read as whole lines: quotes are kept as part of the name.
@@ -154,15 +155,18 @@ See [Bunch generation](06_bunch.md).
 
 `ficb`: magnetic map. `ficv1`: central potential, or `no` (the program then prompts for a central grid and uses a zero potential). `ficv2`: outer potential.
 
-### Optional tail (lines 21, 22)
+### Optional tail (lines 21 to 23)
 
-The deck may end with `[b_factor] [ficloa ficsto]`.
+The deck may end with `[b_factor] [ficloa ficsto] [key=value ...]`.
 The first token is taken as `b_factor` if it parses as a number; the next two tokens are `ficloa ficsto`.
 
 - No `b_factor`: the magnetic map is used as read, as in the Fortran.
 - `b_factor` given: the map (Bz, d2Bz, dBz/dx, dBz/dy) is scaled so that max|Bz| = `b_factor` (T).
 - `ficloa`: bunch file to load after the distribution, `no` for none. Read only when `iflcor != 0`.
 - `ficsto`: bunch file to write at the end of the run, `no` for none.
+
+- `key=value` options come last, after `ficloa ficsto` (written as `'no' 'no'` if unused), so the Fortran never reads them. An unknown key or value raises `ValueError`.
+- `interpolation=hermite`: the magnetic map is interpolated by a bicubic Hermite surface (C1 across cells) built from Bz and its first derivatives at the nodes (dBz/dr and dBz/dtheta from blocks 3 and 4; the cross derivative by second-order differences in r). Bx and By come from the gradient of that surface; the d2Bz term stays bilinear. `bilinear` (default) is the Fortran model. Accuracy and cost against the bilinear model: `benchmarks/DESIGN.md`, case H.
 
 The GUI always writes `b_factor`.
 
