@@ -880,3 +880,39 @@ failure and left out of the criterion. Absolute errors against FIXPO, interior e
   and its one-turn map is far from area-preserving. Steps 2b and 2c trace this to the Boris step on the bilinear
   field. G1 changed the field smoothness with the integrator fixed; the remedy space now includes the integrator or
   the field derivative continuity, not only the interpolation order. Decision for A. Ghribi and O. Kamalou.
+
+## 23. Case H: field-model and integrator options for LIONS (registered before running, approved 2026-11-01)
+
+Question: which opt-in additions to LIONS (the bilinear field and Boris step stay the default, Fortran bit-identity
+kept) remove the G1 and G2 floors, at what cost per particle-step? Phase 1 measures in the harness (numpy, LIONS
+untouched); phase 2 implements the options chosen by A. Ghribi and O. Kamalou from the table.
+
+- Field models, on the LIONS node data (Bz, dBz/dr, dBz/dtheta at the map nodes; vertical field to first order in z;
+  d2Bz = 0):
+  - F0 bilinear: LIONS (Bz, dBz/dx, dBz/dy interpolated separately), numpy port validated in G1 step 3a.
+  - F1 bicubic Hermite: local, C1. Per cell, Bz from the node Bz, dBz/dr, dBz/dtheta and d2Bz/drdtheta (central
+    differences of dBz/dtheta in r, second order, one-sided at the edges); Br and Btheta from the derivatives of that
+    surface.
+  - F2 cubic and F3 quintic splines: separate periodic splines of Bz, dBz/dr, dBz/dtheta (G1 step 3).
+- Integrators: Boris (the LIONS step); RK4 with a fixed step on the same equations and field call, recorded at full
+  steps. Uniform Boris sub-stepping equals more steps per turn and is covered by the step axis.
+- Steps per turn: 720, 1440, 2880.
+- Maps: G1 3-sector (1/3 and 1 deg, 3 orbits), G1 10-sector (1/3 and 1 deg, 4 orbits), PSI Ring (1/3 deg, the 24
+  energies of G2 step 3). CIME when its map is available.
+- References: G1, the prescribed orbits, isochronism and the step 1 RF-Track tunes. PSI, RF-Track on the quintic
+  spline (G2 step 3) for orbit, turn time and tunes; FIXPO reported alongside. det(M) - 1 against 0.
+- Metrics: r_eo, pr_eo / p, turn time, Qr, Qz, det(M) - 1; median and max over orbits or energies per (map, field,
+  integrator, steps); PSI half-integer band (386 to 430 MeV) separate.
+- Cost: wall time per particle-step (field evaluation and push), 1e3 and 1e5 particles, median of 5 after a warm-up,
+  M3 CPU; numpy (scipy FITPACK for the splines). LIONS timed on the same map as calibration of the harness F0 cost.
+  Memory of the precomputed arrays.
+- Validation before the matrix (stop if one fails): F1 reproduces node values and derivatives to 1e-12 and is C1
+  across cell edges (jumps in value and first derivatives below 1e-10 relative); RK4 converges at fourth order on the
+  3-sector quintic field (one orbit, 720, 1440, 2880 steps, r_eo ratio 16 +- 3 per halving).
+- Decision target, fixed before running: Qr and Qz errors at most 1e-4 and det(M) - 1 at most 1e-4 on every orbit or
+  energy of a map (PSI band excluded). For each option and map: the smallest step count of the three that meets it
+  (or none), and the cost per particle-step at that count.
+- Predictions: F1 with Boris removes the det floor (to 1e-6 to 1e-4) and brings the tunes within a factor 3 of F3 at
+  1/3 deg; at 1 deg on the 10-sector map F1 and F2 stay limited by the node density (G1). RK4 on F0 lowers det as
+  RF-Track did (G2 step 2c) but not below 1e-3 at 1440 steps on the PSI map. Cost relative to F0 with Boris: F1 2 to
+  4 times, splines 5 to 20 times, RK4 about 4 times its field model with Boris.
