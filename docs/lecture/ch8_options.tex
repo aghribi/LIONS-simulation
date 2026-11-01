@@ -16,6 +16,7 @@ The validation came first.
 F1 reproduces node values and derivatives to \HFOneNodes, and RK4 shows fourth order from 360 steps per turn.
 
 \textbf{Result} (\cref{fig:H}, \cref{tab:Hdecision,tab:Hcost}).
+All tunes in this chapter come from the one-turn Jacobian; on the bilinear field they do not give the tracked tune (\cref{sec:caseG3}).
 \begin{itemize}
 \item F0 never meets the target, with either integrator.
 RK4 does not fix it: on the 10-sector and PSI maps its worst $|\det M - 1|$ at 1440 steps is \HFzeroRkDetMin{} to
@@ -99,7 +100,8 @@ On the C$^1$ Hermite field the same azimuth change worked, which fits this hypot
 
 \section{What to use}
 \begin{itemize}
-\item For tune or Jacobian work on measured maps: \texttt{interpolation=hermite}.
+\item For Jacobian work and for beam amplitudes below a few millimetres on measured maps: \texttt{interpolation=hermite}.
+On the PSI map, tracked tunes from the default are close to the reference at amplitudes from \num{0.1} to \SI{5}{mm}, while its amplitudes below a few millimetres are not reliable (\cref{sec:caseG3}).
 Its effect on autograd gradients has not been measured: the PyTorch port is bilinear only.
 It lowers $|\det M-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps, for \HCostHerm{} times the cost of
 the default; on the PSI map it still leaves \HFoneDetPsi{} at 1440 steps and \HFoneDetPsiTwoEightEighty{} at 2880 steps, while the

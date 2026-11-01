@@ -98,6 +98,10 @@ G2 2c: adaptive RF-Track on the bilinear field, $|\det-1|$ \GTwoCRatioMin{} to \
 G2 2c, tunes: adaptive RF-Track on the bilinear field within \GTwoCQrRfMax{} of the spline tracker in $\Qr$ & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 H: fixed-step RK4 on F0 keeps $|\det-1|$ at \HFzeroRkDetMin{} to \HFzeroRkDetMax{} (1440 steps) & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 H: F1 (C$^1$) lowers $|\det-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G3: OPALX Boris, an independent code, median $|\det M_r-1|$ \GThreeBorisDet{} & $\cdot$ & $+$ & $-$ & $\cdot$ & $\cdot$\\
+G3: fixed-step DOP853 worse than RK4 at 1440 steps, no order visible & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G3 2b: $M$ predicts the first return within \GThreeOneTurnMax{} & $\cdot$ & $\cdot$ & $\cdot$ & $-$ & $\cdot$\\
+G3 2c: on a commensurate turn the orbit follows $M^n$, whatever the launch amplitude & $\cdot$ & $+$ & $\cdot$ & $-$ & $\cdot$\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -116,8 +120,8 @@ azimuthal step left the scatter unchanged (ratio \BHalfDegQrRatioMin{} to \BHalf
 predicts 0.25.
 The registered reading threshold of G2 2c ($|\det-1|<10^{-3}$ with RF-Track) was met at one energy of three, so the
 adaptive run supports H1b without closing the case.
-The step-insensitivity of $\det$ in G2 2b is a weak argument against H3: on a piecewise-smooth discrete map a central
-difference can mix two slopes at any $h$ (\cref{ch:orbits}).
+H3 is now rejected by a direct test: $M$ predicts the first return of a launched particle within \GThreeOneTurnMax{} (\cref{sec:caseG3}).
+The mechanism behind H1b has a sharper form, hypothesis S: the one-turn map on a bilinear field depends on the step phase at the section.
+\Cref{sec:caseG3} gives the runs, including a threshold that S missed.
 Three direct tests have not been run: the Jacobian from automatic differentiation of the existing PyTorch bilinear
-port (no finite differences at all), the convergence order of $\det M_r - 1$ with the step count, and a Jacobian step
-scan with the closed orbit moved across a cell edge.
+port (no finite differences at all), the convergence order of $\det M_r - 1$ with the step count, and the fixed point and $\det M_r$ against the launch step phase.

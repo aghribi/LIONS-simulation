@@ -210,6 +210,8 @@ On the bilinear map the radial tune is defined only roughly: the case H harness 
 $\operatorname{atan2}$ azimuth, its own Newton solution) agrees with LIONS at some energies and differs several-fold at
 others, giving a median of \HFixpoBilQrMed{} against FIXPO (\cref{sec:caseH}).
 LIONS has $|\det M - 1|$ of \GPsiLionsDetMed{} (median), up to \GPsiLionsDetMax.
+All these tunes come from the one-turn Jacobian.
+Tracked over many turns, LIONS on the same field is within \GThreeFiveFixMax{} of FIXPO at \SI{5}{mm} (\cref{sec:caseG3}), so the LIONS line of \cref{tab:G2} does not measure the betatron frequency of a beam.
 
 \begin{table}[h]
 \centering\small
@@ -254,3 +256,97 @@ the criterion holds whatever LIONS does.
 It passed for $\Qr$ while LIONS was \GPsiLionsOverOpal{} times further from FIXPO than OPAL (median).
 The informative comparison is \cref{tab:G2}.
 The criterion was proposed by this analysis, and the record says so.
+
+\section{Case G3: OPALX and the step phase}\label{sec:caseG3}
+\textbf{Question} (registered before running).
+Does OPALX 1.0.0 \cite{opalx2026} reproduce OPAL 2024.1 and FIXPO on the PSI map, and does a third, independent tracker on the same bilinear field show the $\det M_r$ excess?
+OPALX interpolates $B_z$ bilinearly on the same nodes.
+Its closed-orbit command writes the Jacobian; no trim coil, 1440 steps, the G2 step 3 energies.
+The installation reproduces its own regression test on this map within its tolerances.
+
+\textbf{Result} (\cref{tab:G3,tab:G3det}).
+No run failed.
+The excess is not specific to LIONS: OPALX Boris has a median $|\det M_r-1|$ of \GThreeBorisDet{}, RK4 \GThreeBorisOverRk{} times less, and the fixed-step eighth-order DOP853 \GThreeDopOverRk{} times more than RK4.
+No integrator shows its order: the values are not monotonic in the step count and they change sign.
+The OPALX manual reports the same behaviour on this map at 46080 steps per turn, with a radial modulus off unity by $10^{-4}$ to $10^{-3}$, and names the piecewise interpolation as an unconfirmed candidate \cite{opalx2026}.
+OPALX Boris $\det M_r$ moves at most \GThreeFdVar\,\% with the derivative step from $10^{-7}$ to $10^{-5}$.
+
+\begin{table}[h]
+\centering\small
+\caption{Case G3: OPALX against FIXPO, median / maximum over the energies of \cref{tab:G2}, Jacobian tunes, 1440 steps.
+$|\operatorname{tr}M_r/2|>1$ at several energies, where the tune is clipped to 0.5; the maxima include these.}
+\label{tab:G3}
+\input{gen/tab_g3.tex}
+\end{table}
+
+\begin{table}[h]
+\centering\small
+\caption{Case G3: OPALX $\det M_r - 1$ against steps per turn.}
+\label{tab:G3det}
+\input{gen/tab_g3_det.tex}
+\end{table}
+
+One registered prediction failed.
+OPALX minus OPAL 2024.1 in $\Qr$ has a median of \GThreeOpalQrMin{} to \GThreeOpalQrMax{}, where below $10^{-3}$ was predicted, because the premise of a shared field model does not hold for tunes.
+From its source, the OPAL finder integrates the linearised equations with the interpolated $\partial_rB$ and $\partial_\theta B$ channels, so it sees a continuous gradient.
+OPALX differentiates the tracked map, which sees the gradient jumps of bilinear $B_z$.
+This explanation is read from the sources, not tested.
+
+\paragraph{The same field in two codes.}
+LIONS and OPALX Boris have the same magnitude of $\det M_r-1$ but not the same value: the correlation over the 24 energies is \GThreeCorr.
+OPALX also subdivides steps at sector edges.
+So $\det M_r$ is a property of the discrete map and of where its steps fall, not a stable property of the field.
+
+\paragraph{Tracked tunes.}
+OPALX spectral tunes (a ray \SI{5}{mm} off, RK4, 100 turns) lie within \GThreeSpecQrMax{} of FIXPO in $\Qr$ at \GThreeSpecN{} of \GThreeSpecN{} energies (bin \num{2.5e-3}), the half-integer band included.
+A registered run then measured LIONS itself: launch at amplitude $a$ in $r$ and $z$ from the code's own closed orbit, 100 turns, tune from the turn-by-turn signal (\cref{tab:G3amp}, \cref{fig:G3}).
+LIONS is within \GThreeFiveSplMax{} of the spline tracker at \SI{5}{mm}, \GThreeOneSplMax{} at \SI{1}{mm} and \GThreeTenthSplMax{} at \SI{0.1}{mm}.
+At \SI{0.01}{mm} it is more than 0.1 off at \GThreeSmallOff{} of \GThreeSmallN{} energies.
+The Hermite option stays close at every amplitude (median against FIXPO \GThreeHermQrMed{} in $\Qr$ and \GThreeHermQzMed{} in $\Qz$; spline \GThreeSplQzMed{} and default \GThreeLionsQzMed{} in $\Qz$).
+
+\begin{table}[h]
+\centering\small
+\caption{Case G3 step 2: tracked $|\Qr-\Qr^{\rm FIXPO}|$, median / maximum over 22 energies outside the band, and the ratio of the rms radial amplitude over the last and first ten of 100 turns.
+Baseline of that ratio on the smooth models: \GThreeArBaseMin{} to \GThreeArBaseMax{} (beating at low tune).}
+\label{tab:G3amp}
+\input{gen/tab_g3_amp.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{g3_phase}
+\caption{Left: radial tune error of LIONS on the PSI map, from the one-turn Jacobian and from tracking.
+Grey band: $\Qr$ near 1.5.
+Right: distance from the closed orbit at \SI{292}{MeV}, in units of the launch amplitude, at the nominal step and on a commensurate turn.}
+\label{fig:G3}
+\end{figure}
+
+\paragraph{The step phase.}
+A \SI{0.01}{mm} oscillation does not grow as $\det M_r$ implies: its amplitude ratio is at most \GThreeSmallArMax, against up to \GThreeSmallPred{} from $(\det M_r)^{45}$.
+The registered reading of that failure was that the Jacobian was suspect again, so the Jacobian was tested directly (step 2b, 30 turns, \SIrange{1e-7}{1e-4}{m}).
+$M$ predicts the first return within \GThreeOneTurnMin{} to \GThreeOneTurnMax{} at $a=\SI{1e-7}{m}$.
+At the second return the prediction fails by order 1, which also missed the registered prediction.
+From then on the distance to the closed orbit no longer depends on $a$: at \SI{152}{MeV} and turn 5 it is \GThreeJitterA{}~m from $a=\SI{1e-7}{m}$ and \GThreeJitterB{}~m from $a=\SI{1e-6}{m}$.
+
+Hypothesis S: the turn time is not an integer number of steps, so each turn starts at another step phase and is another map.
+At the nominal step these energies miss a commensurate turn by \GThreeSlipMin{} to \GThreeSlipMax{} of a step per turn.
+Test (step 2c): adjust the step until one turn is exactly 1440 steps, and repeat.
+At turn 2 the deviation falls to \GThreeComTwoMin{} to \GThreeComTwoMax, and the growth no longer depends on $a$ and tracks $M^n$ (\cref{fig:G3}, right).
+At \SI{292}{MeV} a launch grows by \GThreeComGrow{} in 20 turns, against \GThreeComGrowPred{} from $M^n$.
+This refutes the rival that the second-return failure does not depend on the step phase.
+It misses the registered threshold ($10^{-2}$ through turn 10): the deviation at turn 10 is \GThreeComTenMin{} to \GThreeComTenMax, not explained.
+
+\begin{reading}
+This reading is a proposal.
+On a bilinear field, the one-turn map depends on the step phase at the section.
+The Newton solution and $M$ of cases G2, H and G3 are correct for one phase.
+Over many turns the orbit moves among these maps.
+Then:
+(1) tracked tunes are right, with a median of \GThreeTenthFixMed{} against FIXPO at \SI{0.1}{mm};
+(2) below about \SI{0.1}{mm} the betatron signal is lost in a jitter of tens of micrometres;
+(3) amplitudes are not reliable: the radial amplitude at \num{0.1} and \SI{1}{mm} changes by \GThreeArMin{} to \GThreeArMax{} times in 100 turns on a coasting orbit;
+(4) a deliberately commensurate step makes the growth exponential;
+(5) the Hermite field removes all of this in the runs above.
+That each phase has its own fixed point is inferred, not measured.
+Beam size and emittance over longer runs, on a bunch and with acceleration have not been measured.
+\end{reading}

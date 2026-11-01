@@ -82,6 +82,7 @@ When $\det M_u\ne1$, the trace formula still returns a number, but it no longer 
 oscillation; the consistent definition is then $\cos\mu = \operatorname{tr}M_u/(2\sqrt{\det M_u})$.
 The benchmark harness uses $\operatorname{tr}M_u/2$.
 A $\det M_u - 1$ of \GPsiLionsDetMed{} (median), as found for LIONS on the PSI map, means the formula is used outside its validity.
+On a bilinear field there is a further limit: $M$ is the derivative of one first return, from one step phase, and it does not describe the motion over several turns (\cref{sec:caseG3}).
 
 \section{Conditioning of the closed orbit}\label{sec:conditioning}
 For an area-preserving block,
@@ -103,3 +104,4 @@ The maximum is refined by golden-section search.
 Windowing and interpolating the spectrum peak gives a frequency resolution much finer than $1/N_{\rm turns}$
 \cite{bartolini1996}.
 On case B0 the two instruments agree within \BzeroFFTAgree.
+On a bilinear field they do not agree, and the tracked tune is the one close to the reference, as long as the offset exceeds the turn-to-turn jitter of the orbit (\cref{sec:caseG3}).
