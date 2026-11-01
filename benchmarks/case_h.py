@@ -253,7 +253,7 @@ def lions_option(outdir):
         mom = p * np.column_stack([-np.sin(th), np.cos(th), np.zeros(n_part)])
         for interpolation in ('bilinear', 'hermite'):
             samples = [lions_cost(grids, attrs, pos, mom, outdir, interpolation=interpolation) for _ in range(3)]
-            records.append({'map': 'psi', 'spacing': '1/3 deg', 'case': f'lions_{interpolation}', 'steps_per_turn': n_part,
+            records.append({'map': 'psi', 'spacing': '1/3 deg', 'case': f'lions_{interpolation}_{n_part}', 'steps_per_turn': 20,
                             'metric': 's_per_particle_step', 'value': float(np.median(samples)), 'harness': None,
                             'unit': f's, {n_part} particles'})
             print(f'LIONS {interpolation} {n_part}: {np.median(samples):.2e} s/particle-step', file=sys.stderr)
