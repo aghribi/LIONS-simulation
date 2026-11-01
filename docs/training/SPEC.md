@@ -55,7 +55,7 @@ Gaps to close before levels 3 to 5 (not built):
 Each level states the learning goal, the controls, what is shown, the success test and the physics source.
 
 ### Level 0: how a cyclotron works (Discovery)
-Short interactive scenes, T0 and T1, no score pressure:
+Arcade stages, T0 (stage 6 needs the CIME layout, **D1**; failing Fallout costs no life):
 1. **Lorentz force.** Drop a proton in a uniform B: circle, radius rho = p/(qB), frequency qB/(gamma m). Change B, energy,
    charge, mass; watch radius and period. Sign of B and direction of rotation.
 2. **The dees.** Two D-shaped electrodes with an RF voltage. Find the RF frequency that accelerates; see the spiral.
@@ -97,6 +97,8 @@ species; restart after a field cycle (hysteresis).
 
 ## 5. GUI
 
+**Arcade front end** (`lions.game.arcade`, `uv run --extra game lions-arcade`, or the Arcade button of `lions-gui`): vector neon screen,
+score, three lives, high-score table. It draws the stages of `lions.game.stages`, which hold all the physics and know nothing of Qt.
 **D2**: extend the existing PyQt5 GUI (`lions.gui`: parameter form, live plots, field viewer; `uv run lions-gui`). The
 scenario API (§9) keeps a later web front end possible.
 

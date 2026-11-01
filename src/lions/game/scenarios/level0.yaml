@@ -1,0 +1,88 @@
+# Level 0: how a cyclotron works. Every quantity carries its unit; lions.game.stages checks them on load.
+scenario: level0
+stages:
+  - stage: larmor
+    title: LARMOR LOCK
+    brief: "A magnetic field bends an ion into a circle. Radius: rho = p / (q B). Match each ring, and its direction."
+    lesson: "More momentum, bigger circle. More field, smaller circle. The sign of B sets the rotation."
+    params:
+      b_max: {value: 2.0, unit: T}
+      b_min: {value: 0.05, unit: T}
+      b_start: {value: 1.0, unit: T}
+      b_rate: {value: 0.5, unit: T/s}
+      w_min: {value: 1.0, unit: MeV}
+      w_max: {value: 30.0, unit: MeV}
+      w_start: {value: 5.0, unit: MeV}
+      w_rate: {value: 6.0, unit: MeV/s}
+      target_min: {value: 0.3, unit: m}
+      target_max: {value: 1.5, unit: m}
+      tolerance: {value: 0.05, unit: "1"}
+      targets: {value: 5, unit: "1"}
+      shots: {value: 12, unit: "1"}
+      flight_time: {value: 1.0, unit: s}
+  - stage: dee_beat
+    title: DEE BEAT
+    brief: "Two dees, one RF voltage. The ion crosses the gap twice per turn. Tune the RF to f = q B / (2 pi m) and catch the crest."
+    lesson: "In a uniform field the turn time does not depend on the radius. One frequency accelerates all the way out."
+    params:
+      b: {value: 1.0, unit: T}
+      v_gap: {value: 0.1, unit: MV}
+      w_start: {value: 0.2, unit: MeV}
+      w_target: {value: 10.0, unit: MeV}
+      w_lost: {value: 0.05, unit: MeV}
+      f_offset_min: {value: 0.01, unit: "1"}
+      f_offset_max: {value: 0.04, unit: "1"}
+      f_rate: {value: 0.01, unit: 1/s}
+      crossing_time: {value: 0.2, unit: s}
+      crest_cos: {value: 0.9, unit: "1"}
+      time_limit: {value: 60.0, unit: s}
+  - stage: trim_coils
+    title: TRIM THE CLOCK
+    brief: "Relativity: gamma grows, the turn slows, the phase slips. Raise the field with radius, B = gamma B0, to keep the beat."
+    lesson: "This is isochronism: a field that grows with radius keeps the turn time constant."
+    params:
+      b: {value: 1.0, unit: T}
+      v_gap: {value: 0.5, unit: MV}
+      w_start: {value: 1.0, unit: MeV}
+      w_target: {value: 120.0, unit: MeV}
+      w_lost: {value: 0.2, unit: MeV}
+      delta_rate: {value: 0.015, unit: 1/s}
+      crossing_time: {value: 0.1, unit: s}
+      crest_cos: {value: 0.9, unit: "1"}
+      time_limit: {value: 60.0, unit: s}
+  - stage: fallout
+    title: FALLOUT
+    brief: "That same rising field pushes the ion off the median plane: Qz^2 = -k. Tap correctors to stay between the poles. Charges run out."
+    lesson: "An isochronous field defocuses vertically, and more with energy. Kicking one ion by hand is not a machine: a beam needs real focusing."
+    mandatory: false
+    params:
+      w_start: {value: 5.0, unit: MeV}
+      w_per_turn: {value: 1.0, unit: MeV}
+      turn_time: {value: 2.5, unit: s}
+      gap: {value: 25.0, unit: mm}
+      z_start: {value: 0.5, unit: mm}
+      kick: {value: 0.15, unit: mm/rad}
+      charges: {value: 30, unit: "1"}
+      turns_target: {value: 12, unit: "1"}
+  - stage: thomas
+    title: THOMAS RUN
+    brief: "Hills and valleys focus: Qz^2 = -k + N^2/(N^2-1) F (1 + 2 tan^2 xi). Climb in energy. Keep Qz off 0.5 and 1, where field errors drive the beam."
+    lesson: "Flutter and spiral give back the vertical focusing. Sector cyclotrons reach high energy this way."
+    switches: {field_errors: illustrative}    # gradient_error and dipole_error have no machine source yet (SPEC section 6)
+    params:
+      n_sectors: {value: 4, unit: "1"}
+      w_start: {value: 10.0, unit: MeV}
+      w_target: {value: 300.0, unit: MeV}
+      w_per_turn: {value: 6.0, unit: MeV}
+      turn_time: {value: 0.5, unit: s}
+      gap: {value: 25.0, unit: mm}
+      z_start: {value: 2.0, unit: mm}
+      f_max: {value: 1.2, unit: "1"}
+      f_start: {value: 0.1, unit: "1"}
+      f_rate: {value: 0.12, unit: 1/s}
+      xi_max: {value: 60.0, unit: deg}
+      xi_rate: {value: 12.0, unit: deg/s}
+      gradient_error: {value: 0.08, unit: "1"}
+      dipole_error: {value: 0.1, unit: mm}
+      band_low: {value: 0.55, unit: "1"}
+      band_high: {value: 0.92, unit: "1"}

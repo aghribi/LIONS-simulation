@@ -1056,6 +1056,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+game = [
+    { name = "pyarrow", version = "25.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pyarrow", version = "26.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pyyaml" },
+]
 gl = [
     { name = "plotly" },
     { name = "pyopengl" },
@@ -1095,12 +1100,14 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.5" },
     { name = "numpy", specifier = ">=1.20" },
     { name = "plotly", marker = "extra == 'gl'", specifier = ">=5" },
+    { name = "pyarrow", marker = "extra == 'game'", specifier = ">=25.0.1" },
     { name = "pyopengl", marker = "extra == 'gl'", specifier = ">=3.1" },
     { name = "pyqt5", specifier = ">=5.15" },
     { name = "pyqtgraph", specifier = ">=0.13" },
     { name = "pyqtwebengine", marker = "extra == 'gl'", specifier = ">=5.15" },
+    { name = "pyyaml", marker = "extra == 'game'", specifier = ">=6.0.3" },
 ]
-provides-extras = ["gl"]
+provides-extras = ["gl", "game"]
 
 [package.metadata.requires-dev]
 bench = [

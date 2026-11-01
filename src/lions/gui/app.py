@@ -152,6 +152,11 @@ class LionsMainWindow(QMainWindow):
         self.action_fields.triggered.connect(self.on_view_fields)
         toolbar.addAction(self.action_fields)
 
+        self.action_arcade = QAction("Arcade", self)
+        self.action_arcade.setToolTip("ION RUSH: the cyclotron trainer (needs the game extra)")
+        self.action_arcade.triggered.connect(self.on_open_arcade)
+        toolbar.addAction(self.action_arcade)
+
         if HAS_GL:
             self.action_3d = QAction("\u2b1a 3D", self)
             self.action_3d.setToolTip("Open the 3D trajectory view (X, Y, Z)")
@@ -317,6 +322,15 @@ class LionsMainWindow(QMainWindow):
         bid_files = sorted(glob.glob(os.path.join(search_dir, '*.bid')))
         dlg = BidimViewerDialog(self, paths=bid_files if bid_files else None)
         dlg.show()
+
+    def on_open_arcade(self):
+        try:
+            from lions.game.arcade import Arcade
+        except ImportError as exc:
+            QMessageBox.warning(self, "Arcade", f"Needs the game extra: uv run --extra game lions-gui ({exc})")
+            return
+        self.arcade = Arcade()
+        self.arcade.show()
 
     def on_view_fields(self):
         """Open the field viewer on the map files named in the form."""

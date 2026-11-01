@@ -28,6 +28,7 @@ GUI:
 
 ```bash
 uv run lions-gui
+uv run --extra game lions-arcade    # ION RUSH, the trainer (docs/training/SPEC.md)
 ```
 
 Command line. The program reads its answers from stdin, in this order: byte swap for the central potential file (`y`/`n`), input deck, vertical sorter (two lines), first bidim number (`0` for none).
