@@ -166,7 +166,8 @@ ENDTRACK;''')
 
 def amplitude_run(args):
     """All codes at one energy: tunes and amplitude ratios against the launch amplitude."""
-    row, outdir, grids, attrs, species, mass_kg, spline = args
+    row, outdir = args
+    grids, attrs, species, mass_kg, spline = SHARED
     energy, r_ic, pr_ic, qr_ref, qz_ref = row
     p, t, q_ref = case_g2.reference(energy, r_ic, pr_ic, qr_ref, qz_ref)
     work = outdir / f'lions_{energy:.3f}'
@@ -204,10 +205,11 @@ def amplitude_run(args):
 
 
 def step_2(outdir):
-    grids, attrs, _, mass_kg, spline, _ = case_g2.setup()
-    species = case_g1.lions_species(case_g2.MP_MEV * 1e6, 1)
+    global SHARED
+    grids, attrs, species, mass_kg, spline, _ = case_g2.setup()
+    SHARED = grids, attrs, species, mass_kg, spline    # inherited by fork: the spline field does not pickle
     rows = fixpo()
-    runs = [(row.tolist(), outdir, grids, attrs, species, mass_kg, spline) for row in [*rows[::10], rows[-1]]]
+    runs = [(row.tolist(), outdir) for row in [*rows[::10], rows[-1]]]
     with multiprocessing.get_context('fork').Pool(WORKERS) as pool:
         records = [r for part in pool.imap_unordered(amplitude_run, runs) for r in part]
     write(records, outdir, 'case_g3_2.parquet', 'G3 step 2: LIONS and spline multi-turn tunes against launch amplitude')
