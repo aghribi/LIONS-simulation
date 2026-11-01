@@ -290,24 +290,22 @@ def step2(outdir):
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g2_step2.parquet')
 
 
-def step2b(outdir):
-    """Block determinants of the one-turn map: LIONS, numpy Boris on the LIONS bilinear field, spline tracker."""
+def block_determinants(outdir, name, case, make_trackers):
+    """det - 1 of the r block, z block and M, and the tunes, at 152, 292, 452 MeV for each tracker.
+
+    make_trackers(energy, p, grids, attrs, species, mass_kg, spline, work) -> {code: (track, jacobian steps)}.
+    """
     grids, attrs, species, mass_kg, spline, fixpo = setup()
-    f_rev = F_RF / HARMONIC
     work = outdir / 'lions_map'
     work.mkdir(parents=True, exist_ok=True)
     with contextlib.chdir(work):
         case_g1.write_lions_map(grids, attrs, 1)
-    bilinear = case_g1.bilinear_field(grids, attrs, 1)
     records = []
     for energy, r_ic, pr_ic, _, _ in fixpo[[40, 110, 190]]:
         p, t, _ = reference(energy, r_ic, pr_ic, 0, 0)
-        trackers = {'lions': orbits.LionsTracker(work, energy, f_rev, STEPS, species).track,
-                    'bilinear_numpy': orbits.BorisTracker(bilinear, mass_kg, case_g1.lc.E_CHARGE, p, f_rev, STEPS).track,
-                    'spline': orbits.BorisTracker(spline, mass_kg, case_g1.lc.E_CHARGE, p, f_rev, STEPS).track}
-        for code, track in trackers.items():
+        for code, (track, steps) in make_trackers(energy, p, grids, attrs, species, mass_kg, spline, work).items():
             s, _ = orbits.closed_orbit(track, (t['r_theta0_m'], p * t['pr_over_p_theta0']))
-            for h in ((1e-7, 1e-6, 1e-5) if code == 'lions' else (case_g1.H,)):
+            for h in steps:
                 m = orbits.jacobian(track, s, h, h * p / s[0])
                 qr, qz = orbits.linear_tunes(m)
                 values = {'det_r_block': np.linalg.det(m[:2, :2]) - 1, 'det_z_block': np.linalg.det(m[2:, 2:]) - 1,
@@ -317,10 +315,31 @@ def step2b(outdir):
                                     'value': float(v), 'unit': '1'})
                 print(f'{code} {energy} MeV h={h:.0e} ' + ' '.join(f'{k}={v:+.3e}' for k, v in values.items()),
                       file=sys.stderr)
-    meta = {'case': 'G2 step 2b: block determinants of the one-turn map', 'steps_per_turn': str(STEPS),
-            **provenance(PSI / 'bfield.dat', PSI / 'ic.dat'),
+    meta = {'case': case, 'steps_per_turn': str(STEPS), 'rftrack_samples': str(RFT_SAMPLES),
+            'rftrack_tolerance': str(RFT_TOL), **provenance(PSI / 'bfield.dat', PSI / 'ic.dat'),
             'machine': platform.platform(), 'python': platform.python_version()}
-    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g2_step2b.parquet')
+    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / f'case_g2_{name}.parquet')
+
+
+def step2b(outdir):
+    """LIONS (three Jacobian steps), numpy Boris on the LIONS bilinear field, spline tracker."""
+    def trackers(energy, p, grids, attrs, species, mass_kg, spline, work):
+        f_rev, q = F_RF / HARMONIC, case_g1.lc.E_CHARGE
+        bilinear = case_g1.bilinear_field(grids, attrs, 1)
+        return {'lions': (orbits.LionsTracker(work, energy, f_rev, STEPS, species).track, (1e-7, 1e-6, 1e-5)),
+                'bilinear_numpy': (orbits.BorisTracker(bilinear, mass_kg, q, p, f_rev, STEPS).track, (case_g1.H,)),
+                'spline': (orbits.BorisTracker(spline, mass_kg, q, p, f_rev, STEPS).track, (case_g1.H,))}
+    block_determinants(outdir, 'step2b', 'G2 step 2b: block determinants of the one-turn map', trackers)
+
+
+def step2c(outdir):
+    """RF-Track (adaptive) on the LIONS bilinear field."""
+    def trackers(energy, p, grids, attrs, species, mass_kg, spline, work):
+        r_max = attrs['ri_m'] + attrs['rstep_m'] * (attrs['nrad'] - 1)
+        rt = orbits.RFTrackTracker(case_g1.bilinear_field(grids, attrs, 1), r_max, mass_kg, p, HARMONIC / F_RF,
+                                   RFT_SAMPLES, RFT_TOL)
+        return {'rftrack_bilinear': (rt.track, (case_g1.H,))}
+    block_determinants(outdir, 'step2c', 'G2 step 2c: RF-Track on the LIONS bilinear field', trackers)
 
 
 def step3(outdir):
@@ -364,7 +383,7 @@ def step3(outdir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', choices=('1', '2', '2b', '3'), default='1')
+    parser.add_argument('--step', choices=('1', '2', '2b', '2c', '3'), default='1')
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g2')
     args = parser.parse_args()
-    {'1': step1, '2': step2, '2b': step2b, '3': step3}[args.step](args.outroot.resolve() / f'step{args.step}')
+    {'1': step1, '2': step2, '2b': step2b, '2c': step2c, '3': step3}[args.step](args.outroot.resolve() / f'step{args.step}')

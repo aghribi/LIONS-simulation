@@ -826,3 +826,16 @@ LIONS itself); H3, an artefact of the finite-difference Jacobian on a piecewise-
   Qr, Qz. LIONS also with Jacobian steps 1e-7, 1e-6, 1e-5 m.
 - Reading: numpy bilinear equal to LIONS supports H1 and refutes H2; a determinant that moves with the Jacobian
   step by more than 10% supports H3.
+
+G2 step 2b results (`benchmarks/runs/case_g2/step2b/case_g2_step2b.parquet`): numpy Boris on the bilinear field
+equals LIONS to all printed digits (H2 refuted); the determinant moves by at most 2% between Jacobian steps 1e-7 and
+1e-5 m (H3 refuted). The effect is in the radial block only: det(M_r) - 1 = +0.25, +0.41, -0.17 at 152, 292,
+452 MeV; z block 3e-10 to 7e-7; spline 2e-6 to 3e-4. H1 holds and splits: H1a, the bilinear field itself; H1b, the
+Boris step (volume-preserving, not symplectic) on a field whose gradient jumps at every cell edge. The exact flow in
+any continuous median-plane Bz preserves area, so under H1b an accurate integrator gives det near 1.
+
+### G2 step 2c: integrator against field model on the bilinear field (registered before running)
+- RF-Track `rkf45`, tolerance 1e-12, 2880 samples, on the LIONS bilinear field (numpy, G1 step 3a), at 152, 292,
+  452 MeV; metrics as step 2b.
+- Reading: det(M_r) near 1 (below 1e-3) with RF-Track supports H1b (the non-symplectic Boris step on a kinked
+  field); det as large as LIONS supports a field-model effect beyond the exact-flow argument.
