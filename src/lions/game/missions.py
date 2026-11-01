@@ -37,6 +37,7 @@ class Mission(Stage):
         self.machine = mc.Machine(**checked(entry['machine'], MACHINE_UNITS, f'{self.key}.machine'))
         self.ion = mc.Ion(**entry['ion'])
         self.client, self.mission_id = entry['client'], entry['id']
+        self.tutorial = False     # no shift clock, no score: the arcade pairs it with the coach
         self.specs = entry['knobs']
         for spec in self.specs:
             if spec['unit'] != KNOB_UNITS[spec['key']]:
@@ -50,7 +51,7 @@ class Mission(Stage):
         return {'rf_mhz': self.harmonic * f / 1e6, 'dee_kv': p['dee_kv'], 'phase_deg': -e.phase_deg, 'buncher': 1.0,
                 'source_ua': p['source_ua'], 'b0': b0 / (1 + e.field), 'trim': 1.0,
                 'deflector_kv': mc.deflector_nominal(m, self.ion, p['w_target']), 'steer_x': -e.steer_x, 'steer_y': -e.steer_y,
-                'quad': -e.quad, 'slit': 0.0, 'degrader_cm': 0.0}
+                'quad': -e.quad, 'slit': 1.0, 'degrader_cm': 0.0}
 
     def setup(self):
         p, r = self.p, self.rng
@@ -85,14 +86,39 @@ class Mission(Stage):
         noise = lambda v: v * (1 + self.noise_rng.normal(0, self.p['noise']))  # noqa: E731
         b = self.beam
         self.readings = {'extracted_uA': noise(b.extracted_ua), 'transmission': noise(b.transmission), 'w_MeV': noise(b.w_mean),
-                         'spread': b.w_spread, 'x_mm': b.x + self.noise_rng.normal(0, self.p['noise']),
-                         'y_mm': b.y + self.noise_rng.normal(0, self.p['noise']), 'spot_mm': noise(self.spot()), 'lost_kW': noise(b.lost_kw)}
+                         'spread': b.w_spread, 'x_mm': b.x + self.noise_rng.normal(0, self.p['noise']) if self.has_beam() else math.nan,
+                         'y_mm': b.y + self.noise_rng.normal(0, self.p['noise']) if self.has_beam() else math.nan,
+                         'spot_mm': noise(self.spot()) if self.has_beam() else math.nan, 'lost_kW': noise(b.lost_kw),
+                         'reach': self.reach()}
 
     def after_beam(self):
         pass
 
     def spot(self):
         return self.beam.spot
+
+    def has_beam(self):
+        """A profile monitor reads nothing without beam: no position, no spot."""
+        return self.beam.extracted_ua > 0
+
+    def reach(self):
+        """Outermost radius on the radial probe, relative to the extraction radius."""
+        seen = np.flatnonzero(self.beam.probe > 0)
+        return float((seen[-1] + 1) / len(self.beam.probe)) if len(seen) else 0.0
+
+    def spec_terms(self):
+        """What the client asks, as normalised errors: each term is in spec at 1 or below. Measured quantities only."""
+        raise NotImplementedError
+
+    def ready(self):
+        return self.has_beam() and max(self.spec_terms().values()) <= 1
+
+    def tune_score(self):
+        """In [0, 1], from what the control room reads. No beam out of the machine scores on the radial probe only."""
+        if not self.has_beam():
+            return 0.3 * self.reach()
+        terms = self.spec_terms().values()
+        return 0.3 + 0.7 * sum(1 / max(e, 1.0) for e in terms) / len(terms)
 
     def advance(self, action, dt):
         p = self.p
@@ -114,7 +140,7 @@ class Mission(Stage):
                 self.finish(False, 'INTERLOCK: TOO MUCH BEAM LOST IN THE MACHINE')
         else:
             self.heat = max(self.heat - dt * p['heat_rate'], 0.0)
-        if not self.done and self.time >= p['time_limit']:
+        if not self.done and self.time >= p['time_limit'] and not self.tutorial:
             self.finish(False, 'SHIFT OVER')
 
     def observation(self):
@@ -131,7 +157,25 @@ class Mission(Stage):
         return 0.0
 
 
-class Therapy(Mission):
+class Degraded(Mission):
+    """A beam slowed in water-equivalent material before the sample: fewer protons, wider spot."""
+
+    def degrade(self):
+        b, t = self.beam, self.knobs['degrader_cm']
+        if not len(b.energies):
+            self.theta, self.deg_transmission = 0.0, 0.0
+            return
+        self.theta = physics.scattering_angle(float(b.w_mean), t)
+        self.deg_transmission = 1 / (1 + (self.theta / self.machine.theta_accept)**2)
+
+    def spot(self):
+        return float(np.hypot(self.beam.spot, self.machine.drift * 1e3 * self.theta))
+
+    def protons_per_s(self):
+        return self.beam.extracted_ua * 1e-6 * self.deg_transmission / E_CHARGE
+
+
+class Therapy(Degraded):
     """Water phantom: the Bragg peak on the tumour, the dose as prescribed, nothing behind. Not a clinical model."""
     GOAL_UNITS = {'depth_cm': 'cm', 'half_width_cm': 'cm', 'lateral_mm': 'mm', 'dose_gy': 'Gy', 'dose_tolerance': '1', 'healthy_limit_gy': 'Gy',
                   'field_area_cm2': 'cm2', 'real_s_per_s': '1'}
@@ -151,12 +195,10 @@ class Therapy(Mission):
         p, b = self.p, self.beam
         t = self.knobs['degrader_cm']
         self.bragg[:] = 0
+        self.degrade()
         if not len(b.energies):
-            self.peak, self.rate, self.theta, self.deg_transmission = 0.0, 0.0, 0.0, 0.0
+            self.peak, self.rate = 0.0, 0.0
             return
-        w = float(b.w_mean)
-        self.theta = physics.scattering_angle(w, t)
-        self.deg_transmission = 1 / (1 + (self.theta / self.machine.theta_accept)**2)
         ranges = np.maximum(physics.proton_range(b.energies) - t, 1e-3)
         self.peak = float(ranges.mean())
         sigma = float(np.hypot(ranges.std(), physics.straggling(self.peak) + (physics.straggling(max(t, 1e-3)) if t > 0 else 0)))
@@ -169,17 +211,19 @@ class Therapy(Mission):
         width = max(int(4 * sigma / step), 1)
         shape = np.exp(-0.5 * (np.arange(-width, width + 1) * step / sigma)**2)
         self.bragg[:] = np.convolve(stopping, shape / shape.sum(), mode='same')
-        protons = b.extracted_ua * 1e-6 * self.deg_transmission / E_CHARGE
-        at_peak = float(self.bragg.max())
-        self.rate = physics.GY_PER_FLUENCE * protons / p['field_area_cm2'] * at_peak    # Gy/s at the peak
+        self.rate = physics.GY_PER_FLUENCE * self.protons_per_s() / p['field_area_cm2'] * float(self.bragg.max())    # Gy/s at the peak
 
-    def spot(self):
-        drift_mm = self.machine.drift * 1e3 * self.theta
-        return float(np.hypot(self.beam.spot, drift_mm))
+    def release_due(self):
+        return self.delivered >= self.p['dose_gy']
 
     def on_tumour(self):
         p = self.p
         return abs(self.peak - p['depth_cm']) <= p['half_width_cm'] and math.hypot(self.beam.x, self.beam.y) <= p['lateral_mm']
+
+    def spec_terms(self):
+        p, b = self.p, self.beam
+        return {'depth': abs(self.peak - p['depth_cm']) / p['half_width_cm'], 'axis': math.hypot(b.x, b.y) / p['lateral_mm'],
+                'lost': b.lost_kw / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p = self.p
@@ -210,7 +254,7 @@ class Therapy(Mission):
 class Isotope(Mission):
     """18O(p,n)18F in enriched water: A' = lambda (Y I - A), Y = 8 GBq/uA at 18 MeV (Silva, Niroomand-Rad; see the scenario)."""
     GOAL_UNITS = {'activity_gbq': 'GBq', 'yield_gbq_ua': 'GBq/uA', 'w_ref': 'MeV', 'w_threshold': 'MeV', 'half_life_min': 'min',
-                  'real_min_per_s': 'min/s', 'target_kw': 'kW', 'window_mm': 'mm'}
+                  'real_min_per_s': 'min/s', 'target_kw': 'kW', 'window_mm': 'mm', 'current_min': 'uA', 'w_tolerance': '1'}
     UNITS = {**COMMON_UNITS, **GOAL_UNITS}
 
     def setup_goal(self):
@@ -221,6 +265,12 @@ class Isotope(Mission):
 
     def on_window(self):
         return math.hypot(self.beam.x, self.beam.y) <= self.p['window_mm']
+
+    def spec_terms(self):
+        p, b = self.p, self.beam
+        return {'energy': abs(b.w_mean / p['w_ref'] - 1) / p['w_tolerance'], 'current': p['current_min'] / max(b.extracted_ua, 1e-9),
+                'power': self.target_kw / p['target_kw'], 'axis': math.hypot(b.x, b.y) / p['window_mm'],
+                'lost': b.lost_kw / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p, b = self.p, self.beam
@@ -251,14 +301,15 @@ class Experiment(Mission):
     GOAL_UNITS = {'w_tolerance': '1', 'spread_max': '1', 'current_min': 'uA', 'current_max': 'uA', 'position_mm': 'mm', 'spot_max': 'mm', 'hold_s': 's'}
     UNITS = {**COMMON_UNITS, **GOAL_UNITS}
 
-    def in_spec(self):
+    def spec_terms(self):
         p, b = self.p, self.beam
-        return (b.w_mean > 0 and abs(b.w_mean / p['w_target'] - 1) <= p['w_tolerance'] and b.w_spread <= p['spread_max']
-                and p['current_min'] <= b.extracted_ua <= p['current_max'] and math.hypot(b.x, b.y) <= p['position_mm'] and b.spot <= p['spot_max'])
+        return {'energy': abs(b.w_mean / p['w_target'] - 1) / p['w_tolerance'], 'spread': b.w_spread / p['spread_max'],
+                'current_low': p['current_min'] / max(b.extracted_ua, 1e-9), 'current_high': b.extracted_ua / p['current_max'],
+                'axis': math.hypot(b.x, b.y) / p['position_mm'], 'spot': b.spot / p['spot_max'], 'lost': b.lost_kw / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p = self.p
-        if self.in_spec():
+        if self.ready():
             self.delivered += dt
             self.points = int(5000 * self.delivered / p['hold_s'])
         if self.delivered >= p['hold_s']:
@@ -271,11 +322,17 @@ class Experiment(Mission):
 
 class IsolTarget(Mission):
     """A production target: as much beam power as it survives, spread over the spot."""
-    GOAL_UNITS = {'power_limit_kw': 'kW', 'density_limit': 'kW/mm2', 'target_radius_mm': 'mm', 'energy_goal_kws': 'kW s'}
+    GOAL_UNITS = {'power_limit_kw': 'kW', 'power_min_kw': 'kW', 'density_limit': 'kW/mm2', 'target_radius_mm': 'mm', 'energy_goal_kws': 'kW s'}
     UNITS = {**COMMON_UNITS, **GOAL_UNITS}
 
     def power(self):
         return self.beam.extracted_ua * self.beam.w_mean * 1e-3
+
+    def spec_terms(self):
+        p, b = self.p, self.beam
+        return {'power_low': p['power_min_kw'] / max(self.power(), 1e-9), 'power_high': self.power() / p['power_limit_kw'],
+                'density': self.density() / p['density_limit'], 'axis': (math.hypot(b.x, b.y) + b.spot) / p['target_radius_mm'],
+                'lost': b.lost_kw / self.machine.max_lost_kw}
 
     def density(self):
         return self.power() / (2 * math.pi * max(self.beam.spot, 1e-3)**2)
@@ -300,4 +357,61 @@ class IsolTarget(Mission):
         return self.delivered / self.p['energy_goal_kws']
 
 
-STAGES.update({'therapy': Therapy, 'isotope': Isotope, 'experiment': Experiment, 'isol': IsolTarget})
+class Qualification(Degraded):
+    """An irradiation platform: protons on a material sample to qualify it for space: energy, flux, uniform field, then the fluence. Spot is a Gaussian on the sample."""
+    GOAL_UNITS = {'w_sample': 'MeV', 'w_sample_tolerance': '1', 'sample_radius_mm': 'mm', 'uniformity': '1', 'flux_min': '1/cm2/s',
+                  'flux_max': '1/cm2/s', 'fluence_goal': '1/cm2', 'real_s_per_s': '1'}
+    UNITS = {**COMMON_UNITS, **GOAL_UNITS}
+
+    def ideal(self):
+        out = super().ideal()
+        p = self.p
+        out['degrader_cm'] = physics.proton_range(p['w_target']) - physics.proton_range(p['w_sample'])
+        return out
+
+    def setup_goal(self):
+        self.theta, self.deg_transmission = 0.0, 0.0
+
+    def after_beam(self):
+        self.degrade()
+
+    def w_sample(self):
+        return float(physics.energy_at_range(max(physics.proton_range(self.beam.w_mean) - self.knobs['degrader_cm'], 1e-6))) if self.has_beam() else 0.0
+
+    def flux(self):
+        """Peak flux [protons/cm2/s]: a Gaussian spot, sigma in mm."""
+        return self.protons_per_s() / (2 * math.pi * (self.spot() / 10)**2)
+
+    def edge_ratio(self):
+        """Flux at the worst point of the sample over the peak flux."""
+        edge = self.p['sample_radius_mm'] + math.hypot(self.beam.x, self.beam.y)
+        return math.exp(-0.5 * (edge / self.spot())**2)
+
+    def spec_terms(self):
+        p = self.p
+        return {'energy': abs(self.w_sample() / p['w_sample'] - 1) / p['w_sample_tolerance'], 'flux_low': p['flux_min'] / max(self.flux(), 1.0),
+                'flux_high': self.flux() / p['flux_max'], 'uniformity': (1 - self.edge_ratio()) / (1 - p['uniformity']),
+                'lost': self.beam.lost_kw / self.machine.max_lost_kw}
+
+    def deliver(self, dt):
+        p = self.p
+        if self.ready():
+            self.delivered += self.flux() * self.edge_ratio() * dt * p['real_s_per_s']
+        else:
+            self.spoiled += self.flux() * dt * p['real_s_per_s']
+        self.points = int(5000 * self.delivered / p['fluence_goal'])
+        if self.spoiled >= 0.2 * p['fluence_goal']:
+            self.finish(False, 'TEST SPOILED: DOSE OUT OF SPEC ON THE SAMPLE')
+        elif self.delivered >= p['fluence_goal']:
+            self.points += int(30 * max(p['time_limit'] - self.time, 0))
+            self.finish(True, 'SAMPLE QUALIFIED: FLUENCE REACHED')
+
+    def setup(self):
+        self.spoiled = 0.0
+        super().setup()
+
+    def quality(self):
+        return self.delivered / self.p['fluence_goal']
+
+
+STAGES.update({'therapy': Therapy, 'isotope': Isotope, 'experiment': Experiment, 'isol': IsolTarget, 'qualification': Qualification})

@@ -8,6 +8,7 @@ from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from lions.game import physics
+from lions.game.coach import Coach
 from lions.game.runlog import Store
 from lions.game.missions import Mission
 from lions.game.stages import Action, load_scenario
@@ -46,6 +47,7 @@ class Arcade(QWidget):
         self.level0, self.missions = load_scenario(), load_scenario('missions')
         self.stages = self.level0
         self.keys, self.rows = set(), []
+        self.tutorial, self.coach, self.advice = False, None, None
         self.clock, self.state = 0.0, 'attract'
         self.seed_source = random.Random()
         self.scan = self.scanlines()
@@ -83,10 +85,13 @@ class Arcade(QWidget):
         self.stages, self.index = self.menu_items()[self.choice][2], 0
         self.state = 'brief'
 
-    def start_stage(self):
+    def start_stage(self, tutorial=False):
         self.stage = self.stages[self.index]
+        self.tutorial = tutorial
+        self.stage.tutorial = tutorial
         self.stage.reset(self.seed_source.randrange(2**31))
         self.rows = []
+        self.coach = Coach(self.stage) if tutorial else None
         self.state = 'play'
 
     def play_step(self):
@@ -97,6 +102,10 @@ class Arcade(QWidget):
         observation, _, done = self.stage.step(action, DT)
         self.rows.append({'step': self.stage.steps, 'action_x': ax, 'action_y': ay, 'action_fire': action.fire, **observation})
         if done:
+            if self.tutorial:
+                self.stage.points = 0
+                self.state = 'clear'
+                return
             self.store.log_run(self.stage, self.rows)
             self.total += self.stage.points
             if self.stage.success or not self.stage.mandatory:
@@ -112,6 +121,9 @@ class Arcade(QWidget):
         elif state == 'brief':
             self.start_stage()
         elif state == 'clear':
+            if self.tutorial:     # practice done: back to the same brief, for the scored run
+                self.state = 'brief'
+                return
             self.index += 1
             if self.index < len(self.stages):
                 self.state = 'brief'
@@ -139,6 +151,8 @@ class Arcade(QWidget):
             self.new_game()
         elif self.state == 'initials':
             self.edit_initials(key)
+        elif self.state == 'brief' and key == Qt.Key_T and isinstance(self.stages[self.index], Mission):
+            self.start_stage(tutorial=True)
         elif self.state == 'menu' and key in (Qt.Key_Up, Qt.Key_Down):
             self.choice = (self.choice + (1 if key == Qt.Key_Down else -1)) % len(self.menu_items())
         elif key in (Qt.Key_Return, Qt.Key_Enter) or (key == Qt.Key_Space and self.state != 'play'):
@@ -232,11 +246,20 @@ class Arcade(QWidget):
 
     def hud(self):
         s = self.stage
-        self.text(16, 8, f'SCORE {self.total + s.points:07d}', 18, CYAN, 'left')
+        self.text(16, 8, 'TUTORIAL' if self.tutorial else f'SCORE {self.total + s.points:07d}', 18, YELLOW if self.tutorial else CYAN, 'left')
         self.text(W / 2, 8, f'{self.index + 1}/{len(self.stages)} {s.title}', 18, YELLOW)
         self.text(W - 16, 8, 'ION ' * self.lives, 18, MAGENTA, 'right')
-        if s.message:
+        if self.coach:
+            self.helper()
+        elif s.message:
             self.text(W / 2, H - 42, s.message, 16, YELLOW)
+
+    def helper(self):
+        advice = self.advice
+        self.p.fillRect(QRectF(345, H - 62, W - 355, 58), QColor(255, 225, 77, 34))
+        self.text(355, H - 58, advice.text, 16, YELLOW, 'left')
+        for i, line in enumerate(wrapped(advice.why, 76)[:2]):
+            self.text(355, H - 36 + 14 * i, line, 10, WHITE, 'left')
 
     # ---------- screens
 
@@ -283,7 +306,7 @@ class Arcade(QWidget):
             self.text(260, y, title, 18, color, 'left')
             if key in self.completed:
                 self.text(W - 110, y, 'DONE', 16, GREEN, 'right')
-            y += 58
+            y += 50
         request = self.menu_items()[self.choice][2][0]
         client = getattr(request, 'client', request.brief if self.choice else 'Five stages, from the Lorentz force to Thomas focusing.')
         self.block(H - 170, client, 66, 14, CYAN)
@@ -297,6 +320,8 @@ class Arcade(QWidget):
         y = self.block(230, s.client, 56, 17, YELLOW) + 18 if mission else 250
         y = self.block(y, s.brief, 56, 16)
         self.text(W / 2, y + 40, MISSION_CONTROLS if mission else CONTROLS[s.key], 13, GREEN)
+        if mission:
+            self.text(W / 2, y + 80, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE', 14, YELLOW)
         if int(self.clock * 2) % 2:
             self.text(W / 2, H - 80, 'PRESS START', 22, GREEN)
 
@@ -344,6 +369,8 @@ class Arcade(QWidget):
 
     def control_room(self):
         s = self.stage
+        if self.coach:
+            self.advice = self.coach.advise()
         self.knob_panel(s)
         self.plot(350, 62, 580, 110, s.beam.probe_r, s.beam.probe, CYAN, 'RADIAL PROBE, CURRENT AGAINST RADIUS', 0)
         self.plot(350, 192, 580, 90, s.beam.probe_r, s.beam.phase, MAGENTA, 'PHASE PROBE, -90 TO +90 DEG', -90, 90, s.beam.probe > 0)
@@ -357,7 +384,8 @@ class Arcade(QWidget):
         self.bar(350, 300, 180, 16, s.heat, RED, '')
         self.text(350, 318, 'INTERLOCK', 11, RED, 'left')
         self.text(W - 30, 298, 'BEAM ON' if s.beam_on else 'BEAM OFF', 18, RED if s.beam_on else DIM, 'right')
-        self.text(W / 2 + 120, 298, f'TIME {max(s.p["time_limit"] - s.time, 0):.0f}', 16, YELLOW)
+        if not self.tutorial:
+            self.text(W / 2 + 120, 298, f'TIME {max(s.p["time_limit"] - s.time, 0):.0f}', 16, YELLOW)
         getattr(self, f'panel_{s.key}')(s, 350, 345, 580, 320)
 
     @staticmethod
@@ -372,8 +400,11 @@ class Arcade(QWidget):
             color = YELLOW if selected else WHITE
             if selected:
                 self.p.fillRect(QRectF(16, y - 4, 318, row - 2), QColor(255, 225, 77, 28))
+            if self.coach and self.advice.knob == spec['key']:
+                self.p.fillRect(QRectF(16, y - 4, 318, row - 2), QColor(61, 255, 122, 50))
+                self.text(180, y - 2, '<<<' if self.advice.direction < 0 else '>>>', 12, GREEN, 'left')
             value = s.knobs[spec['key']]
-            digits = 3 if spec['unit'] in ('MHz', 'T') else 2
+            digits = 3 if spec['unit'] in ('MHz', 'T') else 5 if spec['max'] < 0.1 else 2
             self.text(24, y - 2, spec['label'], 12, color, 'left')
             self.text(326, y - 2, f"{value:.{digits}f} {spec['unit'] if spec['unit'] != '1' else ''}".strip(), 13, color, 'right')
             self.bar(24, y + 22, 302, 8, (value - spec['min']) / (spec['max'] - spec['min']), CYAN if selected else DIM)
@@ -402,6 +433,10 @@ class Arcade(QWidget):
         self.circle(x, y, limit_mm * scale, GREEN)
         self.line(x - radius, y, x + radius, y, DIM, 1)
         self.line(x, y - radius, x, y + radius, DIM, 1)
+        if not s.has_beam():
+            self.text(x, y + radius + 4, 'NO BEAM', 12, RED)
+            self.text(x, y - radius - 24, title, 11, CYAN)
+            return
         px, py = s.readings['x_mm'] * scale, s.readings['y_mm'] * scale
         px, py = max(min(px, radius), -radius), max(min(py, radius), -radius)
         self.circle(x + px, y - py, max((spot or s.spot()) * scale, 3), MAGENTA, 1.5)
@@ -453,6 +488,17 @@ class Arcade(QWidget):
                            (f"SPOT {b.spot:.1f} MM, MAX {p['spot_max']:.1f}", b.spot <= p['spot_max'])))
         self.crosshair(x + width - 90, y + 90, 80, s, p['position_mm'], 'ON TARGET')
         self.bar(x, y + 190, width, 22, s.delivered / p['hold_s'], GREEN, f"BEAM IN SPEC {s.delivered:.1f} / {p['hold_s']:.0f} S   {s.ion.name}   HARMONIC {b.harmonic}")
+
+    def panel_qualification(self, s, x, y, width, height):
+        p = s.p
+        beam = s.has_beam()
+        self.lights(x, y, ((f"ON SAMPLE {s.w_sample():.1f} MEV, WANT {p['w_sample']:.0f}", beam and abs(s.w_sample() / p['w_sample'] - 1) <= p['w_sample_tolerance']),
+                           (f"FLUX {s.flux():.1e}, {p['flux_min']:.0e} TO {p['flux_max']:.0e} /CM2/S", beam and p['flux_min'] <= s.flux() <= p['flux_max']),
+                           (f"EDGE OVER CENTRE {s.edge_ratio():.2f}, MIN {p['uniformity']:.2f}", beam and s.edge_ratio() >= p['uniformity']),
+                           (f"SPOT {s.spot():.1f} MM ON A {2 * p['sample_radius_mm']:.0f} MM SAMPLE", beam)))
+        self.crosshair(x + width - 90, y + 90, 80, s, p['sample_radius_mm'], 'SAMPLE')
+        self.bar(x, y + 190, width, 22, s.delivered / p['fluence_goal'], GREEN, f"FLUENCE {s.delivered:.2e} / {p['fluence_goal']:.0e} /CM2")
+        self.bar(x, y + 250, width, 14, s.spoiled / (0.2 * p['fluence_goal']), RED, f'OUT OF SPEC ON THE SAMPLE {s.spoiled:.2e} /CM2')
 
     def panel_isol(self, s, x, y, width, height):
         p = s.p

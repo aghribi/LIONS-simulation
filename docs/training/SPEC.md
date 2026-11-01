@@ -73,12 +73,19 @@ flutter that restores Qz above a threshold).
 
 ### Missions (Machine, Control room, Lab)
 Client requests on a control-room screen: therapy (EYE, DEEP: Bragg peak, prescribed dose, water phantom, not a clinical model), isotope
-production (F18), nuclear physics (NEON: energy, spread, current), production target (ISOL: power and power density). Seven to ten knobs
+production (F18), nuclear physics (NEON: energy, spread, current), production target (ISOL: power and power density), a material
+irradiation platform that qualifies samples for space (QUAL: energy, flux, uniformity, fluence). Seven to ten knobs
 per mission (RF, field, trim, dee voltage, phase, buncher, source, deflector, steerers, quadrupole, energy slit, degrader), readings only
 (radial and phase probes, current, energy, losses), hidden errors per seed, interlock on lost beam.
 `lions.game.machine` is tier T0: closed forms along the machine, macroparticles, no tracked field map. **It is not validated against LIONS**,
 an exception to §2 for this tier, so mission scores say nothing about a real machine. `scenarios/missions.yaml` lists what is sourced,
 what is from memory and what is illustrative. Levels 3 to 5 remain the LIONS-validated versions.
+
+**Tutorial** (`lions.game.coach`): each mission can run with a helper that names the next step and why, with no clock and no score. It reads
+what the control room reads and never the hidden errors. A test follows it to the end of every mission. The same rules are the scripted
+baseline of the Lab track. They are not the CIME operator procedure (**D4**).
+
+**Gymnasium** (`lions.game.env`): one environment per mission; registered baseline runs in `docs/training/RL_RUNS.md`.
 
 ### Level 1: single-particle dynamics (Discovery, Machine)
 Closed orbit, betatron oscillations, tunes. Controls: field level, gradient, flutter, spiral angle, starting offset.

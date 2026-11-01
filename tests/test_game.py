@@ -273,7 +273,7 @@ def deliver_all(s, dt=0.05):
     return s
 
 
-FIXES = {'EYE': {}, 'DEEP': {}, 'F18': {'dee_kv': 60.0}, 'NEON': {'slit': 0.0015, 'source_ua': 1.0}, 'ISOL': {'quad': 0.25}}
+FIXES = {'EYE': {}, 'DEEP': {}, 'QUAL': {'quad': 0.5}, 'F18': {'dee_kv': 60.0}, 'NEON': {'slit': 0.0015, 'source_ua': 1.0}, 'ISOL': {'quad': 0.25}}
 
 
 @pytest.mark.parametrize('name', sorted(MISSIONS))
@@ -296,3 +296,109 @@ def test_untuned_start_delivers_little(name):
         s.step(Action(fire=True), DT)
         t += DT
     assert not s.success, s.message
+
+
+# ---------- coach and environment
+
+def follow_coach(s, seed):
+    from lions.game.coach import Coach
+    s.reset(seed)
+    s.tutorial = True
+    coach = Coach(s)
+    keys = [x['key'] for x in s.specs]
+    while not s.done and s.time < 500:
+        a = coach.advise()
+        x, y = 0, 0
+        if a.knob:
+            i = keys.index(a.knob)
+            if i != s.selected:
+                y = 0 if s.last_action.y else (1 if (s.selected - i) % len(keys) == 1 else -1)
+            else:
+                x = a.direction * (0.1 if a.fine else 1)
+        s.step(Action(x, y, a.beam), 0.1)
+    s.tutorial = False
+    return s
+
+
+@pytest.mark.parametrize('name', sorted(MISSIONS))
+def test_following_the_coach_finishes_the_mission(name):
+    s = follow_coach(MISSIONS[name], 11)
+    assert s.success, f'{name}: {s.message} {s.metrics()}'
+
+
+def test_coach_reads_no_hidden_state():
+    import inspect
+    from lions.game import coach
+    source = inspect.getsource(coach)
+    assert '.errors' not in source and 'ideal(' not in source
+
+
+def test_no_beam_reads_no_position_and_scores_on_the_probe_only():
+    """Gaming check: losing the beam cannot read as a clean, centred beam."""
+    s = MISSIONS['EYE']
+    s.reset(1)
+    s.knobs['rf_mhz'] = 104.0
+    s.refresh()
+    assert not s.has_beam() and math.isnan(s.readings['x_mm']) and not s.ready()
+    assert s.tune_score() <= 0.3
+    assert tuned(s, 1).tune_score() > 0.3
+
+
+@pytest.mark.parametrize('name', sorted(MISSIONS))
+def test_parking_on_the_knob_edges_scores_low(name):
+    """Gaming check: every knob at a limit of its range gains nothing."""
+    s = MISSIONS[name]
+    s.reset(1)
+    for side in ('min', 'max'):
+        for spec in s.specs:
+            s.knobs[spec['key']] = spec[side]
+        s.refresh()
+        assert not s.ready() and s.tune_score() <= 0.5
+
+
+def test_saturating_a_limit_does_not_read_as_success():
+    """Gaming check: more current than the target takes is out of spec, not a high score."""
+    s = MISSIONS['F18']
+    assert tuned(s, 1, source_ua=400.0).ready() is False
+
+
+def test_tuned_machines_meet_the_spec():
+    for name, m in MISSIONS.items():
+        tuned(m, 1, **FIXES[name])
+        assert m.ready(), f'{name}: {m.spec_terms()}'
+
+
+def test_environment_api():
+    pytest.importorskip('stable_baselines3')
+    from stable_baselines3.common.env_checker import check_env
+    from lions.game.env import MissionEnv
+    env = MissionEnv('F18', seeds=[1, 2, 3])
+    check_env(env, warn=True)
+    obs, info = env.reset(seed=0)
+    assert env.observation_space.contains(obs) and info['condition'] in (1, 2, 3)
+    assert not any('error' in str(k) for k in vars(env))
+
+
+@pytest.mark.parametrize('name', sorted(MISSIONS))
+@pytest.mark.parametrize('tutorial', [False, True])
+def test_every_mission_draws(name, tutorial):
+    import os
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    import tempfile
+    from PyQt5.QtWidgets import QApplication
+    from lions.game.arcade import Arcade
+    from lions.game.runlog import Store
+    app = QApplication.instance() or QApplication([])
+    w = Arcade(Store(tempfile.mkdtemp()))
+    w.timer.stop()
+    w.new_game()
+    w.stages, w.index = [m for m in w.missions if m.mission_id == name], 0
+    w.state = 'brief'
+    w.grab()
+    w.start_stage(tutorial=tutorial)
+    w.grab()                # no beam at the start
+    w.stage.knobs = w.stage.ideal()
+    w.stage.refresh()
+    w.grab()                # beam
+    assert (w.coach is not None) == tutorial
+    app.processEvents()

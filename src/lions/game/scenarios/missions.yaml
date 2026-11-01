@@ -5,6 +5,8 @@
 # - 18O(p,n)18F saturation yield 7.8 to 8.5 GBq/uA at 18 MeV: Niroomand-Rad 2003; Silva et al. (IBA 18 MeV).
 # - K = 265, 1.5 m, 0.75 to 1.56 T, harmonics 2 to 5: GANIL CIME papers. Its RF range here is derived from these, not quoted.
 # - Target power 1.4 kW: the first SPIRAL limit, GANIL papers.
+# - Space tests: flux 1e5 to 1e9 p/cm2/s and field uniformity +-10%: LANL lecture, USPAS 2019, and the ESCC 22900 excerpt (truncated, so the
+#   reading of its 10% is not confirmed). Fluence and the sample energy here are choices, not quoted requirements.
 # UNVERIFIED, from memory: half-life of 18F 109.8 min; threshold of 18O(p,n) 2.6 MeV.
 # ILLUSTRATIVE, no source: noise, drift, hidden errors, heat rate, space charge, limits on lost beam, spot and density limits, and the
 # linear yield against energy. Each score records them in its switches.
@@ -41,7 +43,7 @@ stages:
       max_lost_kw: {value: 0.5, unit: kW}
     knobs:
       - {key: degrader_cm, label: DEGRADER, unit: cm, min: 0.0, max: 34.0, rate: 2.0, start_error: 8.0}
-      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.05, start_error: 0.05}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.02, start_error: 0.05}
       - {key: b0, label: FIELD, unit: T, min: 1.6, max: 2.0, rate: 0.002, start_error: 0.002}
       - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
       - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 40.0, max: 120.0, rate: 2.0, start_error: 4.0}
@@ -79,9 +81,9 @@ stages:
     machine: *m230
     knobs:
       - {key: degrader_cm, label: DEGRADER, unit: cm, min: 0.0, max: 34.0, rate: 2.0, start_error: 8.0}
-      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.05, start_error: 0.05}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.02, start_error: 0.05}
       - {key: b0, label: FIELD, unit: T, min: 1.6, max: 2.0, rate: 0.002, start_error: 0.002}
-      - {key: trim, label: TRIM, unit: "1", min: 0.9, max: 1.1, rate: 0.01, start_error: 0.005}
+      - {key: trim, label: TRIM, unit: "1", min: 0.9, max: 1.1, rate: 0.003, start_error: 0.005}
       - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 40.0, max: 120.0, rate: 2.0, start_error: 4.0}
       - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
       - {key: steer_y, label: STEER Y, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
@@ -137,7 +139,7 @@ stages:
     knobs:
       - {key: source_ua, label: SOURCE, unit: uA, min: 5.0, max: 400.0, rate: 25.0, start_error: 80.0}
       - {key: buncher, label: BUNCHER, unit: "1", min: 0.0, max: 2.5, rate: 0.4, start_error: 0.7}
-      - {key: rf_mhz, label: RF, unit: MHz, min: 38.0, max: 46.0, rate: 0.05, start_error: 0.06}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 38.0, max: 46.0, rate: 0.02, start_error: 0.06}
       - {key: b0, label: FIELD, unit: T, min: 1.2, max: 1.6, rate: 0.003, start_error: 0.003}
       - {key: dee_kv, label: DEE VOLTAGE, unit: kV, min: 15.0, max: 60.0, rate: 5.0, start_error: 10.0}
       - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
@@ -163,6 +165,8 @@ stages:
       real_min_per_s: {value: 3.0, unit: min/s}
       target_kw: {value: 1.3, unit: kW}
       window_mm: {value: 6.0, unit: mm}
+      current_min: {value: 30.0, unit: uA}
+      w_tolerance: {value: 0.03, unit: "1"}
   - stage: experiment
     id: NEON
     title: NEON BEAM
@@ -193,8 +197,8 @@ stages:
       space_charge: {value: 0.002, unit: 1/uA}
       max_lost_kw: {value: 0.5, unit: kW}
     knobs:
-      - {key: b0, label: FIELD, unit: T, min: 0.75, max: 1.56, rate: 0.01, start_error: 0.02}
-      - {key: rf_mhz, label: RF, unit: MHz, min: 9.0, max: 15.0, rate: 0.05, start_error: 0.03}
+      - {key: b0, label: FIELD, unit: T, min: 0.75, max: 1.56, rate: 0.002, start_error: 0.005}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 9.0, max: 15.0, rate: 0.02, start_error: 0.03}
       - {key: dee_kv, label: DEE VOLTAGE, unit: kV, min: 20.0, max: 100.0, rate: 8.0, start_error: 15.0}
       - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
       - {key: slit, label: ENERGY SLIT, unit: "1", min: 0.0, max: 0.02, rate: 0.002, start_error: 0.01}
@@ -253,9 +257,9 @@ stages:
       max_lost_kw: {value: 1.0, unit: kW}
     knobs:
       - {key: source_ua, label: SOURCE, unit: uA, min: 1.0, max: 150.0, rate: 8.0, start_error: 20.0}
-      - {key: rf_mhz, label: RF, unit: MHz, min: 45.0, max: 65.0, rate: 0.05, start_error: 0.05}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 45.0, max: 65.0, rate: 0.02, start_error: 0.05}
       - {key: b0, label: FIELD, unit: T, min: 0.8, max: 1.3, rate: 0.002, start_error: 0.002}
-      - {key: trim, label: TRIM, unit: "1", min: 0.9, max: 1.1, rate: 0.01, start_error: 0.01}
+      - {key: trim, label: TRIM, unit: "1", min: 0.9, max: 1.1, rate: 0.003, start_error: 0.01}
       - {key: dee_kv, label: DEE VOLTAGE, unit: kV, min: 30.0, max: 120.0, rate: 8.0, start_error: 15.0}
       - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
       - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 5.0, max: 60.0, rate: 2.0, start_error: 3.0}
@@ -275,6 +279,47 @@ stages:
       phase_error: {value: 15.0, unit: deg}
       heat_rate: {value: 0.2, unit: 1/s}
       power_limit_kw: {value: 1.4, unit: kW}
+      power_min_kw: {value: 0.8, unit: kW}
       density_limit: {value: 0.012, unit: kW/mm2}
       target_radius_mm: {value: 20.0, unit: mm}
       energy_goal_kws: {value: 40.0, unit: kW s}
+  - stage: qualification
+    id: QUAL
+    title: MATERIAL QUALIFICATION
+    client: "QUALIFICATION LAB: a material sample for a satellite, 20 mm wide. 60 MeV protons, flux 1e7 to 1e8 per cm2 per s, 80% edge over centre, 1e10 per cm2."
+    brief: "Degrade to 60 MeV. Open the spot with the quadrupole until the edge of the sample gets its share, while the flux stays in the window. Dose out of spec spoils the test."
+    lesson: "A test beam is wide and weak on purpose. Fluence, flux and uniformity decide what a qualification result is worth: the beam line is the test bench."
+    switches: {noise: illustrative, drift: illustrative, errors: illustrative, fluence: illustrative}
+    ion: {name: p, mass_number: 1, charge: 1}
+    harmonic: 4
+    machine: *m230
+    knobs:
+      - {key: degrader_cm, label: DEGRADER, unit: cm, min: 0.0, max: 34.0, rate: 2.0, start_error: 6.0}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.02, start_error: 0.05}
+      - {key: b0, label: FIELD, unit: T, min: 1.6, max: 2.0, rate: 0.002, start_error: 0.002}
+      - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
+      - {key: source_ua, label: SOURCE, unit: uA, min: 0.00005, max: 0.01, rate: 0.0005, start_error: 0.0005}
+      - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 40.0, max: 120.0, rate: 2.0, start_error: 4.0}
+      - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: steer_y, label: STEER Y, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: quad, label: QUADRUPOLE, unit: "1", min: -1.0, max: 1.0, rate: 0.1, start_error: 0.05}
+    params:
+      w_target: {value: 230.0, unit: MeV}
+      dee_kv: {value: 100.0, unit: kV}
+      source_ua: {value: 0.001, unit: uA}
+      time_limit: {value: 150.0, unit: s}
+      noise: {value: 0.005, unit: "1"}
+      drift: {value: 0.00001, unit: 1/s^0.5}
+      field_error: {value: 0.0005, unit: "1"}
+      steer_error: {value: 5.0, unit: mm}
+      quad_error: {value: 0.02, unit: "1"}
+      phase_error: {value: 15.0, unit: deg}
+      heat_rate: {value: 0.2, unit: 1/s}
+      w_sample: {value: 60.0, unit: MeV}
+      w_sample_tolerance: {value: 0.05, unit: "1"}
+      sample_radius_mm: {value: 10.0, unit: mm}
+      uniformity: {value: 0.8, unit: "1"}
+      flux_min: {value: 1.0e+7, unit: 1/cm2/s}
+      flux_max: {value: 1.0e+8, unit: 1/cm2/s}
+      fluence_goal: {value: 1.0e+10, unit: 1/cm2}
+      real_s_per_s: {value: 20.0, unit: "1"}

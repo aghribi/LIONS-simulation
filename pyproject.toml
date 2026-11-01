@@ -19,6 +19,12 @@ game = [
     "pyarrow>=25.0.1",
     "pyyaml>=6.0.3",
 ]
+rl = [
+    "gymnasium>=1.0",
+    "scikit-learn>=1.5",
+    "scipy>=1.13",
+    "stable-baselines3>=2.9",
+]
 
 [dependency-groups]
 bench = [
