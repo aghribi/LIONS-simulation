@@ -1160,7 +1160,7 @@ G2 table (92 to 492 MeV, outside 386 to 430 MeV), median / max, 1440 steps, tune
 |---|---|---|---|---|---|
 | Boris | 6.7e-6 / 2.2e-5 | 9.2e-3 / 5.4e-2 | 9.3e-4 / 2.5e-3 | 0.15 / 0.38 | 8.9e-12 / 2.7e-11 |
 | RK4 | 6.4e-6 / 1.9e-5 | 3.1e-3 / 3.2e-2 | 8.3e-4 / 2.2e-3 | 5.0e-2 / 0.11 | 3.7e-9 / 9.3e-9 |
-| DOP853 | 1.0e-5 / 2.6e-5 | 1.7e-2 / 0.12 | 6.8e-4 / 2.4e-3 | 0.23 / 1.6 | 3.7e-10 / 1.2e-9 |
+| DOP853 | 1.0e-5 / 2.6e-5 | 1.6e-2 / 0.12 | 6.8e-4 / 2.4e-3 | 0.23 / 1.6 | 3.7e-10 / 1.2e-9 |
 
 |trace(M_r) / 2| exceeds 1 at several energies, so `linear_tunes` clips Qr to 0.5: Boris 372 to 452 MeV, RK4 392 to 432 MeV,
 DOP853 312 and 372 to 412 MeV. The Qr maxima include these.
@@ -1187,10 +1187,8 @@ Against the predictions:
 - FDSTEP 1e-7 to 1e-5, Boris: det(M_r) moves at most 1.3%. Third instrument on H3. The earlier objection (section 24, erratum 4:
   a central difference can mix two slopes at any h) is weak at 1e-7 m: the probe moves a step point by about 5e-6 of a 2 cm cell,
   so straddling any cell edge in 1440 steps is rare (order-of-magnitude estimate, not measured). H3 is not supported.
-- Same field, same integrator family, different step placement: OPALX Boris and LIONS Boris have the same magnitude, but
-  det(M_r) - 1 differs in sign at many energies (152, 292, 452 MeV: -0.15, -0.19, +0.18 against +0.25, +0.41, -0.17;
-  correlation -0.36 over 24 energies). So the excess is a property of the discrete map and its step placement, not a stable
-  property of the field. OPALX subdivides at sector edges; LIONS does not.
+- Same field, same integrator family: OPALX Boris and LIONS Boris have the same magnitude and opposite signs (152, 292, 452 MeV: -0.15,
+  -0.19, +0.18 against +0.25, +0.41, -0.17). Over 24 energies see step 2d. OPALX subdivides at sector edges; LIONS does not.
 
 SpectralTunes (RK4, 1440 steps, 100 turns, launched from `ic.dat`, second ray 5 mm off radially and vertically: the
 `SpectralTunes.h` default, not an input): Qr against FIXPO within 2.7e-3 at 24 of 24 energies (median 1.0e-3, bin 2.5e-3),
@@ -1204,7 +1202,7 @@ Evidence matrix (+ supports, - contradicts, 0 neutral):
 |---|---|---|---|
 | OPALX Boris, independent code, 0.15 against LIONS 0.19 | - | 0 | + |
 | det(M_r) moves at most 1.3% over FDSTEP 1e-7 to 1e-5 | 0 | - | 0 |
-| Sign changes with code and step count at equal field | - | 0 | + |
+| Sign changes with step count at equal field | - | 0 | + |
 | DOP853 worse than RK4, no order | 0 | 0 | + |
 | det(M_z) - 1 of 1e-11 with Boris (a vertical probe stays on the same cells to first order) | 0 | 0 | 0 |
 | 5 mm spectral Qr within 2.7e-3 of FIXPO on the same field (OPALX, not LIONS) | 0 | 0 | + |
@@ -1240,7 +1238,7 @@ Jacobian does not, and does a small oscillation grow or damp as det(M_r) implies
 Observation from step 2, before its write-up: at a = 0.01 mm the radial amplitude ratio is 0.6 to 11 where |lambda|^90 predicts up
 to 5.6e6. An estimate made after seeing this: with 1440 steps per turn and 2 cm cells, some step point meets a cell edge once the
 orbit moves by about 2 cm / 1440 = 14 um, so the one-turn map is one linear piece only within about 10 um.
-- LIONS default, 152, 292, 452 MeV, launch (r_co + a, pr_co, 0, 0), a = 1e-7, 1e-6, 1e-5, 1e-4 m, 30 turns. M from
+- LIONS default, 152, 292, 452 MeV, launch (r_co + a, pr_co, 0, 0), a = 1e-7, 1e-6, 1e-5, 1e-4 m, 30 turns (the harness ran 20). M from
   `orbits.jacobian` at h = 1e-7 m. u_n = (r, pr) at turn n minus the closed orbit, pr scaled by rho / p.
 - Metric: ||u_n - M^n u_0|| / ||u_n|| at n = 1, 2, 5, 10, 20; ||u_n|| / ||u_0|| against ||M^n u_0|| / ||u_0||.
 - Prediction: at a = 1e-7 m deviation below 1e-2 for at least n = 2, with the growth M predicts, and lost once ||u_n|| passes
@@ -1300,21 +1298,53 @@ Evidence matrix:
 | Distance from n = 2 independent of a | + | 0 |
 | Commensurate turn: deviation at n = 2 falls 40 to 150 times | + | - |
 | Commensurate turn: growth scale-free in a, tracks M | + | - |
-| LIONS and OPALX differ in sign at equal field | + | 0 |
+| LIONS det(M_r) near the inverse of the OPALX one at equal field (step 2d) | ? | ? |
 | det(M_r) changes sign with step count | + | 0 |
 | Commensurate turn: threshold missed, up to 0.5 at n = 10 | - | 0 |
 
-Proposed reading, for review. On a bilinear field, the one-turn map depends on the step phase at the section. Each phase has its own
-fixed point and Jacobian. The Newton solution and M of G2, H and G3 sample one phase. They are correct there. Turn after turn the
-phase changes (the nominal step is 0.01 to 0.08 of a step off a commensurate turn at these energies, from the three `fhf` values of
-step 2c), and the orbit moves among the maps. In that case:
-1. Multi-turn Qr from LIONS on the bilinear map is right: 1e-3 median against FIXPO from 0.1 to 5 mm.
-2. Below about 0.1 mm the betatron signal drowns in a jitter of tens of um (5.8e-5 m at 152 MeV, n = 5).
-3. **Amplitudes are not right below a few mm.** The radial amplitude changes by 0.24 to 10 times in 100 turns at 0.1 and 1 mm, against a
-   baseline of 0.86 to 1.6, on a coasting orbit. Beam size and emittance from the bilinear field at these scales need a check. Not measured
-   beyond 100 turns, nor on a bunch, nor with acceleration.
-4. A deliberately commensurate step makes it worse: a growth of 70 in 20 turns at 292 MeV.
-5. The Hermite field removes the anomaly in all of these (a = 0.01 mm included).
+Proposed reading, for review, as corrected by step 2d below. On a bilinear field, the one-turn map depends on the step phase at the
+section. The Newton solution and M of G2, H and G3 describe one phase. Turn after turn the phase changes (the nominal step misses a
+commensurate turn by 0.01 to 0.08 of a step at these energies, from the three `fhf` values of step 2c), and the orbit moves among the maps.
+In that case:
+1. Tracked Qr from LIONS on the bilinear map is close to FIXPO: median 1.1e-3, max 4.6e-3 from 0.1 mm up (spline 9e-5, hermite 3e-5).
+2. Below about 0.1 mm the betatron signal is lost: a launch on the closed orbit does not stay there.
+3. Amplitudes are not reliable below a few mm. See step 2d for the absolute excursions; the ratio above has a jitter-dominated
+   denominator at small a and misses them.
+4. A commensurate step gave growth following M at the three energies and two launch offsets tested, up to about 7e-6 m (at 452 MeV the
+   prediction itself oscillates and damps).
+5. Hermite removes the anomaly in steps 2 and 2d. It did not run in 2b or 2c.
 
 Consistent with the runs; "each phase has its own fixed point" is inferred, not measured. Direct test: fixed point and det(M_r) against
 the launch step phase on the same orbit.
+
+### G3 step 2d: signed determinant and excursions at 24 energies (registered before running)
+An independent review of the lecture text found, in scratch reruns: the correlation of G3 step 1 (-0.36) used unsigned LIONS values, and
+the signed one is near -0.93; a launch on the closed orbit reaches about 3 mm at some energies within 100 turns. Both change the reading
+above, so both are measured here, from the harness.
+- LIONS default and `interpolation=hermite`, the 24 energies, 1440 steps, 100 turns. det(M_r) - 1 signed, Jacobian step 1e-6 m.
+- Launch r_co + a, z = 0, a = 0, 1e-5, 1e-4, 1e-3 m. Metrics: largest |r - r_co| over the turns, the turn it occurs, rms over the last 20.
+- Reading: excursions of order 1 mm with a = 0 on the default, and well below 1 um on hermite, mean the bilinear field drives an
+  on-orbit particle to beam-size scale. Correlation near -1 between LIONS and OPALX has no explanation in S as written: an unrelated step
+  placement would give near 0. It stays an open finding.
+
+### G3 step 2d results and corrections
+Table `benchmarks/runs/case_g3/step2d/case_g3_2d.parquet`. No failure. An independent read of the lecture text found the items below;
+its scratch values were reproduced here.
+
+Signed det(M_r) - 1, LIONS against OPALX Boris, 24 energies: correlation -0.93, opposite signs at 22, and LIONS against 1/det(M_r, OPALX) - 1:
+correlation +0.94, median difference 0.039. LIONS det(M_r) is near the inverse of the OPALX one. Not explained. S as written predicts no
+such relation for unrelated step placement, so this is an open observation against S unless the two step patterns turn out to be related.
+Candidates, untested: the drift-kick-drift against kick-drift-kick order, the launch convention at the section.
+
+Launch on the closed orbit (a = 0), largest |r - r_co| in 100 turns: LIONS default median 8.7e-5 m; 3.7, 4.0 and 3.2 mm at 252, 312, 332 MeV
+(turns 71, 68, 54), rms over the last 20 turns 1.4, 1.6, 0.2 mm, so it can grow and decay. Hermite: at most 7.8e-7 m. At a = 1 mm: default up to
+4.0 mm, hermite up to 1.2 mm. A particle launched on the closed orbit reaches beam-size scale at 3 energies of 24 on the default field.
+
+Corrections to the text above:
+- The correlation -0.36 of the first version used unsigned LIONS values. Withdrawn, with the claim built on it that the excess is not a
+  stable property of the field.
+- H3 is not supported, not rejected: the launch a = 1e-7 m equals a Jacobian probe, so its 1.4e-7 is near-tautological. Independent evidence: at
+  n = 1, deviation 3e-7 to 4e-7 at 1e-6 m, 8e-6 to 2.7e-4 at 1e-5 m, 8e-4 to 3.2e-3 at 1e-4 m. The autograd test has not been run.
+- "Jitter of tens of um" holds for about 20 turns and for most energies, not at the three above.
+- Scale-free growth in 2c rests on two launch offsets. Deviation at n = 20 reaches 0.27 to 1.05; at n = 1 at 452 MeV, 2.9e-2.
+- `amp_ratio_r` at 0.01 and 0.1 mm has a jitter-dominated denominator: at most 11 understates the excursion. It reads as a low bound.

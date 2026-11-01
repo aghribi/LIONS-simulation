@@ -12,6 +12,8 @@
 - [ ] Autograd Jacobian of the PyTorch bilinear port against the finite-difference one (DESIGN.md section 24, erratum 4).
 - [ ] Convergence order of det(M) with the step count, beyond 2880 steps per turn.
 - [ ] Fixed point and det(M_r) against the launch step phase, on one orbit (DESIGN.md section 25).
+- [ ] Why LIONS det(M_r) is near the inverse of the OPALX one at equal field (r = +0.94, DESIGN.md section 25, step 2d).
+- [ ] Why a closed-orbit launch reaches 3 to 4 mm at 252, 312 and 332 MeV and stays below 0.2 mm elsewhere (step 2d).
 - [ ] Beam size and emittance on the bilinear field against Hermite: over 1000 turns or more, on a bunch, with acceleration. Amplitudes at
   0.1 to 1 mm change by 0.24 to 10 times in 100 turns (G3 step 2). Before any surrogate is trained on LIONS bilinear data.
 

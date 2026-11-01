@@ -3,7 +3,7 @@
 usage: uv run --group bench [--with pandas] python benchmarks/case_g3.py --step a|b|s|report [--outroot DIR]
 a: closed orbits and tunes at the 24 G2 step 3 energies; b: det(M_r) against steps and FDSTEP at 3 energies;
 s: SpectralTunes at the 24 energies; 2: LIONS and spline multi-turn tunes against amplitude (step 2); 2b: linear range of
-the LIONS Jacobian; 2c: the same on a commensurate turn; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
+the LIONS Jacobian; 2c: the same on a commensurate turn; 2d: signed det(M_r) and excursions; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
 OPALX is run as is from its image. The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignored).
 """
 import argparse
@@ -44,6 +44,7 @@ TURNS, TUNESAMPLE = 100, 50
 WORKERS = 6
 AMPLITUDES = (1e-5, 1e-4, 1e-3, 5e-3)    # m
 ENVELOPE_TURNS = 10
+OFFSETS = (0.0, 1e-5, 1e-4, 1e-3)    # m
 LINEAR_AMPLITUDES = (1e-7, 1e-6, 1e-5, 1e-4)    # m
 LINEAR_CHECK = (1, 2, 5, 10, 20)
 LINEAR_TURNS = 20
@@ -219,6 +220,44 @@ def step_2(outdir):
     write(records, outdir, 'case_g3_2.parquet', 'G3 step 2: LIONS and spline multi-turn tunes against launch amplitude')
 
 
+def excursion_run(args):
+    """Signed det(M_r) - 1 and the distance from the closed orbit over 100 turns, for each launch offset."""
+    row, outdir = args
+    grids, attrs, species, _, _ = SHARED
+    energy, r_ic, pr_ic, _, _ = row
+    p = np.sqrt((1 + energy / case_g2.MP_MEV)**2 - 1)
+    work = outdir / f'lions_{energy:.3f}'
+    work.mkdir(exist_ok=True)
+    with contextlib.chdir(work):
+        case_g1.write_lions_map(grids, attrs, 1)
+    records = []
+    for code, options in (('lions', None), ('lions_hermite', {'interpolation': 'hermite'})):
+        track = orbits.LionsTracker(work, energy, F_RF / HARMONIC, STEPS, species, options).track
+        co, _ = orbits.closed_orbit(track, (r_ic / 1000, pr_ic / 1000))
+        m = orbits.jacobian(track, co, case_g1.H, case_g1.H * p / co[0])
+        base = {'code': code, 'energy_mev': energy, 'unit': '1'}
+        records.append({**base, 'offset_m': None, 'metric': 'det_r_error', 'value': float(np.linalg.det(m[:2, :2]) - 1)})
+        states = np.array([[co[0] + a, co[1], 0.0, 0.0] for a in OFFSETS])
+        for a, tbt in zip(OFFSETS, orbits.section_series(*track(states, TURNS + 1.2))):
+            u = tbt[:TURNS, 1] - co[0]
+            records += [{**base, 'offset_m': a, 'metric': 'peak_m', 'value': float(np.max(np.abs(u)))},
+                        {**base, 'offset_m': a, 'metric': 'peak_turn', 'value': float(np.argmax(np.abs(u)) + 1)},
+                        {**base, 'offset_m': a, 'metric': 'rms_last20_m', 'value': float(np.sqrt(np.mean(u[-20:]**2)))}]
+    print(f'{energy} MeV done', file=sys.stderr)
+    return records
+
+
+def step_2d(outdir):
+    global SHARED
+    grids, attrs, species, mass_kg, spline, _ = case_g2.setup()
+    SHARED = grids, attrs, species, mass_kg, spline
+    rows = fixpo()
+    runs = [(row.tolist(), outdir) for row in [*rows[::10], rows[-1]]]
+    with multiprocessing.get_context('fork').Pool(WORKERS) as pool:
+        records = [r for part in pool.imap_unordered(excursion_run, runs) for r in part]
+    write(records, outdir, 'case_g3_2d.parquet', 'G3 step 2d: signed det(M_r) and excursions from the closed orbit')
+
+
 def step_2b(outdir, commensurate=False):
     grids, attrs, species, _, _, _ = case_g2.setup()
     work = outdir / 'lions'
@@ -309,11 +348,11 @@ def report(outroot):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', choices=('a', 'b', 's', '2', '2b', '2c', 'report'), required=True)
+    parser.add_argument('--step', choices=('a', 'b', 's', '2', '2b', '2c', '2d', 'report'), required=True)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g3')
     args = parser.parse_args()
     if args.step == 'report':
         sys.exit(report(args.outroot.resolve()))
     outdir = args.outroot.resolve() / (f'step{args.step}' if args.step.startswith('2') else f'step1{args.step}')
     outdir.mkdir(parents=True, exist_ok=True)
-    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2, '2b': step_2b, '2c': lambda d: step_2b(d, True)}[args.step](outdir)
+    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2, '2b': step_2b, '2c': lambda d: step_2b(d, True), '2d': step_2d}[args.step](outdir)
