@@ -686,3 +686,44 @@ G1 step 3 results (`benchmarks/runs/case_g1/step3/case_g1_step3.parquet`, code 1
   map at equal steps per turn, and the 4 deg map fails; step 3 converges at second order with both splines, with
   larger coefficients than on the 3-sector map. If step 3 does not converge at second order, the 3-sector reading
   (the floor belongs to the bilinear interpolation) does not carry over to this map.
+
+G1 10-sector results (`benchmarks/runs/case_g1/10sector/step{1,2,3}`, code cd316ad; master 211 x 108, no root
+warnings). Absolute errors against the references, range over the four orbits.
+
+Step 1 (RF-Track on the quintic spline):
+- Closed orbit and isochronism: 5e-12 to 6e-11 on the outer orbits (a = 0.8401, 0.9094), 5.6e-8 to 2.3e-7 on the
+  middle ones (a = 0.8632, 0.8863), identical at 1440 and 2880 samples: not integration. Prediction (1e-9 or better)
+  missed on two orbits of four.
+- Spline error, every-second-node estimate: 9.1e-4 relative to the local Bz, which is ill-posed here (Bz crosses
+  zero in the valleys, -0.48 to +1.12 T); 1.3e-5 T absolute, 1.0e-5 of max |Bz| (3-sector: 1.7e-7). Consistent with
+  the middle-orbit errors [exploratory check, after the run; the reason for the difference between orbits is not
+  established].
+- Tunes RF-Track minus FROM_ORBIT: 8e-6 to 4e-5 (3-sector: up to 2e-5). det(M) - 1: 5e-8 to 1.3e-6 at 2880 samples.
+
+Step 2 (LIONS, bilinear) and step 3 (numpy Boris, bicubic and quintic), 360 / 720 / 1440 steps per turn:
+
+| Metric | step 2, 1/3 deg | step 3, 1/3 deg | step 3 ratio per halving | step 2, 1 deg | step 3, 1 deg |
+|---|---|---|---|---|---|
+| r_eo | 8.7e-5 to 1.3e-4 / 1.9e-5 to 4.8e-5 / 3.7e-6 to 2.8e-5 | 8.4e-5 to 1.6e-4 / 2.1e-5 to 3.9e-5 / 5.2e-6 to 9.7e-6 | 4.0 | 7.1e-5 to 4.8e-4 / 2.1e-6 to 7.7e-5 / 1.6e-5 to 1.7e-4 | 4.5e-6 to 1.1e-5 at 1440 |
+| turn time | 7.2e-5 to 9.2e-5 / 1.2e-5 to 3.5e-5 / 1.9e-7 to 2.4e-5 | 7.0e-5 to 1.1e-4 / 1.8e-5 to 2.6e-5 / 4.4e-6 to 6.7e-6 | 4.0 to 4.1 | 4.5e-5 to 1.8e-4 at 1440 | 2.4e-6 to 9.4e-6 at 1440 |
+| Qr | 2.9e-3 to 1.4e-2 / 5.6e-4 to 6.3e-3 / 7.5e-4 to 3.2e-3 | 4.4e-4 to 3.6e-3 / 1.1e-4 to 9.1e-4 / 2.8e-5 to 2.3e-4 | 3.7 to 4.2 | up to 1.1e-1 / 6.1e-3 / 9.5e-3 | 2.2e-5 to 4.1e-4 at 1440 |
+| Qz | 9.7e-4 to 4.2e-3 / 4.0e-4 to 1.4e-3 / 3.9e-5 to 1.8e-3 | 6.8e-5 to 1.5e-3 / 1.5e-5 to 3.6e-4 / 9.1e-7 to 9.1e-5 | 4 on three orbits; sign change near 5e-6 on a = 0.8632 | up to 1.7e-2 at all steps | 2.0e-5 to 4.4e-4 at 1440 |
+| det(M) - 1 | 5.2e-2 to 2.4e-1 / 7.3e-2 to 1.1e-1 / 7.0e-3 to 5.3e-2 | 1.4e-4 to 5.3e-4 / 4.0e-6 to 9.8e-5 / 1.3e-6 to 2.1e-5 | 3.1 to 36 | up to 5.0 | up to 5.6e-5 at 1440 |
+
+- 3a passed: 2.4e-14. 4 deg map (step 2): 11 of 12 configurations failed (closed orbit not converged, or the
+  particle left the map); the one that converged has Qr and Qz errors of 0.22 and 0.27.
+- 1/3 deg: the splines converge at second order in orbit, turn time and Qr, and agree with each other to 4e-3 in
+  orbit and 11% in Qr. Qz on a = 0.8632 changes sign between 720 and 1440 steps at the 1e-6 to 1e-5 level, near the
+  precision of the step 1 references for the middle orbits. Prediction held.
+- Same step, same nodes, bilinear against spline at 1440 steps: Qr 7.5e-4 to 3.2e-3 against 2.8e-5 to 2.3e-4,
+  det(M) - 1 7e-3 to 5.3e-2 against 1.3e-6 to 2.1e-5, and step 2 does not converge in the tunes. The bilinear floor
+  of the 3-sector map is reproduced on this map, larger.
+- 1 deg (18 nodes per 18 deg harmonic period): the spline results no longer converge cleanly (ratios 3.1 to 8.7 in
+  turn time, irregular in the tunes) and bicubic and quintic differ by up to a factor 5 in the tunes; Qz stays near
+  4e-4 at 1440 steps. The interpolation error is no longer negligible. Prediction (second order with both splines)
+  failed at 1 deg. The 3-sector reading "bicubic at 1 deg removes the floor" does not carry over: what matters is
+  the node count per period of the field harmonics, and 1/3 deg (54 nodes per period) is needed here.
+- The Boris step error is larger than on the 3-sector map at equal steps per turn (r_eo 3 times, Qr up to 250
+  times at 360 steps): at 1440 steps the integrator alone leaves Qr errors up to 2.3e-4 and turn-time errors of
+  4e-6 to 7e-6.
+- Scope: one map, four orbits, one turn each; no acceleration.
