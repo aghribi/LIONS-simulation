@@ -1203,8 +1203,8 @@ Evidence matrix (+ supports, - contradicts, 0 neutral):
 | det(M_r) moves at most 1.4% over FDSTEP 1e-7 to 1e-5 | 0 | - | 0 |
 | Sign changes with code and step count at equal field | - | 0 | + |
 | DOP853 worse than RK4, no order | 0 | 0 | + |
-| det(M_z) - 1 of 1e-11 with Boris | 0 | - | 0 |
-| 5 mm spectral Qr within 2.7e-3 of FIXPO on the same field | - | 0 | + |
+| det(M_z) - 1 of 1e-11 with Boris (a vertical probe stays on the same cells to first order) | 0 | 0 | 0 |
+| 5 mm spectral Qr within 2.7e-3 of FIXPO on the same field (OPALX, not LIONS) | 0 | 0 | + |
 | OPAL Qr 4.2e-4 from FIXPO with a continuous gradient | 0 | 0 | + |
 
 Proposed reading, for review: the bilinear field gives the right betatron frequency at finite amplitude and the wrong
