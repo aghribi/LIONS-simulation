@@ -1232,3 +1232,15 @@ Jacobian does not, and does a small oscillation grow or damp as det(M_r) implies
 - Reading: P1 failing at more than half the energies refutes the reading of G3 step 1. P2 failing means the local Jacobian does
   not describe even small oscillations: then the Jacobian itself is suspect again (H3). Growth at 0.01 mm saturating below
   5 mm would mean the artificial growth has an amplitude limit, which is what a surrogate or an RL model would inherit.
+
+### G3 step 2b: over what range does the Jacobian describe the LIONS map? (registered before running)
+Observation from step 2, before its write-up: at a = 0.01 mm the radial amplitude ratio is 0.6 to 11 where |lambda|^90 predicts up
+to 5.6e6. An estimate made after seeing this: with 1440 steps per turn and 2 cm cells, some step point meets a cell edge once the
+orbit moves by about 2 cm / 1440 = 14 um, so the one-turn map is one linear piece only within about 10 um.
+- LIONS default, 152, 292, 452 MeV, launch (r_co + a, pr_co, 0, 0), a = 1e-7, 1e-6, 1e-5, 1e-4 m, 30 turns. M from
+  `orbits.jacobian` at h = 1e-7 m. u_n = (r, pr) at turn n minus the closed orbit, pr scaled by rho / p.
+- Metric: ||u_n - M^n u_0|| / ||u_n|| at n = 1, 2, 5, 10, 20; ||u_n|| / ||u_0|| against ||M^n u_0|| / ||u_0||.
+- Prediction: at a = 1e-7 m deviation below 1e-2 for at least n = 2, with the growth M predicts, and lost once ||u_n|| passes
+  about 1e-5 m. At a = 1e-4 m already above 10% at n = 1 or 2.
+- Reading: met, the Jacobian is a correct derivative of a map whose linear range is about 10 um, so it says nothing about a beam
+  (H3 stays rejected). Deviation large at a = 1e-7 m: the Jacobian does not even describe the map locally, H3 returns.

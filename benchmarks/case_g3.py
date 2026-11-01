@@ -2,7 +2,8 @@
 
 usage: uv run --group bench [--with pandas] python benchmarks/case_g3.py --step a|b|s|report [--outroot DIR]
 a: closed orbits and tunes at the 24 G2 step 3 energies; b: det(M_r) against steps and FDSTEP at 3 energies;
-s: SpectralTunes at the 24 energies; 2: LIONS and spline multi-turn tunes against amplitude (step 2); report: the DESIGN.md section 25 numbers from the tables (needs pandas).
+s: SpectralTunes at the 24 energies; 2: LIONS and spline multi-turn tunes against amplitude (step 2); 2b: linear range of
+the LIONS Jacobian; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
 OPALX is run as is from its image. The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignored).
 """
 import argparse
@@ -43,6 +44,9 @@ TURNS, TUNESAMPLE = 100, 50
 WORKERS = 6
 AMPLITUDES = (1e-5, 1e-4, 1e-3, 5e-3)    # m
 ENVELOPE_TURNS = 10
+LINEAR_AMPLITUDES = (1e-7, 1e-6, 1e-5, 1e-4)    # m
+LINEAR_CHECK = (1, 2, 5, 10, 20)
+LINEAR_TURNS = 20
 
 
 def lattice():
@@ -215,6 +219,33 @@ def step_2(outdir):
     write(records, outdir, 'case_g3_2.parquet', 'G3 step 2: LIONS and spline multi-turn tunes against launch amplitude')
 
 
+def step_2b(outdir):
+    grids, attrs, species, _, _, _ = case_g2.setup()
+    work = outdir / 'lions'
+    work.mkdir(exist_ok=True)
+    with contextlib.chdir(work):
+        case_g1.write_lions_map(grids, attrs, 1)
+    records = []
+    for energy, r_ic, pr_ic, _, _ in fixpo()[list(G3B_ROWS)].tolist():
+        p = np.sqrt((1 + energy / case_g2.MP_MEV)**2 - 1)
+        track = orbits.LionsTracker(work, energy, F_RF / HARMONIC, STEPS, species).track
+        co, _ = orbits.closed_orbit(track, (r_ic / 1000, pr_ic / 1000))
+        scale = np.array([1.0, co[0] / p])    # pr to m, as the Jacobian probes
+        m = orbits.jacobian(track, co, 1e-7, 1e-7 * p / co[0])[:2, :2]
+        states = np.array([[co[0] + a, co[1], 0.0, 0.0] for a in LINEAR_AMPLITUDES])
+        series = orbits.section_series(*track(states, LINEAR_TURNS + 1.2))
+        for a, tbt in zip(LINEAR_AMPLITUDES, series):
+            u0 = np.array([a, 0.0])
+            for n in LINEAR_CHECK:
+                u = tbt[n - 1, 1:3] - co[:2]
+                predicted = np.linalg.matrix_power(m, n) @ u0
+                row = {'energy_mev': float(energy), 'amplitude_m': a, 'turn': n, 'unit': '1'}
+                records += [{**row, 'metric': 'deviation', 'value': float(np.linalg.norm((u - predicted) * scale) / np.linalg.norm(u * scale))},
+                            {**row, 'metric': 'growth', 'value': float(np.linalg.norm(u * scale) / a)},
+                            {**row, 'metric': 'growth_predicted', 'value': float(np.linalg.norm(predicted * scale) / a)}]
+    write(records, outdir, 'case_g3_2b.parquet', 'G3 step 2b: linear range of the LIONS one-turn Jacobian')
+
+
 def report(outroot):
     import pandas as pd
     fold, g2 = case_g2.fold, outroot.parent / 'case_g2'
@@ -252,11 +283,11 @@ def report(outroot):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', choices=('a', 'b', 's', '2', 'report'), required=True)
+    parser.add_argument('--step', choices=('a', 'b', 's', '2', '2b', 'report'), required=True)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g3')
     args = parser.parse_args()
     if args.step == 'report':
         sys.exit(report(args.outroot.resolve()))
-    outdir = args.outroot.resolve() / ('step2' if args.step == '2' else f'step1{args.step}')
+    outdir = args.outroot.resolve() / (f'step{args.step}' if args.step.startswith('2') else f'step1{args.step}')
     outdir.mkdir(parents=True, exist_ok=True)
-    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2}[args.step](outdir)
+    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2, '2b': step_2b}[args.step](outdir)
