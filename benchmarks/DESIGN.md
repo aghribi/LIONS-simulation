@@ -928,3 +928,52 @@ Case H validation (`benchmarks/runs/case_h/case_h_validate.parquet`) and amendme
   to 1440 steps: ratios -6.9, 9.1, 13.1, 14.7, 15.3. Fourth order holds from 360 steps; 90 to 180 is pre-asymptotic.
   The matrix uses 720 to 2880 steps (RK4 r_eo 1.3e-10 at 720). Both instruments are taken as validated; the change
   concerns the validation criteria only.
+
+Case H phase 1 results (`benchmarks/runs/case_h/case_h_{matrix_*,cost}.parquet`, code 6d62c06; 912 runs, none
+failed). Cost on the PSI map at 1/3 deg, M3 CPU, 1e5 particles, per particle-step (relative to F0 with Boris):
+
+| Option | Boris | RK4 | Memory |
+|---|---|---|---|
+| F0 bilinear | 1.04e-7 s (1.0) | 4.11e-7 s (3.9) | 3.7 MB |
+| F1 Hermite | 1.84e-7 s (1.8) | 7.06e-7 s (6.8) | 4.9 MB |
+| F2 cubic spline | 4.05e-7 s (3.9) | 1.64e-6 s (15.7) | 0.5 MB |
+| F3 quintic spline | 6.16e-7 s (5.9) | 2.27e-6 s (21.8) | 0.5 MB |
+
+LIONS itself: 1.22e-7 s (1e5 particles), 2.53e-7 s (1e3): the harness F0 cost is representative of LIONS. Harness
+costs are numpy (FITPACK for the splines); a compiled LIONS option may scale differently.
+
+Decision target (Qr, Qz, det(M) - 1 all at most 1e-4 on every orbit or energy): smallest step count of 720, 1440,
+2880 that meets it, and the cost per particle and turn at 1e5 particles:
+
+| Map | F0 Boris | F0 RK4 | F1 Boris | F1 RK4 | F2 Boris | F3 Boris | F3 RK4 |
+|---|---|---|---|---|---|---|---|
+| 3-sector 1/3 deg | none | none | 720, 1.3e-4 s | 720, 5.1e-4 s | 720, 2.9e-4 s | 720, 4.4e-4 s | 720, 1.6e-3 s |
+| 3-sector 1 deg | none | none | 720, 1.3e-4 s | 720, 5.1e-4 s | 720, 2.9e-4 s | 720, 4.4e-4 s | 720, 1.6e-3 s |
+| 10-sector 1/3 deg | none | none | 2880, 5.3e-4 s | 1440, 1.0e-3 s | 2880, 1.2e-3 s | 2880, 1.8e-3 s | 1440, 3.3e-3 s |
+| 10-sector 1 deg | none | none | none | none | none | none | none |
+| PSI, reference RF-Track on F3 | none | none | none | none | none | 2880, 1.8e-3 s | 2880, 6.5e-3 s |
+
+Worst-case errors at 1440 steps (Qr, Qz, det(M) - 1): F0 Boris 3e-4, 7e-5, 1e-3 (3-sector 1/3 deg); 3e-3, 2e-3,
+5e-2 (10-sector 1/3 deg); 4e-2, 5e-3, 4e-1 (PSI). F1 Boris 9e-7, 3e-6, 2e-8; 2e-4, 9e-5, 2e-5; 3e-3, 4e-3, 8e-4.
+
+PSI against FIXPO instead (interior energies, median / max): Qr: F0 Boris 1440 6.4e-3 / 4.4e-2, F1 Boris 3.5e-5 /
+4.7e-4, F2 6.2e-5 / 5.2e-4, F3 9.1e-5 / 6.2e-4, OPAL 4.2e-4 / 1.1e-3. Qz: F0 1.1e-3 / 2.2e-3, F1 1.1e-4 / 8.3e-4
+(5.6e-5 median at 2880), F2 and F3 3.0e-4 / 1.1e-3, OPAL 8.2e-4 / 2.1e-3.
+
+Reading:
+- F1 with Boris meets the target wherever any option does at the lowest cost per turn, except on the PSI map with the
+  F3-based reference. On the G1 maps (exact truth) it matches the splines at 1.8 times the F0 cost, against 3.9 to
+  5.9 times for the splines.
+- On the PSI map the field models differ from each other by up to 3e-3 in the tunes, more than the integrators do;
+  the RF-Track reference is built on F3 and favours it. Against FIXPO, the external reference, F1 is the closest
+  model (Qr 180 times closer than F0 and 12 times closer than OPAL, median). Which interpolation FIXPO uses is not
+  known; F1 shares its use of the file derivatives [hypothesis].
+- RK4 never makes F0 meet the target (det(M) - 1 still 1e-2 to 1e-1 on the 10-sector and PSI maps at 1440 steps): the
+  gradient jumps of F0 limit every integrator. On smooth fields RK4 meets the target at half the steps of Boris on
+  the 10-sector map but costs 3.8 times more per step: F1 with Boris stays cheaper per turn.
+- At 1 deg on the 10-sector map no option meets the target: node density, as in G1.
+- Predictions: F1 removes the det floor, held on all maps. F1 within a factor 3 of F3 in the tunes at 1/3 deg: held
+  on the G1 maps, failed on the PSI map against the F3 reference (factor 60), not tested against FIXPO in the
+  prediction. RK4 on F0 above 1e-3 in det at 1440 steps on PSI: held (0.1). Cost: F1 1.8 times (predicted 2 to 4),
+  splines 3.9 to 5.9 times (predicted 5 to 20), RK4 3.8 to 3.9 times its Boris cost (predicted about 4).
+- Scope: one turn, no acceleration, three maps, median-plane maps with first-order vertical field.
