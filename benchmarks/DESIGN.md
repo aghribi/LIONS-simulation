@@ -540,7 +540,7 @@ Case G1 implementation notes (before any tracking):
 - Environment: `benchmarks/g1_maps.py` is a uv script with pinned numpy 1.26.4 and scipy 1.13.1 (FROM_ORBIT uses
   `numpy.trapz`).
 
-## 22. Case E2 results (CPU, Apple GPU, A100; H100 pending)
+## 22. Case E2 results (CPU, Apple GPU, A100, H100)
 
 Runs: M3 CPU and MPS locally (`benchmarks/runs/case_e2_cpu`, `case_e2_mps`), A100 on Jean-Zay (job 1791641, image
 lions-sim-58392b29f72a, torch 2.15.0+cu132, code 501c88f). Median of 3 after a warm-up; plain LIONS timed on the CPU
@@ -551,6 +551,7 @@ of the same node. Throughput ratio to plain LIONS on the same node:
 | M3 CPU | 6.7 | 15.7 | 15.1 | 0.71 s |
 | Apple GPU (MPS) | no float64 | no float64 | 150 | fails (InductorError) |
 | A100 (Jean-Zay) | 5.0 | 267 | 267 | 2.49 s |
+| H100 NVL (CC-IN2P3) | 7.0 | 394 | 400 | 1.57 s |
 
 - Go criterion (section 20): met. Compiled float64 reaches 267 times plain LIONS at 1e5 particles on the A100
   (6.6e8 particle-steps/s), and 15.7 times on the M3 CPU. At 1e3 particles no device reaches 10.
@@ -561,6 +562,10 @@ of the same node. Throughput ratio to plain LIONS on the same node:
   1.6e-13 rad in phase, compiled or not.
 - Gradients at 1e3 particles are faster on the CPU (0.71 s) than on the A100 (2.49 s): small batches are latency-bound.
 - The plain LIONS baseline is 2.3 to 2.6 times slower on the Jean-Zay node than on the M3.
+- H100 (CC-IN2P3 job 62923301, same image and code 501c88f; GPU check 62923297: CUDA against CPU 3.1e-15 in r):
+  compiled float64 at 1e5 particles 1.40e9 particle-steps/s, 2.1 times the A100; 394 times plain LIONS on the same
+  node (3.56e6 particle-steps/s, the CC node CPU is 1.4 times faster than the Jean-Zay one). GPU float64 against CPU
+  float64: 2.1e-14 in r; float32 1.2e-5, as on the A100. Ratios computed as for the A100 row, which they reproduce.
 
 ### G1 step 1: precision of the FROM_ORBIT references (registered before running)
 - Instrument: RF-Track `rkf45`, tolerance 1e-12, on a quintic spline (r, theta; periodic in theta) of the exact
