@@ -1077,3 +1077,47 @@ The tables are unchanged; these entries correct readings and summaries above. Nu
    of the G2 2b determinant is a weak argument against H3, since a central difference on a piecewise-smooth map can mix
    two slopes at any h. Discriminating test, not run: the autograd Jacobian of the PyTorch bilinear port.
 
+## 25. Case G3: OPALX 1.0.0 on the PSI Ring map (registered before running, approved 2026-11-01)
+
+Questions: (G3a) does OPALX 1.0.0 reproduce OPAL 2024.1 and FIXPO on the PSI Ring map (closed orbits, tunes)?
+(G3b) does a third, independent fixed-step tracker on the same bilinear field show the LIONS |det(M_r) - 1| excess
+(section 24, erratum 4: fixed-step integration across gradient jumps)?
+G3 compares models only. It bounds the code-to-code part of the model error; the sim-to-real gap needs CIME data.
+
+Code: OPALX 1.0.0 (tag `OPALX-1.0.0`, released 2026-11-01, GPL-3.0), github.com/OPALX-project/OPALX, CPU image
+`ghcr.io/opalx-project/opalx:cpu` pinned by digest in each run. Run as is, never copied. From the source headers (not
+yet run): `CyclotronSector` reads the PSI Ring map layout ported from OPAL 2022.1, interpolates Bz, dBz/dr and
+dBz/dtheta bilinearly as separate channels, recomputes the derivatives from Bz by 5-point stencils, and extends the
+field off the plane to first order only; `ClosedOrbitSolver` is a damped Newton solver with a central-difference
+Jacobian in (x, px, y, py); `SpectralTunes` gives coasting tunes from a Lomb-Scargle spectrum; steppers Boris, LF2, RK4.
+
+### G3 step 0: conventions and install (registered before running)
+- Run the regression test `Cyclotron-Coasting` (regression-tests-x at `OPALX-1.0.0`) and compare with its reference
+  `.stat`. Success: match within the test's own `.rt` tolerances. Otherwise stop and report.
+- Settle from the source and manual at the tag, before any G3 tracking: input syntax of the sector element and of the
+  closed-orbit and tune commands; how the stepper and the steps per turn are chosen; the frame and sign conventions
+  ((x, y, z) of OPAL to (x, -z, y) of OPALX, y vertical); the units of the launch triple (kinetic GeV, r in m,
+  pr in m0c); whether the solver writes its Jacobian M. If it does not, M comes from one-turn tracking of the orbit
+  and of central probes at 1e-6 m and 1e-6 m0c (the G2 step 2b method), with output at theta = 0.
+- Trim coil TC1 off, as in G2.
+
+### G3 step 1: closed orbits, tunes, determinant
+- G3a: the 24 energies of G2 step 3, 1440 steps per turn, each stepper the closed-orbit solver accepts. Metrics: r and
+  pr at theta = 0 against `ic.dat`; Qr, Qz (one-turn Jacobian, folded into [0, 0.5]) against `refsol.dat`; the same
+  against OPAL 2024.1 (G2 step 3 table); `SpectralTunes` as a second tune instrument. The 386 to 430 MeV band is
+  reported but flagged, as in G2.
+- G3b: 152, 292 and 452 MeV, 720, 1440 and 2880 steps per turn, Boris, LF2, RK4. Metrics: det(M_r) - 1, det(M_z) - 1.
+- Failure rule as G1 step 2. An OPALX non-solution without error (as OPAL at 512 MeV) counts as a failure.
+- Predictions: (G3a) OPALX minus OPAL 2024.1 below 1e-4 relative in r and below 1e-3 in Qr and Qz at interior
+  energies, since the field model is the same; a larger difference is a finding to explain before G3b is read.
+  (G3b) Under erratum 4, Boris and LF2 give |det(M_r) - 1| of order 0.1 (LIONS: 0.17 to 0.41 at these energies) and
+  RK4 a few times less, all decreasing slowly with steps.
+- Reading: OPALX Boris with |det(M_r) - 1| below 1e-3 at 1440 steps contradicts erratum 4 and points back to the
+  LIONS map conversion or to the finite-difference Jacobian (H3); the autograd Jacobian test of erratum 4 then comes
+  first.
+
+### G3c: space charge, not registered
+OPALX models 3D space charge in cyclotrons (regression tests `Cyclotron-SC-Midpoint`, `Cyclotron-SC-Prestep`), which
+LIONS omits. Its size at CIME currents is a sim-to-real item for the training game (`docs/training/SPEC.md`, §6). It
+needs the CIME map in the PSI Ring layout (the only reader found) and a current and bunch from CIME. Registered after
+G3 step 1 and once the CIME map is available.
