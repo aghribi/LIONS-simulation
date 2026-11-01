@@ -758,3 +758,22 @@ Runs:
   and the other combinations miss by at least ten times that. Otherwise stop and report. 1c reads as: a shift at
   72 MeV (far from 4350 mm) confirms the flat TC1 profile; none refutes it. G2 tracking (LIONS, OPAL, RF-Track
   against FIXPO) is registered after step 1, without TC1 if 1c confirms the flat profile.
+
+G2 step 1 results (`benchmarks/runs/case_g2/run2/step1/case_g2_step1.parquet`, code 7c57e70; a first run stopped at
+1c because the OPAL input lacked `OPTION, VERSION`, its 1a and 1b output was identical).
+- 1a: the file dBz/dtheta is per radian: median difference to a periodic 5-point difference of Bz 7.8e-3 kG/rad
+  (6.0 if read per degree), max 2.4 kG/rad at the sector edges against a peak of 568 kG/rad.
+- 1b (numpy Boris, quintic spline, 1440 steps): closed orbits at the `ic.dat` radii to 0.004 to 0.065 mm at the five
+  energies. pr read as 1e-3 m0c: within 4e-7 to 2.5e-4 relative; read as mrad: off by 8.3% to 150%. The map azimuth
+  increases along the motion: the reversed direction gives the same r and the opposite pr (mirror). Settled:
+  `ic.dat` pr is in 1e-3 m0c at theta = 0, travel with increasing map azimuth. The registered criterion asked the
+  other readings to miss by ten times the tolerance (10%); the mrad reading misses by 8.3% at 450 MeV, so the
+  criterion is not met as written, while the match is 300 times closer than the alternative at every energy.
+- 1c (OPAL closed-orbit finder): without TC1, r = 2.1315 m and pr = -2.392e-4 at 72 MeV, 4.30024 m and 0.212152 at
+  530 MeV (`tunes.dat` gives r to 0.01 mm at most). TC1 changes nothing at 72 MeV and moves r by +0.66 mm, Qr by
+  +3e-5 and Qz by +8e-4 at 530 MeV (r = 4.30 m, 5 cm inside RMIN). The flat TC1 profile read from the source is
+  refuted for the closed-orbit-finder path: the field stays near the coil there. Withdrawn. Not checked: the
+  tracking path, and the size of the 530 MeV shift.
+- OPAL minus FIXPO (`refsol.dat`), no TC1: Qr +5.3e-3 and Qz -6.7e-3 at 72 MeV, +4.8e-3 and -7.6e-3 at 530 MeV.
+- OPAL 2024.1 needs two changes to the published example input: FMLOWE, FMHIGHE in GeV (the example gives MeV; all
+  energies then fail), and an element name other than `Ring` (protected keyword).
