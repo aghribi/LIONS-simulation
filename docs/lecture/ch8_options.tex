@@ -21,7 +21,7 @@ All tunes in this chapter come from the one-turn Jacobian; on the bilinear field
 \item F0 never meets the target, with either integrator.
 RK4 does not fix it: on the 10-sector and PSI maps its worst $|\det M - 1|$ at 1440 steps is \HFzeroRkDetMin{} to
 \HFzeroRkDetMax, \HBorisOverRkMin{} to \HBorisOverRkMax{} times below Boris on all maps.
-Both decrease with the step count, slowly: fixed-step integration across the gradient jumps limits every integrator.
+The worst values of both decrease slowly with the step count, and at a single energy they need not be monotonic (\cref{sec:caseG3}): fixed-step integration across the gradient jumps limits every integrator.
 \item F1 with Boris meets the target wherever any option does, at the lowest cost per turn, on the FROM\_ORBIT maps:
 720 steps on the 3-sector map, 2880 on the 10-sector map at \thirddeg{}.
 \item No option meets it on the 10-sector map at \SI{1}{\degree}: too few nodes per harmonic period

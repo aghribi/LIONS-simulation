@@ -723,6 +723,7 @@ def g3():
     com = table('case_g3/step2c/case_g3_2c.parquet')
     s2 = table('case_g2/step2/case_g2_step2.parquet')
     s3 = table('case_g2/step3/case_g2_step3.parquet')
+    x = table('case_g3/step2d/case_g3_2d.parquet')
     interior = lambda e: (e > 80) & (e < 500) & ~((e >= 386) & (e <= 430))  # noqa: E731   the energies of tab_g2, without 512 MeV
     pivot = lambda d: d.pivot_table(index='energy_mev', columns='metric', values='value')  # noqa: E731
     fold = lambda q: np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi)  # noqa: E731
@@ -738,9 +739,6 @@ def g3():
         det[name] = i.det_r_error.abs().median()
         j = i.join(opal, rsuffix='_o', how='inner')
         opal_qr.append((j.qr - fold(j.qr_o)).abs().median())
-        if name == 'BORIS':
-            k = d.join(lions, rsuffix='_l', how='inner')
-            num('GThreeCorr', np.corrcoef(k.det_r_error, k.det_error_l)[0, 1])
     write_table('g3', ['Integrator', r'$r_{eo}$ rel.', r'$Q_r$', r'$Q_z$', r'$\det M_r - 1$'], rows)
     num('GThreeBorisDet', det['BORIS'])
     num('GThreeRkDet', det['RK4'])
@@ -799,17 +797,37 @@ def g3():
     base = pd.concat([ar(c, am) for c in ('spline', 'lions_hermite') for am in (1e-5, 1e-4, 1e-3, 5e-3)])
     num('GThreeArBaseMin', base.min())
     num('GThreeArBaseMax', base.max())
-    pred = (1 + lions.loc[cell('lions', 1e-5).index, 'det_error'].abs())**45
+    signed = lambda c: x[(x.code == c) & (x.metric == 'det_r_error')].set_index('energy_mev').value.sort_index()  # noqa: E731
+    pred = (1 + signed('lions').loc[cell('lions', 1e-5).index])**45
+    worst = pred.idxmax()
     num('GThreeSmallPred', pred.max())
-    num('GThreeSmallArMax', ar('lions', 1e-5).max())
+    num('GThreeSmallArThere', ar('lions', 1e-5).loc[worst])
+    raw('GThreeSmallEnergy', f'{worst:.0f}')
+    opx = pivot(a[a.integrator == 'BORIS']).det_r_error.sort_index()
+    li = signed('lions')
+    num('GThreeSignedCorr', np.corrcoef(li, opx)[0, 1])
+    raw('GThreeOppSign', str(int((np.sign(li) != np.sign(opx)).sum())))
+    inverse = 1 / (1 + opx) - 1
+    num('GThreeInvCorr', np.corrcoef(li, inverse)[0, 1])
+    num('GThreeInvMed', (li - inverse).abs().median())
+    pk = x[x.metric == 'peak_m'].pivot_table(index=['code', 'offset_m', 'energy_mev'], values='value').value
+    zero = pk.loc[('lions', 0.0)]
+    num('GThreePeakMed', zero.median())
+    num('GThreePeakMax', zero.max())
+    raw('GThreePeakN', str(int((zero > 1e-3).sum())))
+    raw('GThreePeakEnergies', ', '.join(f'{e:.0f}' for e in zero.index[zero > 1e-3]))
+    num('GThreeHermPeakMax', pk.loc[('lions_hermite', 0.0)].max())
+    num('GThreeOneMmPeak', pk.loc[('lions', 1e-3)].max())
+    num('GThreeOneMmPeakHerm', pk.loc[('lions_hermite', 1e-3)].max())
     ttl = lions.loc[[e for e in lions.index if min(abs(e - x) for x in (151.999, 291.997, 451.994)) < 1e-3], 'turn_time_rel_error'].abs() * 1440
     num('GThreeSlipMin', ttl.min())
     num('GThreeSlipMax', ttl.max())
     g = lin.pivot_table(index=['energy_mev', 'amplitude_m', 'turn'], columns='metric', values='value')
     c = com[com.metric != 'det_r_error'].pivot_table(index=['energy_mev', 'amplitude_m', 'turn'], columns='metric', values='value')
-    tiny = g.xs(1e-7, level='amplitude_m')
-    num('GThreeOneTurnMin', tiny.xs(1, level='turn').deviation.min())
-    num('GThreeOneTurnMax', tiny.xs(1, level='turn').deviation.max())
+    for name, am in (('Mic', 1e-6), ('Ten', 1e-5), ('Hun', 1e-4)):
+        first = g.xs(am, level='amplitude_m').xs(1, level='turn').deviation
+        num(f'GThreeFirst{name}Min', first.min())
+        num(f'GThreeFirst{name}Max', first.max())
     e152, e292 = 151.999, 291.997
     num('GThreeJitterA', g.loc[(e152, 1e-7, 5), 'growth'] * 1e-7)
     num('GThreeJitterB', g.loc[(e152, 1e-6, 5), 'growth'] * 1e-6)
@@ -818,6 +836,8 @@ def g3():
     num('GThreeComTwoMax', ctiny.xs(2, level='turn').deviation.max())
     num('GThreeComTenMin', ctiny.xs(10, level='turn').deviation.min())
     num('GThreeComTenMax', ctiny.xs(10, level='turn').deviation.max())
+    num('GThreeComTwentyMin', ctiny.xs(20, level='turn').deviation.min())
+    num('GThreeComTwentyMax', ctiny.xs(20, level='turn').deviation.max())
     num('GThreeComGrow', c.loc[(e292, 1e-7, 20), 'growth'])
     num('GThreeComGrowPred', c.loc[(e292, 1e-7, 20), 'growth_predicted'])
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.9))

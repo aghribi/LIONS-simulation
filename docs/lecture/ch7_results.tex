@@ -268,8 +268,9 @@ The installation reproduces its own regression test on this map within its toler
 No run failed.
 The excess is not specific to LIONS: OPALX Boris has a median $|\det M_r-1|$ of \GThreeBorisDet{}, RK4 \GThreeBorisOverRk{} times less, and the fixed-step eighth-order DOP853 \GThreeDopOverRk{} times more than RK4.
 No integrator shows its order: the values are not monotonic in the step count and they change sign.
-The OPALX manual reports the same behaviour on this map at 46080 steps per turn, with a radial modulus off unity by $10^{-4}$ to $10^{-3}$, and names the piecewise interpolation as an unconfirmed candidate \cite{opalx2026}.
-OPALX Boris $\det M_r$ moves at most \GThreeFdVar\,\% with the derivative step from $10^{-7}$ to $10^{-5}$.
+The OPALX manual reports a related behaviour on this map, with trim coils on, at 46080 steps per turn: a radial modulus off unity by $10^{-4}$ to $10^{-3}$, alternating growth and damping with the step, and sensitivity to both the time step and the derivative step.
+It names the piecewise interpolation as an unconfirmed candidate \cite{opalx2026}.
+Here, at 1440 steps, OPALX Boris $\det M_r - 1$ moves at most \GThreeFdVar\,\% with the derivative step from $10^{-7}$ to $10^{-5}$.
 
 \begin{table}[h]
 \centering\small
@@ -286,23 +287,24 @@ $|\operatorname{tr}M_r/2|>1$ at several energies, where the tune is clipped to 0
 \input{gen/tab_g3_det.tex}
 \end{table}
 
-One registered prediction failed.
-OPALX minus OPAL 2024.1 in $\Qr$ has a median of \GThreeOpalQrMin{} to \GThreeOpalQrMax{}, where below $10^{-3}$ was predicted, because the premise of a shared field model does not hold for tunes.
-From its source, the OPAL finder integrates the linearised equations with the interpolated $\partial_rB$ and $\partial_\theta B$ channels, so it sees a continuous gradient.
-OPALX differentiates the tracked map, which sees the gradient jumps of bilinear $B_z$.
-This explanation is read from the sources, not tested.
+Several registered predictions failed, and each is stated where it occurs below.
+The first: OPALX minus OPAL 2024.1 in $\Qr$ has a median of \GThreeOpalQrMin{} to \GThreeOpalQrMax{}, where below $10^{-3}$ was predicted.
+A candidate reason, read from the sources and not tested: the OPAL finder integrates the linearised equations with the interpolated $\partial_rB$ and $\partial_\theta B$ channels, so it sees a continuous gradient, while OPALX differentiates the tracked map, which sees the gradient jumps of bilinear $B_z$.
 
 \paragraph{The same field in two codes.}
-LIONS and OPALX Boris have the same magnitude of $\det M_r-1$ but not the same value: the correlation over the 24 energies is \GThreeCorr.
-OPALX also subdivides steps at sector edges.
-So $\det M_r$ is a property of the discrete map and of where its steps fall, not a stable property of the field.
+LIONS and OPALX Boris have the same magnitude of $\det M_r-1$ and mostly opposite signs: the signed correlation over the 24 energies is \GThreeSignedCorr, with opposite signs at \GThreeOppSign.
+LIONS $\det M_r$ is near the inverse of the OPALX one (correlation \GThreeInvCorr{} with $1/\det M_r^{\rm OPALX}-1$, median difference \GThreeInvMed).
+This is not explained.
+Unrelated step placement would give no such relation, so it counts against the step-phase reading below unless the two step patterns turn out to be related.
+Untested candidates: drift-kick-drift against kick-drift-kick, and the launch convention at the section.
 
 \paragraph{Tracked tunes.}
-OPALX spectral tunes (a ray \SI{5}{mm} off, RK4, 100 turns) lie within \GThreeSpecQrMax{} of FIXPO in $\Qr$ at \GThreeSpecN{} of \GThreeSpecN{} energies (bin \num{2.5e-3}), the half-integer band included.
+OPALX spectral tunes (a ray \SI{5}{mm} off, RK4, 100 turns) lie within \GThreeSpecQrMax{} of FIXPO in $\Qr$ at \GThreeSpecN{} of \GThreeSpecN{} energies (bin \num{2.5e-3}), the half-integer band included; the frequency axis uses the nominal turn time, about 0.2\,\% off at \SI{72}{MeV} according to the manual, not corrected.
 A registered run then measured LIONS itself: launch at amplitude $a$ in $r$ and $z$ from the code's own closed orbit, 100 turns, tune from the turn-by-turn signal (\cref{tab:G3amp}, \cref{fig:G3}).
 LIONS is within \GThreeFiveSplMax{} of the spline tracker at \SI{5}{mm}, \GThreeOneSplMax{} at \SI{1}{mm} and \GThreeTenthSplMax{} at \SI{0.1}{mm}.
 At \SI{0.01}{mm} it is more than 0.1 off at \GThreeSmallOff{} of \GThreeSmallN{} energies.
 The Hermite option stays close at every amplitude (median against FIXPO \GThreeHermQrMed{} in $\Qr$ and \GThreeHermQzMed{} in $\Qz$; spline \GThreeSplQzMed{} and default \GThreeLionsQzMed{} in $\Qz$).
+The registered prediction for it, within $10^{-3}$ of the spline, holds at 21 of 22 energies; at \SI{72}{MeV} the difference is above it, and there the spline is the one off FIXPO.
 
 \begin{table}[h]
 \centering\small
@@ -322,19 +324,27 @@ Right: distance from the closed orbit at \SI{292}{MeV}, in units of the launch a
 \end{figure}
 
 \paragraph{The step phase.}
-A \SI{0.01}{mm} oscillation does not grow as $\det M_r$ implies: its amplitude ratio is at most \GThreeSmallArMax, against up to \GThreeSmallPred{} from $(\det M_r)^{45}$.
-The registered reading of that failure was that the Jacobian was suspect again, so the Jacobian was tested directly (step 2b, 30 turns, \SIrange{1e-7}{1e-4}{m}).
-$M$ predicts the first return within \GThreeOneTurnMin{} to \GThreeOneTurnMax{} at $a=\SI{1e-7}{m}$.
-At the second return the prediction fails by order 1, which also missed the registered prediction.
+A \SI{0.01}{mm} oscillation does not grow as $\det M_r$ implies, and neither of the two registered predictions at this amplitude held: at \SI{\GThreeSmallEnergy}{MeV}, $(\det M_r)^{45}$ gives \GThreeSmallPred{} and the amplitude ratio is \GThreeSmallArThere.
+The registered reading of that failure was that the Jacobian was suspect again, so the Jacobian was tested directly (step 2b, 20 turns, \SIrange{1e-7}{1e-4}{m}).
+$M$ uses probes of \SI{1e-7}{m}, so the independent launches are the others: the first return deviates by \GThreeFirstMicMin{} to \GThreeFirstMicMax{} at \SI{1e-6}{m}, \GThreeFirstTenMin{} to \GThreeFirstTenMax{} at \SI{1e-5}{m}, and \GThreeFirstHunMin{} to \GThreeFirstHunMax{} at \SI{1e-4}{m}.
+At the second return the prediction fails by order 1 for the small launches, which missed the registered prediction.
 From then on the distance to the closed orbit no longer depends on $a$: at \SI{152}{MeV} and turn 5 it is \GThreeJitterA{}~m from $a=\SI{1e-7}{m}$ and \GThreeJitterB{}~m from $a=\SI{1e-6}{m}$.
 
 Hypothesis S: the turn time is not an integer number of steps, so each turn starts at another step phase and is another map.
 At the nominal step these energies miss a commensurate turn by \GThreeSlipMin{} to \GThreeSlipMax{} of a step per turn (turn time between the first two crossings, G2 step 2).
 Test (step 2c): adjust the step until one turn is exactly 1440 steps, and repeat.
-At turn 2 the deviation falls to \GThreeComTwoMin{} to \GThreeComTwoMax, and the growth no longer depends on $a$ and tracks $M^n$ (\cref{fig:G3}, right).
+At turn 2 the deviation falls to \GThreeComTwoMin{} to \GThreeComTwoMax, and for the two launches tested ($10^{-7}$ and \SI{1e-6}{m}) the growth tracks $M^n$ (\cref{fig:G3}, right).
 At \SI{292}{MeV} a launch grows by \GThreeComGrow{} in 20 turns, against \GThreeComGrowPred{} from $M^n$.
 This refutes the rival that the second-return failure does not depend on the step phase.
-It misses the registered threshold ($10^{-2}$ through turn 10): the deviation at turn 10 is \GThreeComTenMin{} to \GThreeComTenMax, not explained.
+It misses the registered threshold ($10^{-2}$ through turn 10): the deviation is \GThreeComTenMin{} to \GThreeComTenMax{} at turn 10 and \GThreeComTwentyMin{} to \GThreeComTwentyMax{} at turn 20, not explained.
+
+\paragraph{Excursions.}
+A step-2d run launched on the closed orbit itself, for 100 turns.
+On the default field the largest distance from the orbit has a median of \GThreePeakMed{}~m, and exceeds \SI{1}{mm} at \GThreePeakN{} of the 24 energies (\GThreePeakEnergies{} MeV), reaching \GThreePeakMax{}~m.
+With Hermite it stays below \GThreeHermPeakMax{}~m.
+From a \SI{1}{mm} launch the default reaches \GThreeOneMmPeak{}~m and Hermite \GThreeOneMmPeakHerm{}~m.
+Why these three energies is not known.
+The amplitude ratio of \cref{tab:G3amp} has a denominator dominated by this motion at small $a$, and it misses these excursions: read it as a lower bound.
 
 \begin{reading}
 This reading is a proposal.
@@ -342,11 +352,11 @@ On a bilinear field, the one-turn map depends on the step phase at the section.
 The Newton solution and $M$ of cases G2, H and G3 are correct for one phase.
 Over many turns the orbit moves among these maps.
 Then:
-(1) tracked tunes are right, with a median of \GThreeTenthFixMed{} against FIXPO at \SI{0.1}{mm};
-(2) below about \SI{0.1}{mm} the betatron signal is lost in a jitter of tens of micrometres;
-(3) amplitudes are not reliable: the radial amplitude at \num{0.1} and \SI{1}{mm} changes by \GThreeArMin{} to \GThreeArMax{} times in 100 turns on a coasting orbit;
-(4) a deliberately commensurate step makes the growth exponential;
-(5) the Hermite field removes all of this in the runs above.
-That each phase has its own fixed point is inferred, not measured.
+(1) tracked tunes are close to FIXPO, with a median of \GThreeTenthFixMed{} at \SI{0.1}{mm}, though less so than the spline or Hermite;
+(2) below about \SI{0.1}{mm} the betatron signal is lost, because a launch on the closed orbit does not stay there;
+(3) amplitudes are not reliable below a few millimetres, on a coasting orbit: see the excursions above;
+(4) a commensurate step gave growth following $M^n$ at the energies and launches tested, up to about \SI{7e-6}{m};
+(5) the Hermite field removes the anomaly in the tune and excursion runs; it did not run in steps 2b and 2c.
+That each phase has its own fixed point is inferred, not measured, and the near-inverse relation between LIONS and OPALX is an open observation against this reading.
 Beam size and emittance over longer runs, on a bunch and with acceleration have not been measured.
 \end{reading}
