@@ -96,8 +96,7 @@ class Arcade(QWidget):
     def press_start(self):
         state = self.state
         if state == 'attract':
-            self.state = 'consent' if self.store.consent is None else 'brief'
-            self.new_game() if self.state == 'brief' else None
+            self.state = 'consent'
         elif state == 'brief':
             self.start_stage()
         elif state == 'clear':
@@ -118,7 +117,7 @@ class Arcade(QWidget):
             return
         self.keys.add(key)
         if self.state == 'consent' and key in (Qt.Key_Y, Qt.Key_N):
-            self.store.consent = key == Qt.Key_Y
+            self.store.new_player(key == Qt.Key_Y)
             self.new_game()
         elif self.state == 'initials':
             self.edit_initials(key)

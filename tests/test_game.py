@@ -135,6 +135,12 @@ def test_unit_mismatch_is_an_error(monkeypatch):
         load_scenario()
 
 
+def test_logged_units():
+    from lions.game.runlog import units_of
+    assert (units_of('dz_mm_rad'), units_of('z_mm'), units_of('phi_rad'), units_of('w_MeV'), units_of('qz2')) == \
+        ('mm/rad', 'mm', 'rad', 'MeV', '1')
+
+
 def test_arcade_full_flow(tmp_path):
     """A headless session through the real widget: consent, one stage logged, game over, high-score table."""
     import os
@@ -167,6 +173,12 @@ def test_arcade_full_flow(tmp_path):
         QTest.keyClick(window, Qt.Key_Space)
     assert window.state == 'attract'
     assert window.store.scores()[0]['initials'] == 'AAA'
+    session = window.store.session
+    QTest.keyClick(window, Qt.Key_Return)
+    assert window.state == 'consent'      # the next player is asked again
+    QTest.keyClick(window, Qt.Key_N)
+    assert window.store.consent is False and window.store.session != session
+    assert window.store.log_run(window.stages[0], [{'step': 1}]) is None
     logs = list((tmp_path / 'runs').glob('*.parquet'))
     assert len(logs) == LIVES
     meta = pq.read_schema(logs[0]).metadata

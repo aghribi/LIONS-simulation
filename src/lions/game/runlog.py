@@ -1,7 +1,8 @@
-"""Local files of the trainer: consent, high scores, anonymous run logs (SPEC section 8, decision D6).
+"""Local files of the trainer: high scores, anonymous run logs (SPEC section 8, decision D6).
 
-A run log holds observations, actions and the score record, with a random run id. It never holds the initials of the
-high-score table. Nothing is written without consent.
+A run log holds observations, actions and the score record, with a random id per game. It never holds the initials of the
+high-score table. Nothing is written without the consent of the current player, asked at each new game and never stored:
+the next player on a shared machine is asked again.
 """
 import json
 import subprocess
@@ -11,7 +12,12 @@ from pathlib import Path
 
 HOME = Path.home() / '.lions_arcade'
 TABLE_SIZE = 8
-UNITS = {'_T': 'T', '_MeV': 'MeV', '_m': 'm', '_rad': 'rad', '_Hz': 'Hz', '_mm': 'mm', '_mm_rad': 'mm/rad', '_deg': 'deg'}
+UNITS = {'_mm_rad': 'mm/rad', '_T': 'T', '_MeV': 'MeV', '_m': 'm', '_rad': 'rad', '_Hz': 'Hz', '_mm': 'mm', '_deg': 'deg'}
+
+
+def units_of(name):
+    """Unit of a logged column, from its suffix; the longest suffix wins."""
+    return next((UNITS[s] for s in sorted(UNITS, key=len, reverse=True) if name.endswith(s)), '1')
 
 
 def code_version():
@@ -26,7 +32,10 @@ class Store:
     def __init__(self, home=HOME):
         self.home = Path(home)
         self.home.mkdir(parents=True, exist_ok=True)
-        self.session = uuid.uuid4().hex
+        self.new_player(False)
+
+    def new_player(self, consent):
+        self.consent, self.session = consent, uuid.uuid4().hex
 
     def _read(self, name, default):
         path = self.home / name
@@ -34,15 +43,6 @@ class Store:
 
     def _write(self, name, value):
         (self.home / name).write_text(json.dumps(value, indent=1))
-
-    @property
-    def consent(self):
-        """None until asked."""
-        return self._read('settings.json', {}).get('log_runs')
-
-    @consent.setter
-    def consent(self, value):
-        self._write('settings.json', {'log_runs': bool(value)})
 
     def scores(self):
         return self._read('scores.json', [])
@@ -62,7 +62,7 @@ class Store:
         import pyarrow as pa
         import pyarrow.parquet as pq
         record = stage.score()
-        units = {k: next((u for suffix, u in UNITS.items() if k.endswith(suffix)), '1') for k in rows[0]}
+        units = {k: units_of(k) for k in rows[0]}
         meta = {'score': json.dumps(record), 'units': json.dumps(units), 'code_version': code_version(), 'session': self.session,
                 'source': 'lions.game arcade, human player, anonymous', 'time_step_s': json.dumps(stage.time / max(stage.steps, 1))}
         columns = {k: [r[k] for r in rows] for k in rows[0]}
