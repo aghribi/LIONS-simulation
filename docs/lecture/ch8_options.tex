@@ -1,0 +1,104 @@
+\chapter{Field-model options for LIONS}\label{ch:options}
+
+\section{Case H: which option removes the floor, at what cost}\label{sec:caseH}
+\textbf{Question.}
+Which opt-in additions to LIONS remove the G1 and G2 floors, and at what cost per particle-step?
+The bilinear field and the Boris step stay the default, and the Fortran bit-identity of the default path is kept.
+
+\textbf{Design} (registered before running).
+Four field models on the same node data (F0 bilinear, F1 bicubic Hermite, F2 cubic and F3 quintic splines;
+\cref{ch:interpolation}) and two integrators: Boris, and RK4 with a fixed step.
+Three step counts (720, 1440, 2880 per turn), and three maps: 3-sector and 10-sector FROM\_ORBIT at \thirddeg{} and
+\SI{1}{\degree}, and the PSI Ring.
+Decision target, fixed before the run: $|\Delta\Qr|$, $|\Delta\Qz|$ and $|\det M - 1|$ all at most $10^{-4}$ on every orbit
+or energy of a map.
+The validation came first.
+F1 reproduces node values and derivatives to \HFOneNodes, and RK4 shows fourth order from 360 steps per turn.
+
+\textbf{Result} (\cref{fig:H}, \cref{tab:Hdecision,tab:Hcost}).
+\begin{itemize}
+\item F0 never meets the target, with either integrator.
+RK4 does not fix it: on the 10-sector and PSI maps $\det M - 1$ stays between $10^{-2}$ and $10^{-1}$ at 1440 steps.
+The gradient jumps limit every integrator.
+\item F1 with Boris meets the target wherever any option does, at the lowest cost per turn, on the FROM\_ORBIT maps:
+720 steps on the 3-sector map, 2880 on the 10-sector map at \thirddeg{}.
+\item No option meets it on the 10-sector map at \SI{1}{\degree}: too few nodes per harmonic period
+(\cref{ch:interpolation}).
+\item On the PSI map the reference is RF-Track on F3, which favours F3; only F3 meets the target against it.
+Against FIXPO, the external reference, F1 with Boris at 1440 steps is the closest model: median $|\Delta\Qr|$
+\HFixpoHermQrMed{} and $|\Delta\Qz|$ \HFixpoHermQzMed, against \HFixpoBilQrMed{} and \HFixpoBilQzMed{} for F0.
+FIXPO's own interpolation is unknown; that F1 shares its use of the file derivatives is a hypothesis.
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{h_matrix}
+\caption{Case H: worst error over orbits or energies (largest of $|\Delta\Qr|$, $|\Delta\Qz|$, $|\det M-1|$) against
+steps per turn, for each field model and integrator.
+Dotted line: decision target $10^{-4}$.
+PSI: reference RF-Track on F3; the 386 to \SI{430}{MeV} band is excluded.}
+\label{fig:H}
+\end{figure}
+
+\begin{table}[h]
+\centering\small
+\caption{Case H: smallest step count per turn (of 720, 1440, 2880) meeting the decision target; -- means none.
+B: Boris, RK: RK4.}
+\label{tab:Hdecision}
+\input{gen/tab_h_decision.tex}
+\end{table}
+
+\begin{table}[h]
+\centering\small
+\caption{Case H: cost per particle-step in the numpy harness, $10^5$ particles, PSI map, Apple M3 CPU (ratio to F0 with
+Boris).
+LIONS itself costs \HLionsCost{} times the harness F0, so the harness cost is representative.}
+\label{tab:Hcost}
+\input{gen/tab_h_cost.tex}
+\end{table}
+
+\section{F1 in LIONS}
+F1 is in LIONS as the deck option \texttt{interpolation=hermite} (API: \texttt{Deck.field\_interpolation}).
+LIONS derives the Hermite slopes from its own map: $\partial_rB$ and $\partial_\theta B$ from $\partial_xB$, $\partial_yB$, and the
+cross derivative as in F1.
+So it needs no new input file.
+The Fortran code ignores the option token, which is checked by a test.
+
+Validation against the harness: one turn agrees within \HPhaseTwoOneTurn{} relative.
+Closed orbits, turn times and $\Qz$ agree to rounding.
+$\Qr$ and $\det M - 1$ differ by up to \HPhaseTwoJacMax.
+The registered tolerance was $10^{-9}$, so the validation failed as written.
+The residual comes from the finite-difference Jacobian acting on the remaining rounding noise, and it is 300 or more times
+below the decision target.
+The cost is \HPhaseTwoCostRatio{} times the default on the PSI map at $10^5$ particles.
+
+The first implementation took the azimuth from $\arccos$ (\cref{sec:azimuth}).
+Its Jacobian differed from the harness by an amount that grew as $1/h$ with the probe step $h$.
+That is the signature of non-smooth noise in the one-turn map, not of a field difference.
+Taking $\theta$ from $\operatorname{atan2}$ removed most of it.
+
+\section{The \texttt{azimuth=atan2} option}
+The same change is available for the default bilinear path, as \texttt{azimuth=atan2}.
+\Cref{tab:Hazimuth} compares the radial Jacobian of LIONS with that of the numpy bilinear tracker (which uses
+$\operatorname{atan2}$).
+
+\begin{table}[h]
+\centering\small
+\caption{Maximum $|\Delta M_{rr}|$ between LIONS bilinear and the numpy bilinear tracker, for three Jacobian steps.}
+\label{tab:Hazimuth}
+\input{gen/tab_h_azimuth.tex}
+\end{table}
+
+The registered criterion, a tenfold reduction at $h = \SI{1e-6}{m}$, was not met on either map.
+On the 10-sector map at $h = \SI{1e-7}{m}$ the noise even grew.
+The working hypothesis, not tested, is that the bilinear one-turn map has a second noise source: it is only piecewise
+smooth, so probes that straddle a cell edge mix two slopes.
+On the C$^1$ Hermite field the same azimuth change worked, which fits this hypothesis.
+
+\section{What to use}
+\begin{itemize}
+\item For tune, Jacobian or gradient work on measured maps: \texttt{interpolation=hermite}.
+It removes the $\det$ floor at \HCostHerm{} times the cost of the default.
+\item Check the node density per harmonic period of the map (\cref{ch:interpolation}) before trusting any interpolation.
+\item The default stays for reproducing Fortran results.
+\end{itemize}

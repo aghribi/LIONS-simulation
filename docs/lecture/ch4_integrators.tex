@@ -1,0 +1,127 @@
+\chapter{Integrators}\label{ch:integrators}
+
+\section{The Boris push}
+In LIONS units, $\vect p = \beta\gamma$, \cref{eq:lorentz} reads
+\begin{equation}
+\frac{\dd\vect p}{\dd t} = \frac{q}{m_0c}\,\vect E + \frac{q}{m_0\gamma}\,\vect p\times\vect B,\qquad
+\frac{\dd\vect x}{\dd t} = \frac{c\,\vect p}{\gamma}.
+\end{equation}
+The Boris scheme \cite{qin2013} keeps momenta at half steps and positions at full steps.
+One step from $\vect p^{\,n-1/2}$ to $\vect p^{\,n+1/2}$ is a half electric kick, a magnetic rotation, and a second half
+electric kick:
+\begin{align}
+\vect p^- &= \vect p^{\,n-1/2} + \frac{q\Delta t}{2m_0c}\,\vect E^n,\\
+\vect p^+ - \vect p^- &= (\vect p^+ + \vect p^-)\times\vect t,\qquad \vect t = \frac{q\Delta t}{2m_0\gamma}\,\vect B^n,
+\label{eq:boris-implicit}\\
+\vect p^{\,n+1/2} &= \vect p^+ + \frac{q\Delta t}{2m_0c}\,\vect E^n,\\
+\vect x^{n+1} &= \vect x^n + \frac{c\Delta t}{\gamma^{n+1/2}}\,\vect p^{\,n+1/2}.
+\end{align}
+\Cref{eq:boris-implicit} is the implicit midpoint rule for the rotation.
+Dotting it with $\vect p^+ + \vect p^-$ gives $|\vect p^+| = |\vect p^-|$: the magnetic part conserves $|\vect p|$ exactly,
+for any step and any field.
+It has the explicit solution
+\begin{equation}
+\vect p' = \vect p^- + \vect p^-\times\vect t,\qquad
+\vect p^+ = \vect p^- + \vect p'\times\frac{2\vect t}{1+t^2},
+\end{equation}
+a rotation about $\vect B$ by the angle $\alpha = 2\arctan|\vect t|$.
+The exact rotation over $\Delta t$ is $\omega\Delta t$, with $|\vect t| = \omega\Delta t/2$.
+LIONS writes the same scheme with a $3\times3$ matrix (\texttt{lions.pusher.boris\_push}).
+It takes $\gamma$ in $\vect t$ from the previous step, which is the same thing when $\vect E = 0$.
+
+\paragraph{Properties.}
+The Boris map is second order and time-reversible.
+Qin et al.\ showed that it preserves phase-space volume, although it is not symplectic \cite{qin2013}.
+The distinction matters for the one-turn maps of \cref{ch:orbits}.
+
+\section{Boris in a uniform field}\label{sec:boris-uniform}
+Take $\vect E = 0$ and a uniform $B$, with exact orbit radius $\rho$ and frequency $\omega$.
+Each step rotates $\vect p$ by $\alpha = 2\arctan(\omega\Delta t/2)$ and moves the particle by a chord of exact length
+$v\Delta t = \rho\,\omega\Delta t$.
+Consecutive chords make the angle $\alpha$, so the full-step positions lie on a circle of radius
+\begin{equation}
+R = \frac{\rho\,\omega\Delta t}{2\sin(\alpha/2)} = \rho\sqrt{1+\left(\frac{\omega\Delta t}{2}\right)^2},
+\qquad \frac{R}{\rho} - 1 = \frac{(\omega\Delta t)^2}{8} + O(\Delta t^4),
+\label{eq:boris-radius}
+\end{equation}
+using $\sin(\arctan u) = u/\sqrt{1+u^2}$.
+The rotation per step is short by $\omega\Delta t - 2\arctan(\omega\Delta t/2) = (\omega\Delta t)^3/12 + O(\Delta t^5)$, so
+the phase lags by $O(\Delta t^2)$ per turn.
+\Cref{fig:boris-polygon} shows the polygon at eight steps per turn, where $R/\rho = \BorisPolyRadius$.
+
+A drift-kick-drift variant (OPAL \texttt{LF2}) records positions half a drift after each kick.
+These are the midpoints of the Boris chords, at distance $R\cos(\alpha/2) = \rho$ from the centre.
+The radius test is blind for it, and case A had to add a phase metric (\cref{sec:caseA}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{boris_polygon}
+\caption{Boris positions in a uniform field at eight steps per turn: a polygon inscribed in a circle of radius
+$\rho\sqrt{1+(\omega\Delta t/2)^2}$, slightly larger than the exact orbit.}
+\label{fig:boris-polygon}
+\end{figure}
+
+\section{Runge--Kutta}
+The classical fourth-order Runge--Kutta method (RK4) applied to $\dot y = \lambda y$ gives $y_{n+1} = R(\lambda\Delta t)\,y_n$ with
+$R(z) = 1+z+z^2/2+z^3/6+z^4/24$.
+Circular motion is $\lambda = \mathrm{i}\omega$.
+With $x = \omega\Delta t$,
+\begin{equation}
+|R(\mathrm{i}x)|^2 = \left(1-\frac{x^2}{2}+\frac{x^4}{24}\right)^2 + \left(x-\frac{x^3}{6}\right)^2
+= 1 - \frac{x^6}{72} + \frac{x^8}{576},
+\end{equation}
+so each step shrinks the amplitude by $1-x^6/144$.
+Over one turn of $n$ steps ($x = 2\pi/n$), $|\vect p|$ falls by
+\begin{equation}
+\frac{\Delta|\vect p|}{|\vect p|} = \frac{(2\pi)^6}{144\,n^5}.
+\label{eq:rk4-decay}
+\end{equation}
+This is fifth order in $1/n$, while the phase error is fourth order.
+The decay is secular: it adds up turn after turn (case D2, \cref{sec:caseD}).
+
+Adaptive embedded pairs such as RKF45 (RF-Track \texttt{rkf45}) choose the step from a local error estimate.
+Their error follows the requested tolerance, not the output sampling, and it also accumulates.
+
+\section{An explicit kick is not a rotation}
+A leapfrog that applies the magnetic force explicitly, $\vect p^{\,n+1} = \vect p^{\,n} + 2\,\vect p^{\,n}\times\vect t$,
+adds a vector perpendicular to $\vect p$ of length $\omega\Delta t\,|\vect p|$.
+So $|\vect p|^2$ grows by the factor $1+(\omega\Delta t)^2$ at every step, and by
+$(1+(2\pi/n)^2)^{n/2}-1$ per turn.
+RF-Track 2.7.4 \texttt{leapfrog} showed exactly this growth on a pure magnetic field in the install checks:
+$\Delta r/r = \num{5.636e-2}$ per turn at 360 steps, against the formula's \LeapfrogPred{} (\texttt{DESIGN.md},
+section~7, single instrument).
+It was excluded from cyclotron tracking.
+
+\section{Symplectic and volume-preserving maps}
+Let $X = (q_1,\dots,q_d,P_1,\dots,P_d)$ be canonical coordinates, and $J = \partial\Phi/\partial X$ the Jacobian of a
+map $\Phi$.
+The map is symplectic if
+\begin{equation}
+J^\mathsf{T} S J = S,\qquad S = \begin{pmatrix}0 & I_d\\ -I_d & 0\end{pmatrix}.
+\label{eq:symplectic}
+\end{equation}
+This implies $\det J = 1$.
+The converse holds only for $d = 1$, where symplectic and area-preserving are the same.
+The exact flow of a Hamiltonian system is symplectic.
+Symplectic integrators have a modified Hamiltonian, so their energy error stays bounded over very long times
+\cite{hairer2006}.
+A merely volume-preserving map has no such guarantee.
+
+Two consequences used later:
+\begin{itemize}
+\item The Poincar\'e map of a Hamiltonian flow on a section at fixed energy is symplectic in the reduced coordinates.
+For planar motion this is a two-dimensional map $(r,P_r)\mapsto(r',P_r')$, so $\det M_r = 1$ exactly for the exact
+flow, whatever the smoothness of $B_z$.
+The variational equation $\dot J = A(t)J$ has a trace-free $A$, and that is enough even when $A$ jumps at cell edges.
+\item A numerical one-turn map built from a non-symplectic step, here Boris (volume-preserving in the full phase space,
+but not symplectic), has no such property on the section.
+Its $\det M_r - 1$ measures how far the discrete map is from the exact one.
+\end{itemize}
+
+\paragraph{Canonical momenta.}
+At $z=0$, choose the gauge $A_r = 0$, $A_\theta(r,\theta) = r^{-1}\int_0^r r'B_z(r',\theta)\,\dd r'$.
+Then $B_z = r^{-1}(\partial_r(rA_\theta) - \partial_\theta A_r)$, and the canonical radial momentum equals the kinetic
+one, $P_r = p_r$.
+Off the plane, with the gauge $A_r = (z^2/2r)\,\partial_\theta B$, $A_z = 0$, the kinetic and canonical $p_r$, $p_z$ differ
+by $O(z^2)$ (\texttt{DESIGN.md}, section~5~D).
+The Jacobians of \cref{ch:orbits} therefore use kinetic momenta at small amplitude.

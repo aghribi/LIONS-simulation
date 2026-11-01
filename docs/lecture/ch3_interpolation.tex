@@ -1,0 +1,129 @@
+\chapter{Field interpolation}\label{ch:interpolation}
+
+A tracking code needs $B$ and its first derivatives at arbitrary points, from values on a grid.
+The choice of interpolation sets the smoothness of the field the integrator sees.
+In the benchmarks this mattered more than the choice of integrator.
+
+\section{Bilinear interpolation (LIONS default, field model F0)}
+Let the grid have steps $h_r$ and $h_\theta$.
+A point $(r,\theta)$ lies in the cell $(i,j)$ with local coordinates $u = (r-r_i)/h_r$ and $v = (\theta-\theta_j)/h_\theta$
+in $[0,1)$.
+For a map $M$,
+\begin{equation}
+\mathcal{B}[M](r,\theta) = (1-u)(1-v)\,M_{i,j} + u(1-v)\,M_{i+1,j} + uv\,M_{i+1,j+1} + (1-u)v\,M_{i,j+1}.
+\end{equation}
+LIONS interpolates three maps this way, each on its own:
+\begin{equation}
+B_z = \mathcal{B}[B] - \frac{z^2}{2}\,\mathcal{B}[D],\qquad
+B_x = z\,\mathcal{B}\!\left[\frac{\partial B}{\partial x}\right],\qquad
+B_y = z\,\mathcal{B}\!\left[\frac{\partial B}{\partial y}\right].
+\end{equation}
+
+\paragraph{Smoothness.}
+$\mathcal{B}[M]$ is continuous, but its gradient jumps across every cell edge.
+Inside a cell, $\partial_r\mathcal{B}[B]$ is linear in $v$ and constant in $u$.
+Across the line $\theta = \theta_j$, $\partial_\theta\mathcal{B}[B]$ jumps from one difference quotient to the next.
+\Cref{fig:kinks} shows this on the 3-sector map: the field error has a cusp at every node, and the azimuthal
+derivative is a staircase.
+
+\paragraph{Consistency.}
+The in-plane motion uses $B_z$ only, at $z=0$.
+Its radial focusing comes from $\partial_r\mathcal{B}[B]$, which is constant in $r$ inside a cell and jumps at each
+radial node.
+The vertical focusing comes from $\mathcal{B}[\partial B/\partial x]$ and $\mathcal{B}[\partial B/\partial y]$, which are
+continuous, because the derivative maps are interpolated directly.
+So the two planes see fields of different smoothness, and $\mathcal{B}[\partial_x B]\ne\partial_x\mathcal{B}[B]$: the
+interpolated field is not exactly curl-free at first order in $z$.
+This asymmetry fits a pattern seen in every benchmark on a bilinear map: the radial block of the one-turn matrix is
+noisy and the vertical block is clean (\cref{sec:caseG2}).
+The pattern is consistent with the asymmetry; it does not prove that the asymmetry causes it.
+
+\paragraph{Error.}
+For a function with bounded second derivatives, linear interpolation in one variable has the error bound
+$|f-\mathcal{L}f|\le (h^2/8)\max|f''|$ \cite{deboor1978}, and its derivative error is of order $h$.
+Consider one harmonic of the field, $\sin(2\pi\theta/\lambda)$, sampled with $N$ nodes per period $\lambda$.
+The bound becomes $(2\pi/N)^2/8$ relative to the harmonic amplitude:
+\LinErrEighteen{} for $N=18$ and \LinErrFiftyFour{} for $N=54$.
+$N = 18$ is the 10-sector FROM\_ORBIT map at \SI{1}{\degree} (\SI{18}{\degree} harmonic); $N = 54$ is the same map at
+\thirddeg{}.
+The number that controls the interpolation error is the node count per period of the shortest field harmonic, not the
+angular step.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.62\textwidth]{interpolation_kinks}
+\caption{3-sector FROM\_ORBIT map at $r = \SI{\KinkRadius}{m}$, interpolated from \SI{1}{\degree} nodes (grey lines).
+Top: error against the reference (Hermite surface on the \thirddeg{} master nodes).
+The bilinear error has a cusp at every node; the Hermite error is not visible at this scale.
+Bottom: $\partial B_z/\partial\theta$.
+The bilinear derivative is piecewise constant and jumps at each node.
+Signs as in the LIONS convention ($-B$ of FROM\_ORBIT).}
+\label{fig:kinks}
+\end{figure}
+
+\section{Bicubic Hermite interpolation (field model F1)}
+The map files hold more than values.
+LIONS stores $\partial_x B$ and $\partial_y B$, from which $\partial_r B$ and $\partial_\theta B$ follow at each node.
+Cubic Hermite interpolation uses value and slope at both ends of an interval.
+On $[0,1]$ the basis functions are
+\begin{equation}
+h_{00} = 2u^3-3u^2+1,\quad h_{01} = -2u^3+3u^2,\quad h_{10} = u^3-2u^2+u,\quad h_{11} = u^3-u^2 .
+\end{equation}
+$h_{00}$ and $h_{01}$ carry the end values; $h_{10}$ and $h_{11}$ carry the end slopes, scaled by the step.
+The tensor product on a cell needs, at each of the four corners, $B$, $\partial_rB$, $\partial_\theta B$ and the cross
+derivative $\partial_r\partial_\theta B$:
+\begin{equation}
+\begin{split}
+S(r,\theta) = \sum_{a,b\in\{0,1\}}\Big[&B\,h_{0a}(u)h_{0b}(v) + h_r\,\partial_rB\,h_{1a}(u)h_{0b}(v)\\
+&+ h_\theta\,\partial_\theta B\,h_{0a}(u)h_{1b}(v) + h_rh_\theta\,\partial_r\partial_\theta B\,h_{1a}(u)h_{1b}(v)\Big]_{i+a,\,j+b}.
+\end{split}
+\end{equation}
+The cross derivative is not in the file.
+F1 computes it by second-order central differences of $\partial_\theta B$ in $r$, one-sided at the map edges.
+The resulting surface is $C^1$: values and first derivatives are continuous across cell edges.
+Then $B_r = z\,\partial_rS$ and $B_\theta = (z/r)\,\partial_\theta S$ come from the same surface, so F1 is consistent with
+\cref{eq:br-expansion}.
+
+For exact node data the cubic Hermite error bound in one variable is $(h^4/384)\max|f^{(4)}|$ \cite{deboor1978}.
+For the harmonic above this is $(2\pi/N)^4/384$: \HermErrEighteen{} for $N=18$, \HermErrFiftyFour{} for $N=54$.
+The cross term enters with the weight $h_rh_\theta$, so a second-order error in $\partial_r\partial_\theta B$ keeps the
+local error at fourth order.
+
+F1 is local: one cell and its four corners.
+It costs \HCostHerm{} times the bilinear field in the numpy harness (\cref{sec:caseH}).
+It is available in LIONS as the deck option \texttt{interpolation=hermite}.
+
+\section{Splines (field models F2, F3)}
+Cubic (F2) and quintic (F3) splines are global $C^2$ and $C^4$ interpolants, periodic in $\theta$.
+The benchmark harness builds separate splines of $B$, $\partial_rB$ and $\partial_\theta B$ (FITPACK through SciPy).
+They are the smooth reference interpolants of case G and are used by the RF-Track runs.
+They cost \HCostCub{} and \HCostQuin{} times F0 in the harness.
+
+\section{The azimuth}\label{sec:azimuth}
+The interpolation needs $\theta$ from $(x,y)$.
+LIONS, as in the Fortran, takes
+\begin{equation}
+\theta = \arccos(x/r)\quad (y\ge0),\qquad \theta = 2\pi-\arccos(x/r)\quad (y<0).
+\end{equation}
+Near $\theta = 0$ this formula is ill-conditioned.
+With $u = x/r$, $\dd\theta/\dd u = -1/\sin\theta$, and $u$ carries a rounding error of order the machine epsilon
+$\varepsilon = 2^{-52}$.
+So the absolute error in $\theta$ is of order $\varepsilon/\theta$ and the relative error of order $\varepsilon/\theta^2$.
+Below $\theta\approx\sqrt{2\varepsilon}\approx\num{2e-8}$, $x/r$ rounds to $1$ and $\theta$ comes out as $0$.
+The function $\operatorname{atan2}(y,x)$ has no such loss (\cref{fig:azimuth}).
+
+This matters for the benchmarks because the Poincar\'e section is at $\theta = 0$ (\cref{ch:orbits}).
+At $\theta = 10^{-6}$, the relative error of $\arccos$ reaches \AcosErrAtOneMicro{} in the test of \cref{fig:azimuth}.
+Its largest absolute value is of order $\sqrt{\varepsilon}\approx\num{1e-8}$~rad, a few tenths of a micrometre at a
+radius of \SI{25}{m}.
+That is a noise source for finite-difference Jacobians with probe steps of \SI{1}{\micro m} (\cref{sec:caseH}).
+LIONS offers \texttt{azimuth=atan2} as a deck option; the default stays the Fortran formula.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.6\textwidth]{azimuth_error}
+\caption{Relative error of the azimuth recovered from $(x,y) = (\cos\theta,\sin\theta)$ in double precision.
+$\arccos(x/r)$ loses everything below $\theta\approx\num{2e-8}$ and follows $\varepsilon/\theta^2$ above it;
+$\operatorname{atan2}$ stays at rounding level.}
+\label{fig:azimuth}
+\end{figure}

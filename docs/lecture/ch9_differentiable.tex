@@ -1,0 +1,118 @@
+\chapter{Differentiable tracking}\label{ch:differentiable}
+
+\section{Why gradients}
+Calibrating a model on machine data means fitting a few parameters (field scale, dee voltages, phases, the initial beam)
+to measured quantities (probe currents, phase, extracted energy).
+With gradients of the tracked observables with respect to these parameters, the fit can use gradient-based optimisers.
+With $10^5$ particles, the forward model can also be fast enough for many evaluations.
+Differentiable beam dynamics codes exist for linear accelerators and transfer lines \cite{kaiser2024}.
+Cases E and E2 ask whether the LIONS core can join them.
+
+\section{Reverse-mode automatic differentiation}
+A tracking run is a composition $X_N = \Phi_N\circ\cdots\circ\Phi_1(X_0;\lambda)$.
+Reverse mode computes $\partial f(X_N)/\partial\lambda$ for a scalar $f$ in one backward sweep, at a cost of a few forward
+passes, whatever the number of parameters.
+The price is memory: the backward sweep needs the intermediate states of all $N$ steps.
+Checkpointing stores only every $\sqrt N$-th state and recomputes each segment during the backward sweep.
+Memory then grows as $O(\sqrt N)$ for one extra forward pass \cite{chen2016,griewank2000}.
+
+\section{Case E: the port and its gradients}
+The LIONS bilinear field and Boris push were ported to PyTorch \cite{paszke2019} in float64.
+The port reproduces LIONS positions and momenta at every step of one turn within \EPortMax{} relative.
+Gradients of $r$, $p_r$ and the phase with respect to the map scale $s$, $r_0$ and $p_{r0}$ were compared with central finite
+differences (\cref{tab:Egrad}).
+
+\begin{table}[h]
+\centering\small
+\caption{Case E: maximum relative difference between autograd and central finite differences at the registered steps.}
+\label{tab:Egrad}
+\input{gen/tab_e_grad.tex}
+\end{table}
+
+\begin{itemize}
+\item B0, the smooth field, passes the $10^{-6}$ criterion.
+\item A, the uniform field, fails on the phase derivatives only.
+These derivatives are small, because the uniform field is isochronous, and the finite-difference reference carries a
+rounding error of order $10^{-8}$ absolute on a phase of $2\pi$.
+The finite difference is the noisy side, not the autograd value.
+\item B, the bilinear 4-sector map, is the instructive case (\cref{fig:Efd}).
+At 3600 steps the disagreement reaches \ESweepLargeH{} at $h = 10^{-4}$, falls to \ESweepSmallH{} at $h = 10^{-8}$, and
+rises again at $h = 10^{-9}$ (\ESweepTinyH) from rounding.
+Example: $\partial r/\partial s = \EExampleAutograd$ from autograd, against \EExampleFD{} from finite differences at
+$h = 10^{-6}$.
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.6\textwidth]{case_e_fd}
+\caption{Case E: worst disagreement between autograd and central finite differences against the finite-difference step,
+at 3600 steps (10 turns).
+The bilinear map (case B) agrees only near $h=10^{-8}$; on the smooth field (B0) the disagreement stays at the
+finite-difference error level (truncation at large $h$, rounding at small $h$).}
+\label{fig:Efd}
+\end{figure}
+
+\begin{reading}
+Autograd returns the derivative of the discrete map at the point.
+On a bilinear map the discrete map is only piecewise $C^1$: its derivative jumps whenever a step point crosses a cell
+edge.
+A finite difference with a step larger than the spacing of these jumps averages over them.
+For an optimiser this means the local gradient and the gradient over a finite parameter change differ: after ten turns,
+by up to \ESweepLargeH{} for a relative change of $10^{-4}$.
+A $C^1$ field (F1) removes the jumps; whether it closes the gap for gradients has not been measured.
+\end{reading}
+
+\paragraph{Memory and time.}
+Without checkpointing the autograd graph costs about \SI{140}{kB} per step for one particle, dominated by about 60 small
+operations per step (\texttt{DESIGN.md}, section 19).
+With checkpointing, $10^5$ steps fit in \SI{6}{GB} (\cref{tab:Ecost}).
+
+\begin{table}[h]
+\centering\small
+\caption{Case E: forward plus backward, eager PyTorch on the M3 CPU (peak RSS includes about \SI{0.4}{GB} of imports).
+``skipped'': extrapolated memory above half the RAM.}
+\label{tab:Ecost}
+\input{gen/tab_e_cost.tex}
+\end{table}
+
+\section{Case E2: throughput}
+\textbf{Question} (registered before running): can a compiled PyTorch step beat plain LIONS throughput by 10 times?
+This is the go criterion for building a differentiable backend.
+
+\textbf{Result} (\cref{fig:E2}, \cref{tab:E2}).
+Compiled float64 reaches \EtwoRatioH{} times plain LIONS at $10^5$ particles on an H100 (\EtwoBestH{} particle-steps per
+second), \EtwoRatioA{} times on an A100, and \EtwoRatioM{} times on the M3 CPU.
+At $10^3$ particles no device reaches 10.
+float32 gives no speed gain on the GPUs and loses accuracy: about $10^{-5}$ in $r$ after ten turns.
+GPU float64 agrees with CPU float64 to about $10^{-14}$.
+
+\begin{table}[h]
+\centering\small
+\caption{Case E2: forward throughput relative to plain LIONS on the same node, and wall time of compiled float64
+forward plus backward at $10^3$ particles (3600 steps).}
+\label{tab:E2}
+\input{gen/tab_e2.tex}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.65\textwidth]{case_e2}
+\caption{Case E2: forward particle-steps per second against particle count, best float64 variant per device
+(MPS: float32 only).
+Dashed: plain LIONS on the CPU of the same node.}
+\label{fig:E2}
+\end{figure}
+
+\begin{reading}
+The go criterion is met at large batch on GPUs.
+On the A100 the wall time hardly changes from 1 to $10^5$ particles, so the run is launch-bound and $10^5$ is not the
+ceiling.
+Small-batch gradients are faster on the CPU.
+\end{reading}
+
+\section{Before trusting a calibrated model}
+A model fitted on machine data inherits every omission of the simulator.
+LIONS does not model space charge, a full 3D field map, misalignments of the dees or the central-region electrodes,
+field drifts and hysteresis, or RF amplitude and phase noise.
+A parameter fit will absorb these effects into the parameters it has.
+Fitted values are therefore effective parameters until they are checked on held-out operating conditions.

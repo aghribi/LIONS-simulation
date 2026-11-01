@@ -1,0 +1,40 @@
+\chapter{Introduction}\label{ch:intro}
+
+LIONS tracks ions through a sector cyclotron, from the central region to extraction.
+It integrates the relativistic Lorentz equation with a Boris push in a static median-plane magnetic map and in RF
+electric potential maps of the dees.
+The code was written in Fortran~90 by P.~Bertrand (GANIL) for the CIME cyclotron, and ported to Python by
+O.~Kamalou.
+The Python port keeps the Fortran results bit for bit on the default path: \nolinkurl{tests/test_fortran.py} compares
+it with a \texttt{gfortran} build compiled with \texttt{-ffp-contract=off}.
+
+These notes explain the physics and the numerical methods behind the Phase~5 benchmarks.
+The benchmarks ask five questions (\nolinkurl{benchmarks/DESIGN.md}, section~1):
+\begin{enumerate}
+\item[Q1] Do LIONS, OPAL-cycl and RF-Track agree on the same fields at the same time step?
+\item[Q2] Is the LIONS one-turn map symplectic, and how does it compare with OPAL and RF-Track integrators?
+\item[Q3] Can the LIONS core be made differentiable at an acceptable cost?
+\item[Q4] Do the codes agree on acceleration through the dee gaps?
+\item[Q5] Does the extracted beam survive the conversion to Xsuite and Cheetah?
+\end{enumerate}
+Q1 to Q3 have answers in these notes.
+Q4 (case C) and Q5 (case F) were not run: case C waits for the CIME maps, and case F has nothing after extraction to compare yet.
+
+\section*{Plan}
+\Cref{ch:motion,ch:fields} cover the physics: motion in a cyclotron, focusing, and fields in the median plane.
+\Cref{ch:interpolation,ch:integrators,ch:orbits} cover the numerical methods: field interpolation, integrators, closed
+orbits and tunes.
+\Cref{ch:method} states the verification method.
+\Cref{ch:results} gives the benchmark results (cases A, B, D, G).
+\Cref{ch:options} covers the field-model options added to LIONS (case H).
+\Cref{ch:differentiable} covers the differentiable port (cases E, E2).
+\Cref{ch:open} lists what is open.
+
+\section*{Conventions}
+Positions in \si{m}, time in \si{s}, fields in \si{T} and \si{V/m}.
+Momenta are normalised, $p = \beta\gamma = |\vect p|/(m_0 c)$, as in LIONS.
+$(r,\theta,z)$ are cylindrical coordinates with $z$ normal to the median plane, and $\theta$ is measured from $x$ towards $y$.
+In LIONS a positive ion turns counter-clockwise ($\theta$ increasing) when $B_z<0$.
+Tunes are folded into $[0,0.5]$ when compared, because the trace of the one-turn matrix only fixes the fractional
+tune modulo this symmetry (\cref{ch:orbits}).
+``Relative error'' always means the error divided by the reference value.

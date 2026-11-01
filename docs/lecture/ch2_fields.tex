@@ -1,0 +1,87 @@
+\chapter{Magnetic fields in the median plane}\label{ch:fields}
+
+\section{Expansion off the median plane}
+In the beam region the static field satisfies $\nabla\times\vect B = 0$ and $\nabla\cdot\vect B = 0$.
+So $\vect B = \nabla\Phi$ with $\nabla^2\Phi = 0$.
+A cyclotron magnet is symmetric about the median plane $z=0$: $B_z$ is even in $z$, $B_r$ and $B_\theta$ are odd.
+Then $\Phi$ is odd in $z$:
+\begin{equation}
+\Phi(r,\theta,z) = z\,B(r,\theta) + z^3 a_3(r,\theta) + O(z^5),
+\end{equation}
+where $B(r,\theta)$ is the median-plane field.
+Write $\nabla_\perp^2 = \partial_r^2 + r^{-1}\partial_r + r^{-2}\partial_\theta^2$.
+Laplace's equation, order by order in $z$, gives $6a_3 + \nabla_\perp^2 B = 0$.
+Differentiating $\Phi$:
+\begin{align}
+B_z &= B - \frac{z^2}{2}\,\nabla_\perp^2 B + O(z^4),\label{eq:bz-expansion}\\
+B_r &= z\,\frac{\partial B}{\partial r} + O(z^3),\qquad
+B_\theta = \frac{z}{r}\,\frac{\partial B}{\partial\theta} + O(z^3).\label{eq:br-expansion}
+\end{align}
+In Cartesian components, $B_x = z\,\partial B/\partial x$ and $B_y = z\,\partial B/\partial y$ to the same order.
+A median-plane map of $B$ and its first derivatives therefore fixes the field to first order in $z$, which is all that
+linear vertical motion needs.
+
+\paragraph{The truncated field.}
+LIONS and OPAL keep \cref{eq:br-expansion} and $B_z = B$ (OPAL), or $B_z = B - (z^2/2)\,D$ with a map $D$ (LIONS).
+Every benchmark here sets $D = 0$, as OPAL does.
+The truncated field is curl-free to this order: $\partial_z B_r - \partial_r B_z = \partial_r B - \partial_r B = 0$.
+It is not divergence-free:
+\begin{equation}
+\nabla\cdot\vect B = \frac{1}{r}\partial_r(r B_r) + \frac{1}{r}\partial_\theta B_\theta + \partial_z B_z
+= z\,\nabla_\perp^2 B \quad (D = 0).
+\end{equation}
+The missing $-(z^2/2)\nabla_\perp^2B$ term in $B_z$ is what cancels it.
+For the linear tunes this does not matter, because the term is second order in $z$.
+For long-term invariants at finite $z$ it does.
+The truncated field has no exact invariant off the plane, so case D2 (\cref{sec:caseD}) uses planar motion only.
+
+\paragraph{The $D$ map in LIONS.}
+The LIONS map file stores a fourth column, documented as $\partial^2B_z/\partial r^2$, which multiplies $-z^2/2$.
+\Cref{eq:bz-expansion} shows that it must hold the transverse Laplacian $\nabla_\perp^2B$ to keep $\nabla\cdot\vect B =
+O(z^3)$.
+The field-harmonic routine of LIONS adds the Laplacian of the harmonic polynomial to it, consistent with
+\cref{eq:bz-expansion}.
+What the CIME map files contain in that column has not been checked here.
+
+\section{Map formats and conventions}
+Three formats appear in the benchmarks.
+Each conversion goes through one function (\nolinkurl{benchmarks/convert.py} or a case driver), validated on a
+reference case.
+The conventions below were settled from the files and the OPAL source, then confirmed by a run (\texttt{DESIGN.md},
+sections 3, 7 and 21).
+
+\begin{description}
+\item[LIONS.] An $(r,\theta)$ grid over \SI{360}{\degree}, endpoint included, with $B_z$, $D$, $\partial B/\partial x$ and
+$\partial B/\partial y$ in \si{T} and \si{T/m}.
+The limits are 250 radii and 1081 azimuths; 1081 columns at \thirddeg{} is the native PSI resolution.
+$B_z<0$ for counter-clockwise positive ions.
+\item[OPAL \texttt{CARBONCYCL}.] Header $r_{\min}$ [\si{mm}], $\Delta r$ [\si{mm}], $\theta_{\min}$ [\si{\degree}],
+$\Delta\theta$ [\si{\degree}], then $B_z$ in \si{kG} on $n_r\times n_\theta$ nodes, with no \SI{360}{\degree} endpoint.
+Values are read with \texttt{fscanf("\%16lE")}: at most 16 characters per value, so a longer number is silently split
+in two.
+A $+\SI{10}{kG}$ map gives $B_z = \SI{-1}{T}$ inside OPAL.
+OPAL recomputes $\partial B/\partial r$ and $\partial B/\partial\theta$ from $B_z$ by five-point differences.
+\item[PSI \texttt{RING}.] One \SI{45}{\degree} sector at \thirddeg{}, 141 radii from 1900 to \SI{4700}{mm}.
+Per radius: $B_z$ in \si{kG} and three azimuthal derivatives, per radian.
+The units of the derivative columns were fixed by comparing them with a five-point difference of $B_z$.
+The FIXPO file \texttt{ic.dat} gives $p_r$ in units of $10^{-3}m_0c$ at $\theta=0$, for motion with increasing map
+azimuth.
+\end{description}
+
+\paragraph{Lesson.}
+Four conventions had to be settled from the files and the source: units in kG, derivatives per radian, the $p_r$
+units, and the direction of travel.
+Two were wrong in the first reading: the OPAL manual names the $p_r$ column in mrad, and a trim-coil profile was
+predicted flat from reading the source.
+Each one was decided by a short run with two readings, where the right one matched by orders of magnitude.
+This costs minutes and prevents a whole class of silent errors.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{field_maps}
+\caption{Median-plane $B_z$ of the two FROM\_ORBIT manufactured maps used in case G1, drawn as annuli (the inner radius is not to scale): the ideal 3-sector map
+(H$_2^+$, $r$ from 0.4 to \SI{2}{m}) and the 10-sector map with a second harmonic in the orbit shape (protons, $r$ from
+22.4 to \SI{26.6}{m}).
+The field changes sign in the valleys of the 10-sector map.}
+\label{fig:field-maps}
+\end{figure}

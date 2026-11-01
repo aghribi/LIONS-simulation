@@ -1,0 +1,97 @@
+\chapter{Verification method}\label{ch:method}
+
+A tracking code is verified against references whose error is known, with instruments whose own error is measured.
+The benchmarks follow five rules.
+
+\section{Register before running}
+Each case states its question, metrics, configuration, references and success criteria in \nolinkurl{benchmarks/DESIGN.md}
+before any run.
+Criteria fixed after seeing results are labelled as amendments, with the reason.
+A criterion that fails stays failed in the record, even when the reason is benign.
+Two examples from the record:
+\begin{itemize}
+\item Case A asked OPAL RK4 to converge at fourth order in the orbit radius.
+It converged at fifth order, as \cref{eq:rk4-decay} shows it must.
+The criterion was wrong, and it is recorded as failed, with the derivation added after the run.
+\item Case H asked that the Hermite surface have value jumps below $10^{-10}$ across cell edges, probed at $\pm10^{-9}$ of a
+cell.
+A smooth surface changes by its gradient times the probe distance, so the test could not pass as posed.
+It was replaced by a scaling test (jumps proportional to the probe distance), documented as a change made after the
+result.
+\end{itemize}
+
+\section{References with a known error}
+Three kinds of reference were used, from strongest to weakest:
+\begin{enumerate}
+\item \textbf{Closed forms.}
+A uniform field (case A): circle, period, and the Boris polygon of \cref{eq:boris-radius}.
+A field linear in $r$ (case B0): closed orbit from $p/q = |B_0|\,r\,(1-k(r-r_0))$, field index $n = kr/(1-k(r-r_0))$,
+tunes from \cref{eq:weak-tunes}.
+\item \textbf{Manufactured solutions.}
+FROM\_ORBIT builds a field from a prescribed family of isochronous closed orbits \cite{planche2019,planche2023}.
+The orbits and the revolution frequency are then exact by construction.
+Its tunes come from a geometric formula; case G1 step 1 measured them against RF-Track on a smooth interpolation of the
+map (\cref{sec:caseG1}).
+\item \textbf{External codes.}
+FIXPO closed orbits and tunes for the PSI Ring, OPAL-cycl \cite{adelmann2019} and RF-Track
+\cite{latina2023}.
+Their error is not known in advance; it is bounded by comparing them with each other.
+\end{enumerate}
+
+\section{Field parity}
+Codes compared on ``the same field'' must see the same field.
+Every converted field is sampled from the LIONS field evaluation itself, so a conversion cannot add a second field model.
+Before each run, the field of every code is compared with LIONS at random points.
+In case B0, $B_z$ agrees within \BzeroParityBz~T and $B_x$, $B_y$ within \BzeroParityBxy~T, below the derived bound of
+the LIONS chord error.
+A failed parity check stops the run.
+One did: the first case B2 check, written for \num{1e-13}~T on all components, failed at \num{4.9e-5}~T, and the bound
+was rederived before running (\texttt{DESIGN.md}, section 14).
+
+\section{Separate the error sources}
+A tracking result mixes three errors: the field model (interpolation), the integrator (step), and the measurement
+(section crossing, finite differences, Newton tolerance).
+The cases are built to change one at a time:
+\begin{itemize}
+\item same field, different integrators and steps: B0, D2;
+\item same integrator, same nodes, different interpolation: G1 step 3 (bilinear against splines, Boris fixed);
+\item same field, different integrator: G2 step 2c (RF-Track on the bilinear field);
+\item same code path, two implementations: the numpy Boris harness reproduces LIONS to \GValidationMax{} over one turn before it is used
+for anything else.
+\end{itemize}
+
+\section{Competing hypotheses}
+When a result is unexpected, the rival explanations are written down with the observation that would separate them,
+and a discriminating run is registered.
+\Cref{tab:evidence} shows the evidence matrix that built up for the bilinear-map noise across cases B, G1 and G2.
+
+\begin{table}[t]
+\centering\small
+\caption{Evidence matrix for the noise of LIONS one-turn maps on bilinear maps.
+H1: the bilinear field (kinks at cell edges). H1b: the Boris step on a kinked field. H2: a LIONS-specific defect.
+H3: the finite-difference Jacobian. H4: a near-integer tune amplifying small errors.
+$+$ supports, $-$ contradicts, $\cdot$ neutral.}
+\label{tab:evidence}
+\begin{tabular}{p{7.4cm}ccccc}
+\toprule
+Observation & H1 & H1b & H2 & H3 & H4\\
+\midrule
+B0 (bilinear exact in $B_z$): orbit order 2, $\det-1\sim10^{-9}$ & $+$ & $\cdot$ & $-$ & $-$ & $\cdot$\\
+B: RF-Track on the closed-form field is clean at the same tune & $+$ & $\cdot$ & $\cdot$ & $\cdot$ & $-$\\
+B-gradient: spread does not follow $\det(M_r-I)$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $-$\\
+B: halving the map step does not reduce the scatter & $-$ (as $O(h^2)$) & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G1 step 3: same Boris, same nodes, spline field removes the floor & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G2 2b: numpy Boris on the bilinear field equals LIONS & $+$ & $+$ & $-$ & $\cdot$ & $\cdot$\\
+G2 2b: $\det$ changes at most \GTwoBJacVar\,\% from $h=10^{-7}$ to $10^{-5}$ m & $\cdot$ & $\cdot$ & $\cdot$ & $-$ & $\cdot$\\
+G2 2c: RF-Track on the bilinear field, $|\det-1|$ \GTwoCRatioMin{} to \GTwoCRatioMax{} times smaller & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+H: F1 (C$^1$) with Boris removes the $\det$ floor on all maps & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The current best explanation is H1b: the Boris step crossing gradient jumps of a bilinear field.
+H1 as first stated, an $O(h^2)$ interpolation error, failed its own prediction.
+In case B, halving the azimuthal step left the scatter unchanged (ratio \BHalfDegQrRatioMin{} to
+\BHalfDegQrRatioMax), where $O(h^2)$ predicts 0.25.
+Kinks of any spacing (H1$'$) remain consistent with every observation.
+A direct test, a Jacobian step scan with the closed orbit moved across a cell edge, has not been run.

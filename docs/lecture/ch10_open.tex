@@ -1,0 +1,52 @@
+\chapter{Open questions}\label{ch:open}
+
+\section{Not run}
+\begin{itemize}
+\item \textbf{CIME.}
+The CIME field map is not available to the benchmarks yet.
+The node density per harmonic period of the CIME map, and the size of the bilinear floor on it, are therefore unknown.
+Case C (acceleration through the dees) waits for it.
+\item \textbf{Extraction (case F).}
+The CIME deck has one electrostatic deflector and no transfer-line element, so there is nothing after extraction to
+compare between LIONS, Xsuite and Cheetah yet.
+\end{itemize}
+
+\section{Untested hypotheses}
+\begin{itemize}
+\item \textbf{Kink noise on the bilinear path.}
+The bilinear one-turn map is only piecewise smooth, and probes that straddle a cell edge mix two slopes.
+Test: a Jacobian step scan with the closed orbit moved across a cell edge.
+\item \textbf{Residual on RF-Track with the bilinear field.}
+RF-Track on the bilinear PSI field still leaves $\det M_r - 1$ near $10^{-2}$ at two energies.
+Adaptive Runge--Kutta also loses order at gradient jumps, and the section crossing adds its own error.
+These were not separated.
+\item \textbf{OPAL offsets.}
+In B0, OPAL has an energy-dependent closed-orbit offset of order $10^{-8}$ shared by LF2 and RK4.
+In A, OPAL RK4 has a phase floor near $5\times10^{-11}$.
+Neither is explained.
+\item \textbf{Gradients on F1.}
+Whether the Hermite field closes the gap between autograd and finite differences on measured maps has not been measured.
+\end{itemize}
+
+\section{Physics questions for the LIONS authors}
+Two behaviours of LIONS were found while porting, are shared with the Fortran, and were left unchanged pending a decision:
+\begin{itemize}
+\item The Python port adds a vertical bunch spread for \texttt{espace='6d'}, while the Fortran does so only for
+\texttt{'3d'} (\texttt{lions\_2.0\_ep.f90}, line 498).
+\item The correlation code indexes the mass array by family number, in both codes.
+This is wrong for families after the first.
+\end{itemize}
+
+\section{Lessons}
+\begin{enumerate}
+\item The interpolation sets the floor.
+On the bilinear maps of case H, neither Boris nor RK4 meets the $10^{-4}$ target at any step count up to 2880 per turn
+(\cref{tab:Hdecision}).
+A $C^1$ interpolation at \HCostHerm{} times the cost removes the $\det$ floor.
+\item Count nodes per harmonic period, not degrees.
+\item A non-symplectic step on a kinked field breaks area preservation of the one-turn map by orders of magnitude more
+than on a smooth field.
+\item Every convention (units, signs, direction, reference azimuth) should be settled by a two-reading run.
+\item A criterion built by the analysis that it judges can be tautological.
+Write the triangle inequality down before using one.
+\end{enumerate}

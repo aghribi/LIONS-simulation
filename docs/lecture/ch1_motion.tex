@@ -1,0 +1,123 @@
+\chapter{Motion in a cyclotron}\label{ch:motion}
+
+\section{Lorentz equation}
+A particle of rest mass $m_0$ and charge $q$ obeys
+\begin{equation}
+\frac{\dd \vect P}{\dd t} = q\left(\vect E + \vect v\times\vect B\right),\qquad
+\vect P = \gamma m_0 \vect v,\qquad \gamma = \sqrt{1+p^2},\qquad \vect p = \vect P/(m_0c).
+\label{eq:lorentz}
+\end{equation}
+In a static magnetic field $\vect v\cdot(\vect v\times\vect B)=0$, so $|\vect p|$ and $\gamma$ are constants of the
+motion.
+This exact invariant is the first test of any integrator (case A, \cref{sec:caseA}).
+
+In a uniform field $\vect B = B\hat z$ the motion in the plane is a circle of radius $\rho$ at angular frequency
+$\omega$:
+\begin{equation}
+\rho = \frac{P}{|q B|} = \frac{m_0 c\, p}{|qB|},\qquad \omega = \frac{|q B|}{\gamma m_0},
+\qquad B\rho = \frac{P}{q}.
+\label{eq:cyclotron}
+\end{equation}
+The non-relativistic frequency $|qB|/m_0$ does not depend on the energy.
+This is the principle of the cyclotron: an RF voltage at a harmonic $h$ of $\omega$ accelerates the ion at each gap
+crossing while the orbit radius grows.
+
+The direction of rotation follows from the force.
+For counter-clockwise motion $\vect v = v\hat\theta$, and $q\,\vect v\times\vect B = q v B_z\,\hat\theta\times\hat z
+= q v B_z\,\hat r$.
+The force must point to the centre, so $qB_z<0$: in LIONS a positive ion turns counter-clockwise in $B_z<0$.
+
+\section{Isochronism}
+With relativity, $\omega = |qB|/(\gamma m_0)$ falls as the energy grows.
+To keep the revolution frequency at $\omega_0$, the azimuthally averaged field $\bar B(r)$ must grow with $\gamma$.
+On an orbit of radius $r$, $v = \omega_0 r$, so $\beta = r/r_\infty$ with $r_\infty = c/\omega_0$, and
+\begin{equation}
+\bar B(r) = \gamma(r)\, B_0 = \frac{B_0}{\sqrt{1-r^2/r_\infty^2}},\qquad B_0 = \frac{m_0\omega_0}{|q|}.
+\label{eq:isochronous}
+\end{equation}
+Define the field index
+\begin{equation}
+k = \frac{r}{\bar B}\frac{\dd \bar B}{\dd r}.
+\end{equation}
+From \cref{eq:isochronous}, $\dd\gamma/\dd r = \gamma^3 r/r_\infty^2$, hence
+\begin{equation}
+k = \frac{r}{\gamma}\,\frac{\gamma^3 r}{r_\infty^2} = \gamma^2\beta^2 = \gamma^2-1 .
+\label{eq:k-isochronous}
+\end{equation}
+An isochronous field grows with radius ($k>0$).
+In a weak-focusing machine (\cref{sec:weak}) this defocuses vertically, and the cyclotron must recover vertical
+focusing elsewhere: from the azimuthal variation of the field.
+
+The FROM\_ORBIT maps used in case G (\cref{sec:caseG1}) are isochronous by construction, with $r_\infty$ = \SI{5}{m}
+(3-sector example) and \SI{28}{m} (10-sector example) \cite{planche2019}.
+
+\section{Linear motion near a circular orbit}\label{sec:weak}
+Take an azimuthally symmetric field $B_z(r)$ in the median plane, with $n = -k = -(r/B)\,\dd B/\dd r$ evaluated on the
+reference orbit of radius $\rho$.
+Use $\theta$ as the independent variable and write $r = \rho + x$.
+To first order in $x$ and $z$, the radial and vertical motions decouple:
+\begin{equation}
+\frac{\dd^2 x}{\dd\theta^2} + (1-n)\,x = 0,\qquad \frac{\dd^2 z}{\dd\theta^2} + n\,z = 0 .
+\end{equation}
+The radial term $1$ is the geometric focusing of the circle; the gradient term $\mp n$ comes from the radial derivative
+of $B_z$ and, through $\nabla\times\vect B = 0$, from $B_r = z\,\partial B_z/\partial r$ (\cref{ch:fields}).
+The number of betatron oscillations per turn, the tunes, are
+\begin{equation}
+\Qr = \sqrt{1-n} = \sqrt{1+k},\qquad \Qz = \sqrt{n} = \sqrt{-k} .
+\label{eq:weak-tunes}
+\end{equation}
+Both planes are stable only for $0<n<1$ \cite{kerst1941}.
+This is the field used in case B0 (\cref{sec:caseB0}), where \cref{eq:weak-tunes} gives the exact reference tunes.
+
+In an isochronous field, $k = \gamma^2-1 > 0$, so $\Qr\simeq\gamma$ and $\Qz^2<0$: the vertical motion is unstable without
+another focusing mechanism.
+
+\section{Sector focusing}
+Thomas \cite{thomas1938} showed that an azimuthally varying field (alternating hills and valleys) gives vertical
+focusing.
+The orbit is no longer a circle: it is scalloped, and it crosses the hill edges at an angle.
+At each crossing, the azimuthal field component $B_\theta = (z/r)\,\partial B_z/\partial\theta$ combines with the radial
+velocity component to give a vertical force.
+Averaged over a turn, this force is focusing.
+Spiral sector edges add an alternating-gradient focusing in the sense of Courant and Snyder \cite{courant1958}.
+They are used in FFAG accelerators \cite{symon1956}; the PSI Ring map of case G2 has eight spiral sectors
+\cite{grillenberger2021}.
+
+Define the flutter of a field with $N$ sectors,
+\begin{equation}
+F = \frac{\langle (B-\bar B)^2\rangle}{\bar B^2},
+\end{equation}
+where $\langle\cdot\rangle$ is the azimuthal average on a circle, and the spiral angle $\xi$ of the hill edges.
+In the smooth approximation the tunes are \cite{zaremba2017}
+\begin{align}
+\Qz^2 &\simeq -k + \frac{N^2}{N^2-1}\,F\,(1+2\tan^2\xi), \label{eq:smooth-qz}\\
+\Qr^2 &\simeq 1 + k + \frac{3N^2}{(N^2-1)(N^2-4)}\,F\,(1+\tan^2\xi). \label{eq:smooth-qr}
+\end{align}
+(The source writes the field index with the opposite sign; \cref{eq:smooth-qz,eq:smooth-qr} use $k$ as defined above.)
+Two consequences shape the benchmarks.
+First, $\Qr\simeq\gamma$ in an isochronous cyclotron: $\Qr$ crosses integer and half-integer values as the energy grows.
+In the FIXPO reference tunes of the PSI Ring (case G2), $\Qr$ crosses $1.5$ between 386 and \SI{430}{MeV}, where the
+tune formula of \cref{ch:orbits} is ill-conditioned.
+Second, at low energy $\Qr$ is close to $1$, which makes the closed orbit sensitive to small field errors
+(\cref{sec:conditioning}).
+
+\paragraph{Check on case B.}
+The case B field is $B_z = B_0(1+\epsilon\cos 4\theta)$ with $\epsilon = 0.3$, $k=0$ and radial sector edges.
+Its flutter is $F = \epsilon^2/2 = \BFlutter$.
+\Cref{eq:smooth-qz,eq:smooth-qr} give $\Qz = \BSmoothQz$ and a fractional $\Qr$ of $\BSmoothQrFrac$.
+LIONS at 1440 steps per turn finds $\Qz = \BLionsQz$ and a fractional $\Qr$ of $\BLionsQr$ (1~MeV protons).
+The smooth approximation is good to the third digit here, because $\epsilon$ is small.
+
+\section{What LIONS models}
+LIONS integrates \cref{eq:lorentz} for many particles, with
+\begin{itemize}
+\item a median-plane magnetic map $B_z(r,\theta)$ with its first-order off-plane expansion (\cref{ch:fields});
+\item two dees, each described by an electrostatic potential map scaled by $V\cos(\omega_{\rm rf}t+\phi)$: a Cartesian map in the
+central region, and a normalised single-gap map in the outer region;
+\item extraction elements: electrostatic deflectors, gradient dipoles and recording grids;
+\item an initial bunch drawn from a $6\times6$ sigma matrix, and a vertical sorter.
+\end{itemize}
+It does not model space charge, a full 3D magnetic map, misalignments or charge exchange.
+The cases in these notes use the static magnetic part only: no RF and no extraction.
+LIONS was first described by Bertrand for the CIME injection studies \cite{bertrand1995,bertrand1998}; CIME is the
+cyclotron of the SPIRAL facility at GANIL \cite{bourgarel1998}.
