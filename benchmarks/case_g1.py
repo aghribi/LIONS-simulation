@@ -30,7 +30,7 @@ from provenance import provenance  # noqa: E402
 
 SAMPLES = [1440, 2880]
 STEPS = [360, 720, 1440]
-EVERY = {1: '1/3 deg', 3: '1 deg', 12: '4 deg'}   # master columns per map column (3-sector master)
+EVERY = {1: '1/3 deg', 3: '1 deg', 12: '4 deg'}   # master columns per map column (1/3 deg master)
 TOL = 1e-12
 H = 1e-6            # m, finite-difference step of the Jacobian
 RESIDUAL_MAX = 1e-9   # m, closed-orbit Newton residual above which the run counts as failed
@@ -41,6 +41,8 @@ def load_master(path):
     with h5py.File(path) as f:
         grids = {k: f[k][()] for k in ('bz', 'dbz_dr', 'dbz_dtheta')}
         attrs = dict(f.attrs)
+    if not np.isclose(attrs['theta_step_rad'], np.radians(1 / 3), rtol=1e-12):
+        raise ValueError(f"{path}: master step {np.degrees(attrs['theta_step_rad'])} deg, the EVERY labels need 1/3 deg")
     return grids, attrs
 
 

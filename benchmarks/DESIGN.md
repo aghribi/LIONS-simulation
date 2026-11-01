@@ -664,3 +664,25 @@ G1 step 3 results (`benchmarks/runs/case_g1/step3/case_g1_step3.parquet`, code 1
   therefore holds in part for any field interpolation at that step count [estimate, not simulated].
 - Scope: one map (3-sector, ideal), three orbits, one turn. Changing the LIONS interpolation changes results and
   breaks Fortran bit-identity: decision for A. Ghribi and O. Kamalou.
+
+### G1 10-sector: steps 1 to 3 on the second published example (registered before running)
+- Example: `example/10-sector/10sector-2h.py` (N = 10, orbit shape with a second harmonic, protons, r_inf = 28 m),
+  run as is up to its field-map section. Orbits: the interior indices 1 to 4 (a = 0.8401 to 0.9094, 932 to
+  1630 MeV, r 22.8 to 26.3 m); indices 0 and 5 bound the family. FROM_ORBIT tunes: Qr 2.78, Qz 2.72 to 2.73
+  (fractional 0.22 and 0.27 after folding, away from 0 and 0.5).
+- Master: r 22.40 to 26.60 m by 2 cm (211 nodes, LIONS limit 250), 108 points per 36 deg sector (1/3 deg; 1081
+  columns on the full turn, the LIONS limit). Exploratory pre-check, before registering: root finding converges
+  without warning from 22.0 to 27.3 m. No rectangular map lies inside the orbit family (largest r of orbit 0:
+  23.69 m, smallest r of orbit 5: 25.40 m), so the map corners use FROM_ORBIT's spline extrapolation of the orbit
+  parameters beyond orbits 0 and 5. The tracked orbits lie inside the family, so the references hold on them. The
+  map edges are at least 0.35 m from any tracked orbit; the extrapolated field degrades beyond 26.8 m (peak 1.12 T
+  at 26.5 m, 0.93 T at 27.0 m).
+- Steps 1, 2 and 3 as registered for the 3-sector map, unchanged: instruments, metrics, references, 360 / 720 /
+  1440 steps per turn, 1/3, 1 and 4 deg maps, failure rule. Outputs in `benchmarks/runs/case_g1/10sector/`.
+- Differences that change the expected numbers: the field period is 36 deg with an 18 deg harmonic, so 360 steps
+  per turn give 18 steps per harmonic period (120 per period on the 3-sector map), and the 4 deg map has 4.5 nodes
+  per harmonic period. The radial node step is 8e-4 of the radius (1e-2 on the 3-sector map).
+- Prediction: step 1 reproduces the prescribed orbits to 1e-9 or better; step 2 errors larger than on the 3-sector
+  map at equal steps per turn, and the 4 deg map fails; step 3 converges at second order with both splines, with
+  larger coefficients than on the 3-sector map. If step 3 does not converge at second order, the 3-sector reading
+  (the floor belongs to the bilinear interpolation) does not carry over to this map.
