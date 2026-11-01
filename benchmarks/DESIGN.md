@@ -1076,4 +1076,245 @@ The tables are unchanged; these entries correct readings and summaries above. Nu
    "fixed-step integration across gradient jumps"; consistent with the evidence, not tested directly. The h-insensitivity
    of the G2 2b determinant is a weak argument against H3, since a central difference on a piecewise-smooth map can mix
    two slopes at any h. Discriminating test, not run: the autograd Jacobian of the PyTorch bilinear port.
+5. Sections 22 and 23, and every reading of "the LIONS radial tune is off by 1e-2 to 5e-2" on the PSI map. That number is the Jacobian tune
+   of one step phase. Multi-turn tunes of LIONS on the same field are within 1.9e-3 of FIXPO at 5 mm, and the amplitude behaviour is the
+   problem instead (section 25, G3 steps 2 to 2c). The tables stand; the reading changes.
 
+## 25. Case G3: OPALX 1.0.0 on the PSI Ring map (registered before running, approved 2026-11-01)
+
+Questions: (G3a) does OPALX 1.0.0 reproduce OPAL 2024.1 and FIXPO on the PSI Ring map (closed orbits, tunes)?
+(G3b) does a third, independent fixed-step tracker on the same bilinear field show the LIONS |det(M_r) - 1| excess
+(section 24, erratum 4: fixed-step integration across gradient jumps)?
+G3 compares models only. It bounds the code-to-code part of the model error; the sim-to-real gap needs CIME data.
+
+Code: OPALX 1.0.0 (tag `OPALX-1.0.0`, released 2026-11-01, GPL-3.0), github.com/OPALX-project/OPALX, CPU image
+`ghcr.io/opalx-project/opalx:cpu` pinned by digest in each run. Run as is, never copied. From the source headers (not
+yet run): `CyclotronSector` reads the PSI Ring map layout ported from OPAL 2022.1, interpolates Bz, dBz/dr and
+dBz/dtheta bilinearly as separate channels, recomputes the derivatives from Bz by 5-point stencils, and extends the
+field off the plane to first order only; `ClosedOrbitSolver` is a damped Newton solver with a central-difference
+Jacobian in (x, px, y, py); `SpectralTunes` gives coasting tunes from a Lomb-Scargle spectrum; steppers Boris, LF2, RK4.
+
+### G3 step 0: conventions and install (registered before running)
+- Run the regression test `Cyclotron-Coasting` (regression-tests-x at `OPALX-1.0.0`) and compare with its reference
+  `.stat`. Success: match within the test's own `.rt` tolerances. Otherwise stop and report.
+- Settle from the source and manual at the tag, before any G3 tracking: input syntax of the sector element and of the
+  closed-orbit and tune commands; how the stepper and the steps per turn are chosen; the frame and sign conventions
+  ((x, y, z) of OPAL to (x, -z, y) of OPALX, y vertical); the units of the launch triple (kinetic GeV, r in m,
+  pr in m0c); whether the solver writes its Jacobian M. If it does not, M comes from one-turn tracking of the orbit
+  and of central probes at 1e-6 m and 1e-6 m0c (the G2 step 2b method), with output at theta = 0.
+- Trim coil TC1 off, as in G2.
+
+### G3 step 1: closed orbits, tunes, determinant
+- G3a: the 24 energies of G2 step 3, 1440 steps per turn, each stepper the closed-orbit solver accepts. Metrics: r and
+  pr at theta = 0 against `ic.dat`; Qr, Qz (one-turn Jacobian, folded into [0, 0.5]) against `refsol.dat`; the same
+  against OPAL 2024.1 (G2 step 3 table); `SpectralTunes` as a second tune instrument. The 386 to 430 MeV band is
+  reported but flagged, as in G2.
+- G3b: 152, 292 and 452 MeV, 720, 1440 and 2880 steps per turn, Boris, LF2, RK4. Metrics: det(M_r) - 1, det(M_z) - 1.
+- Failure rule as G1 step 2. An OPALX non-solution without error (as OPAL at 512 MeV) counts as a failure.
+- Predictions: (G3a) OPALX minus OPAL 2024.1 below 1e-4 relative in r and below 1e-3 in Qr and Qz at interior
+  energies, since the field model is the same; a larger difference is a finding to explain before G3b is read.
+  (G3b) Under erratum 4, Boris and LF2 give |det(M_r) - 1| of order 0.1 (LIONS: 0.17 to 0.41 at these energies) and
+  RK4 a few times less, all decreasing slowly with steps.
+- Reading: OPALX Boris with |det(M_r) - 1| below 1e-3 at 1440 steps contradicts erratum 4 and points back to the
+  LIONS map conversion or to the finite-difference Jacobian (H3); the autograd Jacobian test of erratum 4 then comes
+  first.
+
+### G3c: space charge, not registered
+OPALX models 3D space charge in cyclotrons (regression tests `Cyclotron-SC-Midpoint`, `Cyclotron-SC-Prestep`), which
+LIONS omits. Its size at CIME currents is a sim-to-real item for the training game (`docs/training/SPEC.md`, §6). It
+needs the CIME map in the PSI Ring layout (the only reader found) and a current and bunch from CIME. Registered after
+G3 step 1 and once the CIME map is available.
+
+### G3 step 0 results and amendments to step 1 (registered before step 1)
+Results of step 0 (`benchmarks/runs/case_g3/step0`, image digest in `benchmarks/case_g3.py`):
+- `Cyclotron-Coasting` matches its reference within the `.rt` tolerances: reference orbit within 2.7e-15 m and 1.8e-15 in
+  momentum, energy within 2.9e-12 MeV. Image built from git rev d48acdd, the tag. Its `bfield.dat` is byte-identical to the G2 map.
+- Input settled from the manual and source at the tag. `COF` is experimental, runs one static RING, takes a fixed `DT`,
+  writes `matrix` (M in (x, px, y, py), p in m0c) to the JSON named by `OUTPUT`. x is radial, outward; launch r = x + ring
+  X. There is no steps-per-turn input: `DT` = harmonic / (RF frequency x steps), the G2 definition.
+- `TIMEINTEGRATOR`: `LF2` is an alias of `BORIS`. `DOP853` is a fixed-step eighth-order formula. Neither `RK4` nor `DOP853`
+  is adaptive. Steps are subdivided at element support boundaries (sector edges), not at map cell edges.
+- The OPALX manual (`physics/linear-transfer-maps.qmd`) reports on this map a radial modulus off unity by 1e-4 to 1e-3
+  at 46080 steps per turn, alternating between growth and damping with the step, and names the piecewise interpolation as
+  a candidate, unconfirmed. Independent of this work. Its trim coil is on; ours is off.
+- Observed once while testing the input, 72 MeV, Boris, DT 8.226e-11 s, no trim coil: radial modulus 1.0482, vertical
+  1 + 7e-12, r = 2.131504 m.
+
+Amendments:
+- Integrators in G3a and G3b: Boris, RK4, DOP853 (replaces Boris, LF2, RK4).
+- M from the `COF` JSON, `FDSTEP` 1e-6 in all coordinates. G3b adds, Boris at 1440 steps, `FDSTEP` 1e-7, 1e-6, 1e-5 (x and
+  y in m, px and py in m0c): a third instrument on H3, read as in G2 step 2b.
+- Tunes by `orbits.linear_tunes` on the diagonal blocks of M, as in G2, not from the `COF` mode list (no plane label).
+- Failure: exit without JSON, residual above 1e-9 m, or r off `ic.dat` by more than 1e-3 relative.
+- `SpectralTunes`: 24 energies in one run, RK4, 1440 steps, 100 turns, launched from `ic.dat`. Frequency bin 2.5e-3 and a
+  legacy frequency axis (manual: about 0.25% scale at 72 MeV), so it checks the tune branch only, not differences below 5e-3.
+- Added prediction, G3b: if gradient jumps limit the order, DOP853 gives no large gain over RK4 at equal steps, and
+  neither shows its nominal order in det(M_r) - 1. A nominal order 8 refutes that reading.
+
+### G3 step 1 results
+Tables `benchmarks/runs/case_g3/step1{a,b,s}` (code ed45bd0); numbers below from `case_g3.py --step report`. No failure in 105 COF
+runs. OPALX is deterministic here, one instrument, no seeds. Absolute errors against FIXPO, 19 interior energies as in the
+G2 table (92 to 492 MeV, outside 386 to 430 MeV), median / max, 1440 steps, tunes from the COF Jacobian:
+
+| Integrator | r_eo | Qr | Qz | det(M_r) - 1 | det(M_z) - 1 |
+|---|---|---|---|---|---|
+| Boris | 6.7e-6 / 2.2e-5 | 9.2e-3 / 5.4e-2 | 9.3e-4 / 2.5e-3 | 0.15 / 0.38 | 8.9e-12 / 2.7e-11 |
+| RK4 | 6.4e-6 / 1.9e-5 | 3.1e-3 / 3.2e-2 | 8.3e-4 / 2.2e-3 | 5.0e-2 / 0.11 | 3.7e-9 / 9.3e-9 |
+| DOP853 | 1.0e-5 / 2.6e-5 | 1.7e-2 / 0.12 | 6.8e-4 / 2.4e-3 | 0.23 / 1.6 | 3.7e-10 / 1.2e-9 |
+
+|trace(M_r) / 2| exceeds 1 at several energies, so `linear_tunes` clips Qr to 0.5: Boris 372 to 452 MeV, RK4 392 to 432 MeV,
+DOP853 312 and 372 to 412 MeV. The Qr maxima include these.
+
+det(M_r) - 1 at 152, 292, 452 MeV:
+
+| Integrator | 720 steps | 1440 | 2880 |
+|---|---|---|---|
+| Boris | -0.13, +0.92, +0.13 | -0.15, -0.19, +0.18 | -3.0e-2, +3.1e-2, -1.4e-2 |
+| RK4 | +0.14, +0.54, -2.0e-2 | -5.0e-2, -3.9e-2, +7.5e-2 | -1.7e-2, +3.6e-2, -7.1e-4 |
+| DOP853 | +1.7, -4.5e-2, -0.68 | +0.97, -6.4e-2, -0.13 | -9.4e-2, -4.6e-2, +4.5e-2 |
+
+Against the predictions:
+- G3a, OPALX minus OPAL 2024.1, 19 energies (OPAL 512 MeV non-solution excluded): r median 1.9e-6 to 7.6e-6, max 2.7e-5, and Qz
+  median 5.9e-5 to 2.4e-4, max 7.7e-4: met. Qr median 3.3e-3 (RK4) to 1.7e-2 (DOP853), max 3.1e-2 to 0.12: **missed** (predicted
+  below 1e-3). The premise "same field model" does not hold for the tunes. OPAL 2024.1 (`ClosedOrbitFinder`, after Gordon 1983)
+  integrates the linearised equations using the interpolated dB/dr and dB/dtheta channels, whose nodes come from 5-point
+  differences, so the gradient it sees is continuous; COF differentiates the tracked map, which sees the piecewise-constant
+  gradient of bilinear Bz. Read from the sources, not tested.
+- G3b, Boris of order 0.1: met (median 0.15; LIONS median 0.19). RK4 a few times less: met (3 times). DOP853 no gain over RK4:
+  met, and it is worse, by 4.7 times in the median. No integrator shows its order: the values are not monotonic in the steps and
+  change sign, as the OPALX manual reports at finer steps. The G3b reading of erratum 4, "decreasing slowly", is only roughly
+  right: from 1440 to 2880 steps Boris falls 5 to 13 times, RK4 1.1 to 100 times, DOP853 1.4 to 10 times.
+- FDSTEP 1e-7 to 1e-5, Boris: det(M_r) moves at most 1.4%. Third instrument on H3. The earlier objection (section 24, erratum 4:
+  a central difference can mix two slopes at any h) is weak at 1e-7 m: the probe moves a step point by about 5e-6 of a 2 cm cell,
+  so straddling any cell edge in 1440 steps is rare (order-of-magnitude estimate, not measured). H3 is not supported.
+- Same field, same integrator family, different step placement: OPALX Boris and LIONS Boris have the same magnitude, but
+  det(M_r) - 1 differs in sign at many energies (152, 292, 452 MeV: -0.15, -0.19, +0.18 against +0.25, +0.41, -0.17;
+  correlation -0.36 over 24 energies). So the excess is a property of the discrete map and its step placement, not a stable
+  property of the field. OPALX subdivides at sector edges; LIONS does not.
+
+SpectralTunes (RK4, 1440 steps, 100 turns, launched from `ic.dat`, second ray 5 mm off radially and vertically: the
+`SpectralTunes.h` default, not an input): Qr against FIXPO within 2.7e-3 at 24 of 24 energies (median 1.0e-3, bin 2.5e-3),
+inside the half-integer band too, on the same bilinear field where the RK4 Jacobian misses by up to 3.2e-2. Qz within 5e-3 at 22 of
+24; misses at 72 MeV (-7.3e-3) and 530 MeV (-1.3e-2), the end points where G2 also shows shared differences. Frequency axis
+rescaled by the sampled span with the nominal turn time; the real turn time differs by about 0.2% at 72 MeV (manual), not corrected.
+
+Evidence matrix (+ supports, - contradicts, 0 neutral):
+
+| Observation | Excess is a defect of LIONS | FD Jacobian artefact (H3) | Fixed-step integration across gradient jumps, on the local Jacobian |
+|---|---|---|---|
+| OPALX Boris, independent code, 0.15 against LIONS 0.19 | - | 0 | + |
+| det(M_r) moves at most 1.4% over FDSTEP 1e-7 to 1e-5 | 0 | - | 0 |
+| Sign changes with code and step count at equal field | - | 0 | + |
+| DOP853 worse than RK4, no order | 0 | 0 | + |
+| det(M_z) - 1 of 1e-11 with Boris (a vertical probe stays on the same cells to first order) | 0 | 0 | 0 |
+| 5 mm spectral Qr within 2.7e-3 of FIXPO on the same field (OPALX, not LIONS) | 0 | 0 | + |
+| OPAL Qr 4.2e-4 from FIXPO with a continuous gradient | 0 | 0 | + |
+
+Proposed reading, for review: the bilinear field gives the right betatron frequency at finite amplitude and the wrong
+one-turn Jacobian at a point. The Qr error of G2 and H (1e-2 to 5e-2) and det(M_r) - 1 describe the local derivative of the
+discrete map, which depends on where the steps fall. A ray at 5 mm averages over many cells. Consistent with these
+observations; not tested on LIONS itself, and the amplitude dependence is not measured. What would change it: LIONS spectral
+tunes far from FIXPO at 5 mm, or a spectral Qr that keeps its accuracy down to amplitudes well below the 2 cm cell.
+Not separated: the end-point Qz differences; the excess of DOP853 over RK4 (large stage coefficients across kinks is a guess).
+G3c remains unregistered.
+
+### G3 step 2: LIONS tunes in multi-turn tracking (registered before running, approved 2026-11-01)
+Question: on the bilinear PSI map, does LIONS itself give the right betatron tune at finite amplitude while its one-turn
+Jacobian does not, and does a small oscillation grow or damp as det(M_r) implies?
+- Codes: LIONS default; LIONS `interpolation=hermite`; the spline tracker of G2 step 2 (smooth control). 1440 steps per turn,
+  no RF, TC1 off.
+- Energies: the 24 of G2 step 3. Launch from each code's own closed orbit (`orbits.closed_orbit`) with r and z both offset
+  by a = 0.01, 0.1, 1, 5 mm, pr = pz = 0 offset. 0.01 mm is added to the 0.1 to 5 mm first proposed: it is far below the 2 cm cell.
+- 100 turns. Tunes by `orbits.tune` (Hann-windowed DFT peak, refined) on r and z at theta = 0, folded by construction.
+  Band 386 to 430 MeV flagged: Qr within 0.02 of 0.5 is inside the Hann main lobe of its alias.
+- Metrics: Qr, Qz minus FIXPO (folded); minus the spline tracker at the same a, which removes amplitude detuning and FIXPO;
+  amplitude ratio: rms of r - r_co over the last 10 turns divided by that over the first 10, same for z.
+- Predictions: (P1) LIONS default within 5e-3 of the spline in Qr at a = 5 mm outside the band, at every energy. (P2) At
+  a = 0.01 mm, LIONS Qr is close to its Jacobian Qr of G2 step 2 (within 1e-3) and its radial amplitude ratio departs from 1 as
+  |lambda|^90, with |lambda|^2 = det(M_r). (P3) LIONS `hermite` within 1e-3 of the spline in Qr at every a outside the band.
+- Reading: P1 failing at more than half the energies refutes the reading of G3 step 1. P2 failing means the local Jacobian does
+  not describe even small oscillations: then the Jacobian itself is suspect again (H3). Growth at 0.01 mm saturating below
+  5 mm would mean the artificial growth has an amplitude limit, which is what a surrogate or an RL model would inherit.
+
+### G3 step 2b: over what range does the Jacobian describe the LIONS map? (registered before running)
+Observation from step 2, before its write-up: at a = 0.01 mm the radial amplitude ratio is 0.6 to 11 where |lambda|^90 predicts up
+to 5.6e6. An estimate made after seeing this: with 1440 steps per turn and 2 cm cells, some step point meets a cell edge once the
+orbit moves by about 2 cm / 1440 = 14 um, so the one-turn map is one linear piece only within about 10 um.
+- LIONS default, 152, 292, 452 MeV, launch (r_co + a, pr_co, 0, 0), a = 1e-7, 1e-6, 1e-5, 1e-4 m, 30 turns. M from
+  `orbits.jacobian` at h = 1e-7 m. u_n = (r, pr) at turn n minus the closed orbit, pr scaled by rho / p.
+- Metric: ||u_n - M^n u_0|| / ||u_n|| at n = 1, 2, 5, 10, 20; ||u_n|| / ||u_0|| against ||M^n u_0|| / ||u_0||.
+- Prediction: at a = 1e-7 m deviation below 1e-2 for at least n = 2, with the growth M predicts, and lost once ||u_n|| passes
+  about 1e-5 m. At a = 1e-4 m already above 10% at n = 1 or 2.
+- Reading: met, the Jacobian is a correct derivative of a map whose linear range is about 10 um, so it says nothing about a beam
+  (H3 stays rejected). Deviation large at a = 1e-7 m: the Jacobian does not even describe the map locally, H3 returns.
+
+### G3 step 2c: commensurate turn (registered before running)
+Observation from step 2b, before its write-up: the deviation is 1e-7 to 1e-6 at n = 1 for a up to 1e-6 m and near 1 at n = 2. From
+n = 2 the distance to the closed orbit does not depend on a (152 MeV, n = 5: 5.7e-5 m at a = 1e-7, 5.8e-5 m at a = 1e-6).
+The registered reading of 2b does not cover this: the Jacobian describes the first return; what fails is the second return.
+Hypothesis S: the turn time is not an integer number of steps, so each turn starts at another step phase and is another map, with
+its own fixed point and Jacobian. Rival R: an instability or a tracker defect that does not depend on the step phase.
+- LIONS default, 152, 292, 452 MeV, 1440 steps. Iterate the step (`fhf` = 1 / T, T the closed-orbit turn time, closed orbit
+  recomputed, 6 iterations) until one turn is exactly 1440 steps. Launch and metrics as step 2b, a = 1e-7, 1e-6 m. M at the
+  final step.
+- Prediction under S: deviation below 1e-2 through n = 10 while ||u_n|| stays below about 1e-5 m, with the growth M predicts,
+  det(M_r) != 1. Under R: deviation near 1 at n = 2 as in 2b.
+
+### G3 steps 2, 2b, 2c results
+Tables `benchmarks/runs/case_g3/step2{,b,c}` (codes b1afe04, 38fe5b2, 273285c), numbers of step 2 from `case_g3.py --step report`. No
+failure. One instrument, deterministic. 22 energies outside the band.
+
+Step 2, |Qr - FIXPO| median / max, multi-turn tunes, 100 turns:
+
+| a [mm] | LIONS default | LIONS hermite | spline |
+|---|---|---|---|
+| 0.01 | 2.1e-3 / 0.40 | 3.1e-5 / 2.7e-4 | 9.0e-5 / 2.6e-3 |
+| 0.1 | 1.1e-3 / 4.6e-3 | 3.1e-5 / 2.7e-4 | 9.0e-5 / 2.6e-3 |
+| 1 | 1.1e-3 / 2.6e-3 | 3.8e-5 / 2.8e-4 | 9.5e-5 / 2.6e-3 |
+| 5 | 7.2e-4 / 1.9e-3 | 9.0e-5 / 5.6e-4 | 1.1e-4 / 2.8e-3 |
+
+The LIONS Jacobian tune of G2 is 1.4e-2 / 5.1e-2. Radial amplitude ratio over 100 turns: LIONS 0.60 to 11 at 0.01 mm, 0.61 to 10 at 0.1 mm,
+0.24 to 1.7 at 1 mm, 0.89 to 1.6 at 5 mm; hermite 0.85 to 1.5 and spline 0.86 to 1.6 at every a (ratio of 10-turn rms values: beating
+at low tune, the baseline).
+
+- P1 met: LIONS within 1.8e-3 of the spline in Qr at 5 mm at every energy; within 2.5e-3 at 1 mm; 4.8e-3 at 0.1 mm.
+- P2 failed, both parts. At 0.01 mm Qr is off the spline by more than 0.1 at 9 of 22 energies, not close to the Jacobian tune, and the
+  amplitude ratio is at most 11 where |lambda|^90 gives up to 5.6e6.
+- P3 met at 21 of 22; at 72 MeV hermite minus spline is 2.5e-3, where the spline is the one off FIXPO (2.6e-3; hermite 2.7e-4).
+- Hermite is the closest to FIXPO in Qr and Qz (Qz median 1.1e-4 at 0.01 mm; spline 4.7e-4; LIONS default 9.6e-4).
+
+Step 2b, reading not covered as registered. At n = 1 the deviation from M is 1.4e-7 to 1.1e-6 for a = 1e-7 m. At n = 2 it is near 1 and
+the prediction fails. a = 1e-4 m: 8e-4 to 3e-3 at n = 1 and 4.5e-2 to 0.55 at n = 2, smaller than predicted at two energies of three.
+
+Step 2c, a = 1e-7 and 1e-6 m, last turn-time correction at most 1e-9. Deviation at n = 2 is 2.3e-2, 6.7e-3, 2.5e-2 (2b: near 1) and at
+n = 10 is 0.16, 0.13, 0.51: the registered threshold (1e-2 through n = 10) is **not met**. Rival R (near 1 at n = 2) is refuted. Growth no
+longer depends on a and tracks M: at n = 2, 1.58, 3.04, 1.29 against 1.55, 3.02, 1.31; at n = 20 at 152 and 292 MeV, 12 and 70 against 9.2
+and 39. det(M_r) - 1 = +0.22, +0.41, -0.09. M is not exact over many turns (accumulated error of one finite-difference matrix, or
+the 2b effect from rounding in the crossing, not separated).
+
+Evidence matrix:
+
+| Observation | S: each step phase is another map | R: independent of the step phase |
+|---|---|---|
+| M exact at n = 1, off at n = 2 at nominal step | + | 0 |
+| Distance from n = 2 independent of a | + | 0 |
+| Commensurate turn: deviation at n = 2 falls 40 to 150 times | + | - |
+| Commensurate turn: growth scale-free in a, tracks M | + | - |
+| LIONS and OPALX differ in sign at equal field | + | 0 |
+| det(M_r) changes sign with step count | + | 0 |
+| Commensurate turn: threshold missed, up to 0.5 at n = 10 | - | 0 |
+
+Proposed reading, for review. On a bilinear field, the one-turn map depends on the step phase at the section. Each phase has its own
+fixed point and Jacobian. The Newton solution and M of G2, H and G3 sample one phase. They are correct there. Turn after turn the
+phase changes (the nominal step is 0.01 to 0.08 of a step off a commensurate turn at these energies, from the three `fhf` values of
+step 2c), and the orbit moves among the maps. In that case:
+1. Multi-turn Qr from LIONS on the bilinear map is right: 1e-3 median against FIXPO from 0.1 to 5 mm.
+2. Below about 0.1 mm the betatron signal drowns in a jitter of tens of um (5.8e-5 m at 152 MeV, n = 5).
+3. **Amplitudes are not right below a few mm.** The radial amplitude changes by 0.24 to 10 times in 100 turns at 0.1 and 1 mm, against a
+   baseline of 0.86 to 1.6, on a coasting orbit. Beam size and emittance from the bilinear field at these scales need a check. Not measured
+   beyond 100 turns, nor on a bunch, nor with acceleration.
+4. A deliberately commensurate step makes it worse: a growth of 70 in 20 turns at 292 MeV.
+5. The Hermite field removes the anomaly in all of these (a = 0.01 mm included).
+
+Consistent with the runs; "each phase has its own fixed point" is inferred, not measured. Direct test: fixed point and det(M_r) against
+the launch step phase on the same orbit.

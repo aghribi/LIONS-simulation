@@ -1,5 +1,5 @@
 # OPAL (classic, with OPAL-cycl) and PyOpal, built from source.
-# OPAL-2024.1.0 is the latest tag of github.com/OPALX-project/OPAL; OPALX has no cyclotron tracker.
+# OPAL-2024.1.0 is the latest tag of github.com/OPALX-project/OPAL. OPALX runs from its own image (DESIGN.md section 25).
 FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
 
 # Sources pinned to commits: H5hut-2.0.0rc7 and OPAL-2024.1.0.
