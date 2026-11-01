@@ -34,7 +34,7 @@ A perturbed orbit oscillates around it; the number of oscillations per turn is t
 \paragraph{Crossing the section.}
 The integrator does not land on $\theta = 0$.
 The benchmark harness interpolates the crossing in time between steps: four-point Lagrange interpolation of the
-full-step positions and momenta, or cubic Hermite.
+full-step positions and momenta.
 LIONS keeps momenta at half steps, so the harness forms full-step momenta by a half Boris kick of $\vect p^{\,n-1/2}$.
 That is the exact inverse of the start-up, so the recorded map is conjugate to the Boris map.
 The interpolation is not symplectic, and its error is $O(\Delta t^4)$.
@@ -52,15 +52,18 @@ with $M$ from central differences:
 \begin{equation}
 M_{:,j} \approx \frac{T(X+h\,e_j) - T(X-h\,e_j)}{2h}.
 \end{equation}
-The benchmarks use $h = \SI{1e-6}{m}$ in positions and $10^{-6}$ in $p/\rho$ in momenta.
+The Newton iteration uses $h = \SI{1e-7}{m}$ on the radial block.
+The Jacobian used for tunes and $\det M$ uses $h = \SI{1e-6}{m}$ in positions and $h\,p/\rho$ in momenta (the same step
+as an angle $h/\rho$).
 The truncation error is $O(h^2)$ and the rounding error is $O(\varepsilon_T/h)$, with $\varepsilon_T$ the noise of the
 one-turn map.
-A one-turn map that is only piecewise smooth breaks this picture: if a probe pair $X\pm he_j$ straddles a change of
+A discrete one-turn map that is only piecewise smooth breaks this picture: if a probe pair $X\pm he_j$ straddles a change of
 slope, the difference quotient mixes two slopes, at any $h$.
 
 \section{Tunes from the one-turn matrix}
 In uncoupled planes $M$ is block-diagonal, with $2\times2$ blocks $M_r$, $M_z$.
-For a symplectic block, $\det M_u = 1$, and the block can be written in Twiss form
+For a symplectic block with $|\operatorname{tr}M_u|<2$ (stable motion), $\det M_u = 1$ and the block can be written in
+Twiss form (here $\alpha$, $\beta$, $\gamma$ are the Twiss parameters, not the Lorentz factors)
 \begin{equation}
 M_u = I\cos\mu + \begin{pmatrix}\alpha & \beta\\ -\gamma & -\alpha\end{pmatrix}\sin\mu,\qquad
 \cos\mu = \tfrac12\operatorname{tr}M_u,\qquad \mu = 2\pi Q_u
@@ -75,7 +78,8 @@ which diverges near $Q\in\{0, 0.5\}$.
 This is why the PSI energies where $\Qr$ crosses $1.5$ are reported separately.
 
 When $\det M_u\ne1$, the trace formula still returns a number, but it no longer is the tune of an area-preserving
-oscillation.
+oscillation; the consistent definition is then $\cos\mu = \operatorname{tr}M_u/(2\sqrt{\det M_u})$.
+The benchmark harness uses $\operatorname{tr}M_u/2$.
 A $\det M_u - 1$ of \num{0.2}, as found for LIONS on the PSI map, means the formula is used outside its validity.
 
 \section{Conditioning of the closed orbit}\label{sec:conditioning}
@@ -83,11 +87,13 @@ For an area-preserving block,
 \begin{equation}
 \det(M_u - I) = 2 - \operatorname{tr}M_u = 4\sin^2(\pi Q_u).
 \end{equation}
-Near an integer tune this is small.
-In case B, with a fractional $\Qr$ of \BLionsQr, it is \BCondDet, so a map error of $\delta$ moves the closed
-orbit by about $\delta/\BCondDet$.
-This hypothesis (H4) was a candidate to explain the case B scatter, and a registered run rejected it as the amplifier
-(\cref{sec:caseB}).
+A map error $\delta$ moves the fixed point by $(I-M_u)^{-1}\delta$.
+In normalised coordinates $M_u$ is a rotation by $2\pi Q_u$, and $\|(I-M_u)^{-1}\| = 1/(2\sin\pi Q_u) = 1/\sqrt{\det(M_u-I)}$:
+the classic $\beta/(2\sin\pi Q)$ closed-orbit sensitivity.
+The sensitivity grows as $1/\sqrt{\det(M_u-I)}$, not as $1/\det(M_u-I)$.
+In case B, with a fractional $\Qr$ of \BLionsQr, $\det(M_r-I) = \BCondDet$ and the amplification is about \BSens{} in
+normalised units.
+This near-integer amplifier (hypothesis H4) was a candidate for the case B scatter (\cref{sec:caseB}).
 
 \section{Tunes from tracking}
 A second instrument: track a particle offset by \SI{1e-4}{m} from the closed orbit for 256 turns, record the

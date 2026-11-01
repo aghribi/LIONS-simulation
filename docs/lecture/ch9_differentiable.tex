@@ -14,7 +14,8 @@ Reverse mode computes $\partial f(X_N)/\partial\lambda$ for a scalar $f$ in one 
 passes, whatever the number of parameters.
 The price is memory: the backward sweep needs the intermediate states of all $N$ steps.
 Checkpointing stores only every $\sqrt N$-th state and recomputes each segment during the backward sweep.
-Memory then grows as $O(\sqrt N)$ for one extra forward pass \cite{chen2016,griewank2000}.
+In principle memory then grows as $O(\sqrt N)$ for one extra forward pass \cite{chen2016}; recursive schemes reach
+logarithmic growth \cite{griewank2000}.
 
 \section{Case E: the port and its gradients}
 The LIONS bilinear field and Boris push were ported to PyTorch \cite{paszke2019} in float64.
@@ -31,10 +32,12 @@ differences (\cref{tab:Egrad}).
 
 \begin{itemize}
 \item B0, the smooth field, passes the $10^{-6}$ criterion.
-\item A, the uniform field, fails on the phase derivatives only.
-These derivatives are small, because the uniform field is isochronous, and the finite-difference reference carries a
-rounding error of order $10^{-8}$ absolute on a phase of $2\pi$.
-The finite difference is the noisy side, not the autograd value.
+\item A, the uniform field, fails on \EAFailCount{} entries.
+The large failures are $\partial\phi/\partial r_0$ and $\partial\phi/\partial p_{r0}$.
+These derivatives are small because the uniform field is isochronous (the phase does not depend on the orbit size), and
+the finite-difference reference carries a rounding error of order $10^{-8}$ absolute on a phase of $2\pi$: there the
+finite difference is the noisy side.
+The other failures are at most \EAFailOtherMax{} and were not analysed.
 \item B, the bilinear 4-sector map, is the instructive case (\cref{fig:Efd}).
 At 3600 steps the disagreement reaches \ESweepLargeH{} at $h = 10^{-4}$, falls to \ESweepSmallH{} at $h = 10^{-8}$, and
 rises again at $h = 10^{-9}$ (\ESweepTinyH) from rounding.
@@ -64,8 +67,12 @@ A $C^1$ field (F1) removes the jumps; whether it closes the gap for gradients ha
 
 \paragraph{Memory and time.}
 Without checkpointing the autograd graph costs about \SI{140}{kB} per step for one particle, dominated by about 60 small
-operations per step (\texttt{DESIGN.md}, section 19).
-With checkpointing, $10^5$ steps fit in \SI{6}{GB} (\cref{tab:Ecost}).
+operations per step (\nolinkurl{benchmarks/DESIGN.md}, section 19).
+The measurements (\cref{tab:Ecost}) do not follow the textbook picture.
+Checkpointing reduces memory only with $10^3$ particles; with one particle it uses more.
+It costs \ECkptTimeMin{} to \ECkptTimeMax{} times the time, not about two.
+At $10^5$ steps it still needs about \SI{5}{GB} above the imports, far more than $\sqrt N$ stored states.
+The cause was not investigated.
 
 \begin{table}[h]
 \centering\small

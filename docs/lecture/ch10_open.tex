@@ -5,7 +5,8 @@
 \item \textbf{CIME.}
 The CIME field map is not available to the benchmarks yet.
 The node density per harmonic period of the CIME map, and the size of the bilinear floor on it, are therefore unknown.
-Case C (acceleration through the dees) waits for it.
+Case C (acceleration through the dees) does not need it, but waits for a check of the RF time convention of each
+code on a one-gap test.
 \item \textbf{Extraction (case F).}
 The CIME deck has one electrostatic deflector and no transfer-line element, so there is nothing after extraction to
 compare between LIONS, Xsuite and Cheetah yet.
@@ -17,7 +18,7 @@ compare between LIONS, Xsuite and Cheetah yet.
 The bilinear one-turn map is only piecewise smooth, and probes that straddle a cell edge mix two slopes.
 Test: a Jacobian step scan with the closed orbit moved across a cell edge.
 \item \textbf{Residual on RF-Track with the bilinear field.}
-RF-Track on the bilinear PSI field still leaves $\det M_r - 1$ near $10^{-2}$ at two energies.
+RF-Track on the bilinear PSI field still leaves $|\det M_r - 1|$ near $7\times10^{-3}$ at two energies (\cref{tab:G2det}).
 Adaptive Runge--Kutta also loses order at gradient jumps, and the section crossing adds its own error.
 These were not separated.
 \item \textbf{OPAL offsets.}
@@ -29,11 +30,11 @@ Whether the Hermite field closes the gap between autograd and finite differences
 \end{itemize}
 
 \section{Physics questions for the LIONS authors}
-Two behaviours of LIONS were found while porting, are shared with the Fortran, and were left unchanged pending a decision:
+Two behaviours were found while porting and left unchanged pending a decision:
 \begin{itemize}
-\item The Python port adds a vertical bunch spread for \texttt{espace='6d'}, while the Fortran does so only for
-\texttt{'3d'} (\texttt{lions\_2.0\_ep.f90}, line 498).
-\item The correlation code indexes the mass array by family number, in both codes.
+\item A difference between the codes: the Python port adds a vertical bunch spread for \texttt{espace='6d'}, while the
+Fortran does so only for \texttt{'3d'} (\texttt{lions\_2.0\_ep.f90}, line 498).
+\item Shared by both codes: the correlation code indexes the mass array by family number.
 This is wrong for families after the first.
 \end{itemize}
 

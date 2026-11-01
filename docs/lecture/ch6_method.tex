@@ -25,7 +25,7 @@ Three kinds of reference were used, from strongest to weakest:
 \begin{enumerate}
 \item \textbf{Closed forms.}
 A uniform field (case A): circle, period, and the Boris polygon of \cref{eq:boris-radius}.
-A field linear in $r$ (case B0): closed orbit from $p/q = |B_0|\,r\,(1-k(r-r_0))$, field index $n = kr/(1-k(r-r_0))$,
+A field linear in $r$ (case B0): closed orbit from $P/|q| = |B_0|\,r\,(1-\kappa(r-r_0))$, field index $n = \kappa r/(1-\kappa(r-r_0))$,
 tunes from \cref{eq:weak-tunes}.
 \item \textbf{Manufactured solutions.}
 FROM\_ORBIT builds a field from a prescribed family of isochronous closed orbits \cite{planche2019,planche2023}.
@@ -40,8 +40,11 @@ Their error is not known in advance; it is bounded by comparing them with each o
 
 \section{Field parity}
 Codes compared on ``the same field'' must see the same field.
-Every converted field is sampled from the LIONS field evaluation itself, so a conversion cannot add a second field model.
-Before each run, the field of every code is compared with LIONS at random points.
+In the synthetic-field cases (A, B0, B2, D2), every converted field is sampled from the LIONS field evaluation itself,
+so a conversion cannot add a second field model, and before each run the field of every code is compared with LIONS at
+random points.
+On the external maps (G1, G2) this is not possible: OPAL reads the PSI file natively and recomputes the derivatives,
+and RF-Track runs on splines; there the field models differ by design and the comparison measures that.
 In case B0, $B_z$ agrees within \BzeroParityBz~T and $B_x$, $B_y$ within \BzeroParityBxy~T, below the derived bound of
 the LIONS chord error.
 A failed parity check stops the run.
@@ -77,8 +80,8 @@ $+$ supports, $-$ contradicts, $\cdot$ neutral.}
 Observation & H1 & H1b & H2 & H3 & H4\\
 \midrule
 B0 (bilinear exact in $B_z$): orbit order 2, $\det-1\sim10^{-9}$ & $+$ & $\cdot$ & $-$ & $-$ & $\cdot$\\
-B: RF-Track on the closed-form field is clean at the same tune & $+$ & $\cdot$ & $\cdot$ & $\cdot$ & $-$\\
-B-gradient: spread does not follow $\det(M_r-I)$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $-$\\
+B: RF-Track on the closed-form field is clean at the same tune & $+$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$\\
+B-gradient: OPAL spread follows $1/(2\sin\pi\Qr)$, LIONS partly & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $+/-$\\
 B: halving the map step does not reduce the scatter & $-$ (as $O(h^2)$) & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$\\
 G1 step 3: same Boris, same nodes, spline field removes the floor & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 G2 2b: numpy Boris on the bilinear field equals LIONS & $+$ & $+$ & $-$ & $\cdot$ & $\cdot$\\

@@ -24,7 +24,9 @@ linear vertical motion needs.
 \paragraph{The truncated field.}
 LIONS and OPAL keep \cref{eq:br-expansion} and $B_z = B$ (OPAL), or $B_z = B - (z^2/2)\,D$ with a map $D$ (LIONS).
 Every benchmark here sets $D = 0$, as OPAL does.
-The truncated field is curl-free to this order: $\partial_z B_r - \partial_r B_z = \partial_r B - \partial_r B = 0$.
+With $D = 0$ the truncated field is exactly curl-free: for example $\partial_z B_r - \partial_r B_z = \partial_r B - \partial_r B = 0$,
+and the other two components vanish the same way.
+(With $D\ne0$, $(\nabla\times\vect B)_r = -(z^2/2r)\,\partial_\theta D$.)
 It is not divergence-free:
 \begin{equation}
 \nabla\cdot\vect B = \frac{1}{r}\partial_r(r B_r) + \frac{1}{r}\partial_\theta B_\theta + \partial_z B_z
@@ -33,10 +35,12 @@ It is not divergence-free:
 The missing $-(z^2/2)\nabla_\perp^2B$ term in $B_z$ is what cancels it.
 For the linear tunes this does not matter, because the term is second order in $z$.
 For long-term invariants at finite $z$ it does.
-The truncated field has no exact invariant off the plane, so case D2 (\cref{sec:caseD}) uses planar motion only.
+A divergent field has no vector potential, so the motion off the plane is not Hamiltonian and the canonical angular
+momentum is no longer an invariant ($|\vect p|$ still is, as for any magnetic field).
+Case D2 (\cref{sec:caseD}) therefore uses planar motion only.
 
 \paragraph{The $D$ map in LIONS.}
-The LIONS map file stores a fourth column, documented as $\partial^2B_z/\partial r^2$, which multiplies $-z^2/2$.
+The LIONS map file stores a second block after $B_z$, documented as $\partial^2B_z/\partial r^2$, which multiplies $-z^2/2$.
 \Cref{eq:bz-expansion} shows that it must hold the transverse Laplacian $\nabla_\perp^2B$ to keep $\nabla\cdot\vect B =
 O(z^3)$.
 The field-harmonic routine of LIONS adds the Laplacian of the harmonic polynomial to it, consistent with
@@ -71,10 +75,14 @@ azimuth.
 \paragraph{Lesson.}
 Four conventions had to be settled from the files and the source: units in kG, derivatives per radian, the $p_r$
 units, and the direction of travel.
-Two were wrong in the first reading: the OPAL manual names the $p_r$ column in mrad, and a trim-coil profile was
-predicted flat from reading the source.
-Each one was decided by a short run with two readings, where the right one matched by orders of magnitude.
-This costs minutes and prevents a whole class of silent errors.
+The last three were decided by short runs comparing two readings.
+The right reading of the derivative units matched \GTwoDerivRatio{} times better than the alternative (median
+difference to a five-point difference of $B_z$), and the $p_r$ reading in the units of the OPAL example matched to
+\GTwoPrGoodMax{} relative while the mrad reading of the OPAL manual missed by \GTwoPrMradMin\,\% to
+\GTwoPrMradMax\,\%.
+A separate prediction from reading the OPAL source, a flat trim-coil profile, was refuted by an OPAL run with and
+without the coil.
+Short runs like these take minutes and settle what reading the source cannot.
 
 \begin{figure}[t]
 \centering

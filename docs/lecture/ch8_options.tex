@@ -97,7 +97,8 @@ On the C$^1$ Hermite field the same azimuth change worked, which fits this hypot
 
 \section{What to use}
 \begin{itemize}
-\item For tune, Jacobian or gradient work on measured maps: \texttt{interpolation=hermite}.
+\item For tune or Jacobian work on measured maps: \texttt{interpolation=hermite}.
+Its effect on autograd gradients has not been measured: the PyTorch port is bilinear only.
 It removes the $\det$ floor at \HCostHerm{} times the cost of the default.
 \item Check the node density per harmonic period of the map (\cref{ch:interpolation}) before trusting any interpolation.
 \item The default stays for reproducing Fortran results.

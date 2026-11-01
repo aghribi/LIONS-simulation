@@ -33,7 +33,7 @@ $(n-1)(\omega\Delta t-2\arctan(\omega\Delta t/2))/2\pi$. LIONS and OPAL LF2 over
 \end{figure}
 
 \section{Case B0: smooth radial gradient}\label{sec:caseB0}
-\textbf{Setup.} $B_z = B_0(1-k(r-r_0))$, $B_0 = \SI{-1}{T}$, $k = \SI{0.5}{m^{-1}}$, $r_0 = \SI{0.15}{m}$, 1 to \SI{5}{MeV}
+\textbf{Setup.} $B_z = B_0(1-\kappa(r-r_0))$, $B_0 = \SI{-1}{T}$, $\kappa = \SI{0.5}{m^{-1}}$, $r_0 = \SI{0.15}{m}$, 1 to \SI{5}{MeV}
 protons, on a bilinear map of \SI{5}{mm} by \SI{1}{\degree}.
 $B_z$ is linear in $r$ and constant in $\theta$, so bilinear interpolation is exact for it.
 Exact references from \cref{sec:weak}.
@@ -51,8 +51,8 @@ The Jacobian tunes and the Fourier tunes of LIONS agree within \BzeroFFTAgree.
 
 \textbf{Reading.}
 On a field without kinks in the plane, LIONS is a clean second-order code.
-The orbit-error tolerance of $10^{-6}$ in the first draft was out of reach of any second-order integrator at 1440 steps,
-and it was dropped before the runs.
+The orbit-error tolerance of $10^{-6}$ in the first draft is out of reach of any second-order integrator at 1440 steps.
+It was dropped after an exploratory LIONS run at \SI{1}{MeV} showed this, and before the registered B0 runs.
 
 \begin{figure}[t]
 \centering
@@ -73,12 +73,22 @@ Halving the azimuthal map step does not reduce the LIONS scatter (ratio \BHalfDe
 \BHalfDegQrRatioMax).
 
 \textbf{Discriminating runs} (case B2, registered before running).
-A radial gradient moves $\Qr$ away from 1, so $\det(M_r - I)$ grows by \BTwoCondMin{} to \BTwoCondMax{} times.
-If the near-integer tune were the amplifier (H4), the orbit spread would fall by the same ratio.
-Per energy it fell by \BTwoSpreadLionsMin{} to \BTwoSpreadLionsMax{} (LIONS), \BTwoSpreadLFMin{} to \BTwoSpreadLFMax{}
-(OPAL LF2) and \BTwoSpreadRKMin{} to \BTwoSpreadRKMax{} (OPAL RK4), and RF-Track stayed clean at the near-integer tune:
-H4 is rejected.
-The map is the source.
+A radial gradient moves $\Qr$ away from 1.
+Per energy, $\det(M_r - I)$ grows by \BTwoCondMin{} to \BTwoCondMax{} times (from the LIONS $\Qr$ at 1440 steps), so the
+closed-orbit sensitivity $1/(2\sin\pi\Qr)$ falls by \BTwoSensMin{} to \BTwoSensMax{} (\cref{sec:conditioning}).
+The orbit spread across step counts fell by \BTwoSpreadLionsMin{} to \BTwoSpreadLionsMax{} (LIONS), \BTwoSpreadLFMin{} to
+\BTwoSpreadLFMax{} (OPAL LF2) and \BTwoSpreadRKMin{} to \BTwoSpreadRKMax{} (OPAL RK4).
+On the closed-form field RF-Track stayed clean at the near-integer tune.
+
+\textbf{Reading, corrected.}
+The registered prediction expected the spread to fall by the full $\det(M_r-I)$ ratio, and on that basis
+\nolinkurl{benchmarks/DESIGN.md} (section 15) rejected H4.
+The prediction used the wrong scaling: the sensitivity goes as $1/\sqrt{\det(M_r-I)}$.
+With the correct scaling, the OPAL spreads fall as H4 predicts, and the LIONS spread falls by less at some energies.
+The clean RF-Track run shows that the map is the source of the errors; it says nothing about amplification, because the
+errors it would amplify are tiny.
+So the map is the source, and near-integer amplification (H4) is not excluded: it may add to the scatter at low
+energy.
 
 \begin{figure}[t]
 \centering
@@ -93,7 +103,7 @@ The map codes scatter at the $10^{-3}$ level; RF-Track on the closed-form field 
 In the B0 field the canonical angular momentum is an exact invariant of planar motion.
 In LIONS units,
 \begin{equation}
-L = x p_y - y p_x + \frac{q}{m_0c}\,B_0\left(\frac{(1+kr_0)\,r^2}{2} - \frac{k\,r^3}{3}\right).
+L = x p_y - y p_x + \frac{q}{m_0c}\,B_0\left(\frac{(1+\kappa r_0)\,r^2}{2} - \frac{\kappa\,r^3}{3}\right).
 \end{equation}
 One particle at \SI{1}{MeV}, \SI{1}{mm} off the closed orbit, \DTurns{} turns at 360 steps per turn (the largest step).
 A secular change below $10^{-9}$ counts as no drift.
@@ -119,7 +129,8 @@ The LIONS oscillation of $L$ is \DOscRatio{} times that of LF2; this was not ana
 \section{Case G1: manufactured solutions}\label{sec:caseG1}
 \textbf{Setup.}
 FROM\_ORBIT maps from the published 3-sector (H$_2^+$, three orbits from 19 to \SI{130}{MeV}) and 10-sector examples
-(protons, four orbits from 932 to \SI{1630}{MeV}) \cite{planche2019}, shown in \cref{fig:field-maps}.
+(protons, four orbits from 932 to \SI{1630}{MeV}) of FROM\_ORBIT \cite{planche2019,planche2023}, shown in
+\cref{fig:field-maps}.
 The exact field is evaluated by FROM\_ORBIT's own root finding on a \thirddeg{} master grid; coarser maps are
 subsets of its nodes.
 \begin{itemize}
@@ -151,16 +162,18 @@ $|\Delta r_{eo}|/r$ & \GThreeBilReoMax & \GThreeSplReoMax & \GTenBilReoMax & \GT
 
 With splines the errors converge at second order (ratio 4 per halving of the step) in orbit, turn time and tunes.
 With the bilinear field they do not converge in the tunes, and $\det M - 1$ stays orders of magnitude higher.
-The closed orbit is close in both: there the integrator error dominates.
+At 360 steps the closed-orbit errors of both are close, so there the integrator dominates.
+At 1440 steps the bilinear orbit error is larger than the spline one on the 10-sector map.
 On the 10-sector map at \SI{1}{\degree} (18 nodes per \SI{18}{\degree} harmonic) even the splines stop converging
 cleanly.
 
 \textbf{Reading.}
 Only the interpolation changed between steps 2 and 3, so the tune floor and the $\det$ scatter on these maps belong to the
 bilinear interpolation.
-The isochronism error (turn time) at 1440 steps is set by the Boris step for any interpolation, at the $10^{-6}$ level.
-Over 500 turns at harmonic $h$ that would be an RF phase slip of order $2\pi h\times500\times10^{-6}$~rad; this is an
-estimate, not simulated.
+With splines, the isochronism error (turn time) at 1440 steps is set by the Boris step, at the $10^{-6}$ level; on the
+bilinear maps it is larger.
+Over 500 turns at harmonic number $h_{\rm rf}$, a turn-time error of $10^{-6}$ would be an RF phase slip of order
+$2\pi h_{\rm rf}\times500\times10^{-6}$~rad; this is an estimate, not simulated.
 
 \begin{figure}[t]
 \centering
@@ -181,7 +194,8 @@ All at 1440 steps per turn (RF-Track: 2880 samples), no trim coil.
 At \SI{512}{MeV} OPAL returned a non-solution without an error; that energy is excluded for every code in the table.
 
 \textbf{Result} (\cref{fig:G2}, \cref{tab:G2}).
-Closed orbits agree with FIXPO for every code within the print resolution of the reference file (\SI{0.1}{mm}).
+Closed-orbit radii of every code agree with FIXPO at the level of the print resolution of the reference file
+(\SI{0.1}{mm}), so the radius comparison cannot separate the codes.
 The smooth-field instruments are closest to FIXPO in $\Qr$ (median \GPsiSplineQrMed{} and \GPsiRftrackQrMed), then OPAL
 (\GPsiOpalQrMed), then LIONS (\GPsiLionsQrMed).
 LIONS has $|\det M - 1|$ of \GPsiLionsDetMed{} (median), up to \GPsiLionsDetMax.

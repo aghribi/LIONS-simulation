@@ -47,8 +47,12 @@ def num(name, value, digits=2):
     if not name.isalpha():
         raise ValueError(f'macro name {name} must be letters only')
     value = float(value)
-    text = f'{value:.{digits - 1}e}' if value != 0 and (abs(value) < 1e-2 or abs(value) >= 1e4) \
-        else f'{value:.{digits}g}'
+    if value != 0 and (abs(value) < 1e-2 or abs(value) >= 1e4):
+        text = f'{value:.{digits - 1}e}'
+    elif abs(value) >= 10**digits:   # e.g. 770, not 7.7e+02
+        text = f'{round(value, digits - 1 - int(np.floor(np.log10(abs(value))))):.0f}'
+    else:
+        text = f'{value:.{digits}g}'
     NUMBERS[name] = rf'\num{{{text}}}'
 
 
@@ -173,7 +177,7 @@ def interpolation_kinks():
     u = (rr - r[i]) / (r[1] - r[0])
     bil = (1 - u) * ((1 - v) * bz[i, j] + v * bz[i, j + 1]) + u * ((1 - v) * bz[i + 1, j] + v * bz[i + 1, j + 1])
     bil_dt = ((1 - u) * (bz[i, j + 1] - bz[i, j]) + u * (bz[i + 1, j + 1] - bz[i + 1, j])) / dth
-    # exact field: the 1/3 deg master nodes along the same radius, linear in r between its nodes (r grid 1 cm)
+    # reference: Hermite surface on the 1/3 deg master nodes
     rm, thm, bzm, _, dbtm = fieldmodels.node_arrays(grids, attrs, 1)
     exact = fieldmodels.hermite_surface(rm, thm, bzm, *fieldmodels.node_arrays(grids, attrs, 1)[3:])
     e_bz, _, e_dt = exact(np.full_like(t, rr), t)
@@ -316,6 +320,12 @@ def case_b():
     c_ratio = cond(grad) / cond(full_b)
     num('BTwoCondMin', c_ratio.min())
     num('BTwoCondMax', c_ratio.max())
+    # closed-orbit sensitivity |(M - I)^-1| ~ 1 / (2 sin(pi Q)) = 1 / sqrt(det(M - I))
+    num('BTwoSensMin', np.sqrt(c_ratio.min()))
+    num('BTwoSensMax', np.sqrt(c_ratio.max()))
+    sm = b2[(b2.case == 'B-smooth') & (b2.steps_per_turn == 1440)].set_index('metric').value
+    num('BRfQz', sm['qz'], 3)
+    num('BRfQr', sm['qr'], 3)
     spread = lambda x: x[(x.metric == 'r_eo') & x.code.isin(['lions', 'opal'])].groupby(  # noqa: E731
         ['code', 'integrator', 'energy_mev']).value.agg(np.ptp)
     s_ratio = (spread(full_b) / spread(grad)).groupby(level=[0, 1]).agg(['min', 'max'])
@@ -326,6 +336,7 @@ def case_b():
     num('BLionsQr', lq['qr'])
     num('BLionsQz', lq['qz'], 3)
     num('BCondDet', 4 * np.sin(np.pi * lq['qr'])**2)
+    num('BSens', 1 / (2 * np.sin(np.pi * lq['qr'])))
     # smooth approximation (Zaremba and Kleeven, eqs. 14, 15), N = 4, k = 0, xi = 0, flutter eps^2 / 2
     n_sec, flutter = 4, 0.3**2 / 2
     num('BFlutter', flutter, 2)
@@ -355,7 +366,7 @@ def case_e():
         s = g[(g.case == case) & (g.steps == 3600)].groupby('fd_step').rel_diff.max()
         ax.loglog(s.index, s.values, marker + '-', label=f'case {case}, 3600 steps')
     ax.axhline(1e-6, color='k', ls='--', lw=0.7, label='registered criterion')
-    ax.set_xlabel('finite-difference step $h$ (relative units of each parameter)')
+    ax.set_xlabel('finite-difference step $h$ (relative for $s$; m for $r_0$; $\\beta\\gamma$ for $p_{r0}$)')
     ax.set_ylabel('max |autograd/FD - 1|')
     ax.legend(fontsize=6.5)
     save(fig, 'case_e_fd')
@@ -370,6 +381,9 @@ def case_e():
     num('ESweepLargeH', sweep[1e-4])
     num('ESweepSmallH', sweep[1e-8])
     num('ESweepTinyH', sweep[1e-9])
+    fail = reg[(reg.case == 'A') & (reg.rel_diff > 1e-6)]
+    num('EAFailCount', len(fail), 1)
+    num('EAFailOtherMax', fail[~((fail.output == 'phase') & fail.param.isin(['r0', 'pr0']))].rel_diff.max(), 1)
     val = d[d.param == 'validation']
     num('EPortMax', val.rel_diff.max(), 1)
     c = table('case_e/case_e_cost.parquet')
@@ -378,8 +392,11 @@ def case_e():
         cells = []
         for ck in (False, True):
             x = s[s.checkpoint == ck].iloc[0]
-            cells.append('skipped' if isinstance(x.error, str) else f'{x.wall_s:.2g} s, {x.peak_rss_mb / 1024:.2g} GB')
+            cells.append('skipped' if isinstance(x.error, str) else f'{x.wall_s:.2g} s, {x.peak_rss_mb / 1000:.2g} GB')
         rows.append([rf'\num{{{steps:.0e}}}', str(particles), *cells])
+    both = c[c.error.isna()].pivot_table(index=['steps', 'particles'], columns='checkpoint', values='wall_s').dropna()
+    num('ECkptTimeMin', (both[True] / both[False]).min())
+    num('ECkptTimeMax', (both[True] / both[False]).max())
     write_table('e_cost', ['Steps', 'Particles', 'no checkpoint', r'checkpoint every $\sqrt{N}$'], rows)
 
 
@@ -502,6 +519,15 @@ def g2():
         rows.append([label, *cells])
         key = ''.join(ch for ch in code if ch.isalpha()).capitalize()
         num(f'GPsi{key}QrMed', d[d.metric == 'qr_error'].value.abs().median())
+    s1 = table('case_g2/run2/step1/case_g2_step1.parquet')
+    med = s1[s1.metric == 'dbz_dtheta_diff_median'].set_index('case').value
+    num('GTwoDerivRatio', med['per_deg'] / med['per_rad'], 2)
+    pr = s1[s1.run == '1b']
+    good = pr[(pr.metric == 'pr_rel_error_pr_1e-3_m0c') & (pr.case == 'direction+1')].value.abs()
+    bad = pr[(pr.metric == 'pr_rel_error_pr_mrad') & (pr.case == 'direction+1')].value.abs()
+    num('GTwoPrGoodMax', good.max())
+    num('GTwoPrMradMin', 100 * bad.min())
+    num('GTwoPrMradMax', 100 * bad.max(), 3)
     write_table('g2', ['Code', r'$r_{eo}$ rel.', r'$Q_r$', r'$Q_z$'], rows)
     q = lambda d, code: interior(d[d.code == code]).pipe(  # noqa: E731
         lambda x: x[(x.metric == 'qr_error') & x.energy_mev.round(3).isin(np.round(e3, 3))].value.abs().median())

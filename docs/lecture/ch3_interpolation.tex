@@ -12,7 +12,7 @@ For a map $M$,
 \begin{equation}
 \mathcal{B}[M](r,\theta) = (1-u)(1-v)\,M_{i,j} + u(1-v)\,M_{i+1,j} + uv\,M_{i+1,j+1} + (1-u)v\,M_{i,j+1}.
 \end{equation}
-LIONS interpolates three maps this way, each on its own:
+LIONS interpolates four maps this way, each on its own:
 \begin{equation}
 B_z = \mathcal{B}[B] - \frac{z^2}{2}\,\mathcal{B}[D],\qquad
 B_x = z\,\mathcal{B}\!\left[\frac{\partial B}{\partial x}\right],\qquad
@@ -34,8 +34,8 @@ The vertical focusing comes from $\mathcal{B}[\partial B/\partial x]$ and $\math
 continuous, because the derivative maps are interpolated directly.
 So the two planes see fields of different smoothness, and $\mathcal{B}[\partial_x B]\ne\partial_x\mathcal{B}[B]$: the
 interpolated field is not exactly curl-free at first order in $z$.
-This asymmetry fits a pattern seen in every benchmark on a bilinear map: the radial block of the one-turn matrix is
-noisy and the vertical block is clean (\cref{sec:caseG2}).
+This asymmetry fits a pattern seen where the blocks were reported separately (cases B and G2): the radial block of the
+one-turn matrix is noisy and the vertical block is clean (\cref{sec:caseG2}).
 The pattern is consistent with the asymmetry; it does not prove that the asymmetry causes it.
 
 \paragraph{Error.}
@@ -46,8 +46,9 @@ The bound becomes $(2\pi/N)^2/8$ relative to the harmonic amplitude:
 \LinErrEighteen{} for $N=18$ and \LinErrFiftyFour{} for $N=54$.
 $N = 18$ is the 10-sector FROM\_ORBIT map at \SI{1}{\degree} (\SI{18}{\degree} harmonic); $N = 54$ is the same map at
 \thirddeg{}.
-The number that controls the interpolation error is the node count per period of the shortest field harmonic, not the
-angular step.
+The error is a sum over the field harmonics, each weighted by its amplitude times $(2\pi/N_m)^2$.
+What controls it is the node count per period of the shortest harmonic with a significant amplitude, not the angular
+step.
 
 \begin{figure}[t]
 \centering
@@ -109,7 +110,8 @@ Near $\theta = 0$ this formula is ill-conditioned.
 With $u = x/r$, $\dd\theta/\dd u = -1/\sin\theta$, and $u$ carries a rounding error of order the machine epsilon
 $\varepsilon = 2^{-52}$.
 So the absolute error in $\theta$ is of order $\varepsilon/\theta$ and the relative error of order $\varepsilon/\theta^2$.
-Below $\theta\approx\sqrt{2\varepsilon}\approx\num{2e-8}$, $x/r$ rounds to $1$ and $\theta$ comes out as $0$.
+Below $\theta\approx\sqrt{\varepsilon/2}\approx\num{1e-8}$, $\cos\theta$ rounds to $1$ and $\theta$ comes out as $0$; the smallest
+non-zero value $\arccos$ can return is $\arccos(1-2^{-53}) = \sqrt{\varepsilon}\approx\num{1.5e-8}$.
 The function $\operatorname{atan2}(y,x)$ has no such loss (\cref{fig:azimuth}).
 
 This matters for the benchmarks because the Poincar\'e section is at $\theta = 0$ (\cref{ch:orbits}).
@@ -123,7 +125,7 @@ LIONS offers \texttt{azimuth=atan2} as a deck option; the default stays the Fort
 \centering
 \includegraphics[width=0.6\textwidth]{azimuth_error}
 \caption{Relative error of the azimuth recovered from $(x,y) = (\cos\theta,\sin\theta)$ in double precision.
-$\arccos(x/r)$ loses everything below $\theta\approx\num{2e-8}$ and follows $\varepsilon/\theta^2$ above it;
+$\arccos(x/r)$ loses everything below $\theta\approx\num{1e-8}$ and follows $\varepsilon/\theta^2$ above it;
 $\operatorname{atan2}$ stays at rounding level.}
 \label{fig:azimuth}
 \end{figure}

@@ -5,8 +5,9 @@ It integrates the relativistic Lorentz equation with a Boris push in a static me
 electric potential maps of the dees.
 The code was written in Fortran~90 by P.~Bertrand (GANIL) for the CIME cyclotron, and ported to Python by
 O.~Kamalou.
-The Python port keeps the Fortran results bit for bit on the default path: \nolinkurl{tests/test_fortran.py} compares
-it with a \texttt{gfortran} build compiled with \texttt{-ffp-contract=off}.
+\nolinkurl{tests/test_fortran.py} runs six cases through the Python port and a \texttt{gfortran} build of the Fortran
+(\texttt{-ffp-contract=off}): final bunches agree within $10^{-12}$, and bit for bit on macOS arm64.
+Two known differences remain (the random bunch generator and the vertical spread of \texttt{6d} bunches).
 
 These notes explain the physics and the numerical methods behind the Phase~5 benchmarks.
 The benchmarks ask five questions (\nolinkurl{benchmarks/DESIGN.md}, section~1):
@@ -18,7 +19,8 @@ The benchmarks ask five questions (\nolinkurl{benchmarks/DESIGN.md}, section~1):
 \item[Q5] Does the extracted beam survive the conversion to Xsuite and Cheetah?
 \end{enumerate}
 Q1 to Q3 have answers in these notes.
-Q4 (case C) and Q5 (case F) were not run: case C waits for the CIME maps, and case F has nothing after extraction to compare yet.
+Q4 (case C) and Q5 (case F) were not run: case C waits for a check of the RF time convention in each code, and case F
+has nothing after extraction to compare yet.
 
 \section*{Plan}
 \Cref{ch:motion,ch:fields} cover the physics: motion in a cyclotron, focusing, and fields in the median plane.

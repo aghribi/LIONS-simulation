@@ -48,8 +48,9 @@ An isochronous field grows with radius ($k>0$).
 In a weak-focusing machine (\cref{sec:weak}) this defocuses vertically, and the cyclotron must recover vertical
 focusing elsewhere: from the azimuthal variation of the field.
 
-The FROM\_ORBIT maps used in case G (\cref{sec:caseG1}) are isochronous by construction, with $r_\infty$ = \SI{5}{m}
-(3-sector example) and \SI{28}{m} (10-sector example) \cite{planche2019}.
+The FROM\_ORBIT maps used in case G (\cref{sec:caseG1}) are isochronous by construction \cite{planche2019}, with
+$r_\infty$ = \SI{5}{m} in the 3-sector example script of the FROM\_ORBIT repository and \SI{28}{m} in the 10-sector
+example \cite{planche2023}.
 
 \section{Linear motion near a circular orbit}\label{sec:weak}
 Take an azimuthally symmetric field $B_z(r)$ in the median plane, with $n = -k = -(r/B)\,\dd B/\dd r$ evaluated on the
@@ -79,7 +80,7 @@ The orbit is no longer a circle: it is scalloped, and it crosses the hill edges 
 At each crossing, the azimuthal field component $B_\theta = (z/r)\,\partial B_z/\partial\theta$ combines with the radial
 velocity component to give a vertical force.
 Averaged over a turn, this force is focusing.
-Spiral sector edges add an alternating-gradient focusing in the sense of Courant and Snyder \cite{courant1958}.
+Spiral sector edges add alternating-gradient focusing \cite{courant1958}.
 They are used in FFAG accelerators \cite{symon1956}; the PSI Ring map of case G2 has eight spiral sectors
 \cite{grillenberger2021}.
 
@@ -102,11 +103,13 @@ Second, at low energy $\Qr$ is close to $1$, which makes the closed orbit sensit
 (\cref{sec:conditioning}).
 
 \paragraph{Check on case B.}
-The case B field is $B_z = B_0(1+\epsilon\cos 4\theta)$ with $\epsilon = 0.3$, $k=0$ and radial sector edges.
+The case B field is $B_z = B_0(1+\epsilon\cos 4\theta)$ with $\epsilon = 0.3$, $k=0$ and no spiral ($\xi = 0$).
 Its flutter is $F = \epsilon^2/2 = \BFlutter$.
 \Cref{eq:smooth-qz,eq:smooth-qr} give $\Qz = \BSmoothQz$ and a fractional $\Qr$ of $\BSmoothQrFrac$.
-LIONS at 1440 steps per turn finds $\Qz = \BLionsQz$ and a fractional $\Qr$ of $\BLionsQr$ (1~MeV protons).
-The smooth approximation is good to the third digit here, because $\epsilon$ is small.
+RF-Track on the closed-form field (no map, case B2) finds $\Qz = \BRfQz$ and a fractional $\Qr$ of $\BRfQr$ at 1~MeV.
+The smooth approximation agrees to the digits shown.
+LIONS on the bilinear map gives $\Qz = \BLionsQz$ and a fractional $\Qr$ of $\BLionsQr$ at 1440 steps per turn, but its
+$\Qr$ scatters with the step count by up to \BQrSpreadMax{} (\cref{sec:caseB}), so it is not a sharp check.
 
 \section{What LIONS models}
 LIONS integrates \cref{eq:lorentz} for many particles, with

@@ -6,7 +6,7 @@ In LIONS units, $\vect p = \beta\gamma$, \cref{eq:lorentz} reads
 \frac{\dd\vect p}{\dd t} = \frac{q}{m_0c}\,\vect E + \frac{q}{m_0\gamma}\,\vect p\times\vect B,\qquad
 \frac{\dd\vect x}{\dd t} = \frac{c\,\vect p}{\gamma}.
 \end{equation}
-The Boris scheme \cite{qin2013} keeps momenta at half steps and positions at full steps.
+The Boris scheme, whose properties are analysed in \cite{qin2013}, keeps momenta at half steps and positions at full steps.
 One step from $\vect p^{\,n-1/2}$ to $\vect p^{\,n+1/2}$ is a half electric kick, a magnetic rotation, and a second half
 electric kick:
 \begin{align}
@@ -85,8 +85,8 @@ Their error follows the requested tolerance, not the output sampling, and it als
 \section{An explicit kick is not a rotation}
 A leapfrog that applies the magnetic force explicitly, $\vect p^{\,n+1} = \vect p^{\,n} + 2\,\vect p^{\,n}\times\vect t$,
 adds a vector perpendicular to $\vect p$ of length $\omega\Delta t\,|\vect p|$.
-So $|\vect p|^2$ grows by the factor $1+(\omega\Delta t)^2$ at every step, and by
-$(1+(2\pi/n)^2)^{n/2}-1$ per turn.
+So $|\vect p|^2$ grows by the factor $1+(\omega\Delta t)^2$ at every step, and $|\vect p|$ (hence the radius) by the
+factor $(1+(2\pi/n)^2)^{n/2}$ per turn: a relative growth of about $2\pi^2/n$, first order in the step.
 RF-Track 2.7.4 \texttt{leapfrog} showed exactly this growth on a pure magnetic field in the install checks:
 $\Delta r/r = \num{5.636e-2}$ per turn at 360 steps, against the formula's \LeapfrogPred{} (\texttt{DESIGN.md},
 section~7, single instrument).
@@ -103,16 +103,19 @@ J^\mathsf{T} S J = S,\qquad S = \begin{pmatrix}0 & I_d\\ -I_d & 0\end{pmatrix}.
 This implies $\det J = 1$.
 The converse holds only for $d = 1$, where symplectic and area-preserving are the same.
 The exact flow of a Hamiltonian system is symplectic.
-Symplectic integrators have a modified Hamiltonian, so their energy error stays bounded over very long times
-\cite{hairer2006}.
+For a smooth Hamiltonian, a symplectic integrator exactly conserves a modified Hamiltonian close to the true one, up to
+exponentially small terms, so its energy error stays bounded over very long times \cite{hairer2006}.
+The argument needs smoothness; it does not cover a field with gradient jumps, such as a bilinear map.
 A merely volume-preserving map has no such guarantee.
 
 Two consequences used later:
 \begin{itemize}
 \item The Poincar\'e map of a Hamiltonian flow on a section at fixed energy is symplectic in the reduced coordinates.
 For planar motion this is a two-dimensional map $(r,P_r)\mapsto(r',P_r')$, so $\det M_r = 1$ exactly for the exact
-flow, whatever the smoothness of $B_z$.
-The variational equation $\dot J = A(t)J$ has a trace-free $A$, and that is enough even when $A$ jumps at cell edges.
+flow.
+This holds for a continuous $B_z$ whose gradient jumps at cell edges: the variational equation $\dot J = A(t)J$ has a
+trace-free $A$, and with transversal crossings of the edges the exact one-turn map stays $C^1$.
+The slope changes discussed in \cref{ch:orbits} belong to the discrete map, not to the exact flow.
 \item A numerical one-turn map built from a non-symplectic step, here Boris (volume-preserving in the full phase space,
 but not symplectic), has no such property on the section.
 Its $\det M_r - 1$ measures how far the discrete map is from the exact one.
@@ -122,6 +125,9 @@ Its $\det M_r - 1$ measures how far the discrete map is from the exact one.
 At $z=0$, choose the gauge $A_r = 0$, $A_\theta(r,\theta) = r^{-1}\int_0^r r'B_z(r',\theta)\,\dd r'$.
 Then $B_z = r^{-1}(\partial_r(rA_\theta) - \partial_\theta A_r)$, and the canonical radial momentum equals the kinetic
 one, $P_r = p_r$.
-Off the plane, with the gauge $A_r = (z^2/2r)\,\partial_\theta B$, $A_z = 0$, the kinetic and canonical $p_r$, $p_z$ differ
-by $O(z^2)$ (\texttt{DESIGN.md}, section~5~D).
-The Jacobians of \cref{ch:orbits} therefore use kinetic momenta at small amplitude.
+Off the plane a vector potential exists only for the Maxwell-consistent field ($D = \nabla_\perp^2B$; the truncated field
+with $D=0$ is divergent).
+With $A_z = 0$, $A_r = (z^2/2r)\,\partial_\theta B$ and $A_\theta = r^{-1}\int_0^r r'B\,\dd r' - (z^2/2)\,\partial_rB$, the kinetic
+$p_z$ is canonical and $p_r$ differs from $P_r$ by $O(z^2)$.
+The change of variables has a Jacobian equal to the identity plus $O(z)$, so at small amplitude the Jacobians of
+\cref{ch:orbits} can use kinetic momenta.
