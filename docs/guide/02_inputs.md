@@ -59,6 +59,7 @@ Each field fills the `State` attribute given in the tables below.
 | 21 | `b_factor` | T | `field.b_factor` | optional | `1.56d0` |
 | 22 | `ficloa ficsto` | text | `files.bunch_load`, `files.bunch_save` | optional, default `no no` | `no bunch.bin` |
 | 23 | `interpolation=` | text | `field.interpolation` (`Deck.field_interpolation`) | optional, Python only, default `bilinear` | `interpolation=hermite` |
+| 23 | `azimuth=` | text | `field.azimuth` (`Deck.field_azimuth`) | optional, Python only, default `arccos` | `azimuth=atan2` |
 
 Lines 12 and 13 repeat for each family, in the order 12, 13, 12, 13, ...
 Lines 14b and 14c are read as whole lines: quotes are kept as part of the name.
@@ -167,6 +168,7 @@ The first token is taken as `b_factor` if it parses as a number; the next two to
 
 - `key=value` options come last, after `ficloa ficsto` (written as `'no' 'no'` if unused), so the Fortran never reads them. An unknown key or value raises `ValueError`.
 - `interpolation=hermite`: the magnetic map is interpolated by a bicubic Hermite surface (C1 across cells) built from Bz and its first derivatives at the nodes (dBz/dr and dBz/dtheta from blocks 3 and 4; the cross derivative by second-order differences in r). Bx and By come from the gradient of that surface; the d2Bz term stays bilinear. `bilinear` (default) is the Fortran model. Accuracy and cost against the bilinear model: `benchmarks/DESIGN.md`, case H.
+- `azimuth=atan2`: the particle azimuth for the field lookup is taken from atan2(y, x). `arccos` (default) is the Fortran formula arccos(x / r), which loses precision near theta = 0 and 180 deg (error of order 1e-16 / sin theta rad). Diagnostics of the reference particle keep arccos. The Hermite interpolation always uses atan2.
 
 The GUI always writes `b_factor`.
 
