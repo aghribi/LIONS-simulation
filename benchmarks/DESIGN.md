@@ -1318,3 +1318,13 @@ step 2c), and the orbit moves among the maps. In that case:
 
 Consistent with the runs; "each phase has its own fixed point" is inferred, not measured. Direct test: fixed point and det(M_r) against
 the launch step phase on the same orbit.
+
+### G3 step 2d: signed determinant and excursions at 24 energies (registered before running)
+An independent review of the lecture text found, in scratch reruns: the correlation of G3 step 1 (-0.36) used unsigned LIONS values, and
+the signed one is near -0.93; a launch on the closed orbit reaches about 3 mm at some energies within 100 turns. Both change the reading
+above, so both are measured here, from the harness.
+- LIONS default and `interpolation=hermite`, the 24 energies, 1440 steps, 100 turns. det(M_r) - 1 signed, Jacobian step 1e-6 m.
+- Launch r_co + a, z = 0, a = 0, 1e-5, 1e-4, 1e-3 m. Metrics: largest |r - r_co| over the turns, the turn it occurs, rms over the last 20.
+- Reading: excursions of order 1 mm with a = 0 on the default, and well below 1 um on hermite, mean the bilinear field drives an
+  on-orbit particle to beam-size scale. Correlation near -1 between LIONS and OPALX has no explanation in S as written: an unrelated step
+  placement would give near 0. It stays an open finding.
