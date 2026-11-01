@@ -1184,7 +1184,7 @@ Against the predictions:
   met, and it is worse, by 4.7 times in the median. No integrator shows its order: the values are not monotonic in the steps and
   change sign, as the OPALX manual reports at finer steps. The G3b reading of erratum 4, "decreasing slowly", is only roughly
   right: from 1440 to 2880 steps Boris falls 5 to 13 times, RK4 1.1 to 100 times, DOP853 1.4 to 10 times.
-- FDSTEP 1e-7 to 1e-5, Boris: det(M_r) moves at most 1.4%. Third instrument on H3. The earlier objection (section 24, erratum 4:
+- FDSTEP 1e-7 to 1e-5, Boris: det(M_r) moves at most 1.3%. Third instrument on H3. The earlier objection (section 24, erratum 4:
   a central difference can mix two slopes at any h) is weak at 1e-7 m: the probe moves a step point by about 5e-6 of a 2 cm cell,
   so straddling any cell edge in 1440 steps is rare (order-of-magnitude estimate, not measured). H3 is not supported.
 - Same field, same integrator family, different step placement: OPALX Boris and LIONS Boris have the same magnitude, but
@@ -1203,7 +1203,7 @@ Evidence matrix (+ supports, - contradicts, 0 neutral):
 | Observation | Excess is a defect of LIONS | FD Jacobian artefact (H3) | Fixed-step integration across gradient jumps, on the local Jacobian |
 |---|---|---|---|
 | OPALX Boris, independent code, 0.15 against LIONS 0.19 | - | 0 | + |
-| det(M_r) moves at most 1.4% over FDSTEP 1e-7 to 1e-5 | 0 | - | 0 |
+| det(M_r) moves at most 1.3% over FDSTEP 1e-7 to 1e-5 | 0 | - | 0 |
 | Sign changes with code and step count at equal field | - | 0 | + |
 | DOP853 worse than RK4, no order | 0 | 0 | + |
 | det(M_z) - 1 of 1e-11 with Boris (a vertical probe stays on the same cells to first order) | 0 | 0 | 0 |
