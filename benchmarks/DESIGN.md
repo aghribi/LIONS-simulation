@@ -1147,3 +1147,70 @@ Amendments:
   legacy frequency axis (manual: about 0.25% scale at 72 MeV), so it checks the tune branch only, not differences below 5e-3.
 - Added prediction, G3b: if gradient jumps limit the order, DOP853 gives no large gain over RK4 at equal steps, and
   neither shows its nominal order in det(M_r) - 1. A nominal order 8 refutes that reading.
+
+### G3 step 1 results
+Tables `benchmarks/runs/case_g3/step1{a,b,s}` (code ed45bd0); numbers below from `case_g3.py --step report`. No failure in 105 COF
+runs. OPALX is deterministic here, one instrument, no seeds. Absolute errors against FIXPO, 19 interior energies as in the
+G2 table (92 to 492 MeV, outside 386 to 430 MeV), median / max, 1440 steps, tunes from the COF Jacobian:
+
+| Integrator | r_eo | Qr | Qz | det(M_r) - 1 | det(M_z) - 1 |
+|---|---|---|---|---|---|
+| Boris | 6.7e-6 / 2.2e-5 | 9.2e-3 / 5.4e-2 | 9.3e-4 / 2.5e-3 | 0.15 / 0.38 | 8.9e-12 / 2.7e-11 |
+| RK4 | 6.4e-6 / 1.9e-5 | 3.1e-3 / 3.2e-2 | 8.3e-4 / 2.2e-3 | 5.0e-2 / 0.11 | 3.7e-9 / 9.3e-9 |
+| DOP853 | 1.0e-5 / 2.6e-5 | 1.7e-2 / 0.12 | 6.8e-4 / 2.4e-3 | 0.23 / 1.6 | 3.7e-10 / 1.2e-9 |
+
+|trace(M_r) / 2| exceeds 1 at several energies, so `linear_tunes` clips Qr to 0.5: Boris 372 to 452 MeV, RK4 392 to 432 MeV,
+DOP853 312 and 372 to 412 MeV. The Qr maxima include these.
+
+det(M_r) - 1 at 152, 292, 452 MeV:
+
+| Integrator | 720 steps | 1440 | 2880 |
+|---|---|---|---|
+| Boris | -0.13, +0.92, +0.13 | -0.15, -0.19, +0.18 | -3.0e-2, +3.1e-2, -1.4e-2 |
+| RK4 | +0.14, +0.54, -2.0e-2 | -5.0e-2, -3.9e-2, +7.5e-2 | -1.7e-2, +3.6e-2, -7.1e-4 |
+| DOP853 | +1.7, -4.5e-2, -0.68 | +0.97, -6.4e-2, -0.13 | -9.4e-2, -4.6e-2, +4.5e-2 |
+
+Against the predictions:
+- G3a, OPALX minus OPAL 2024.1, 19 energies (OPAL 512 MeV non-solution excluded): r median 1.9e-6 to 7.6e-6, max 2.7e-5, and Qz
+  median 5.9e-5 to 2.4e-4, max 7.7e-4: met. Qr median 3.3e-3 (RK4) to 1.7e-2 (DOP853), max 3.1e-2 to 0.12: **missed** (predicted
+  below 1e-3). The premise "same field model" does not hold for the tunes. OPAL 2024.1 (`ClosedOrbitFinder`, after Gordon 1983)
+  integrates the linearised equations using the interpolated dB/dr and dB/dtheta channels, whose nodes come from 5-point
+  differences, so the gradient it sees is continuous; COF differentiates the tracked map, which sees the piecewise-constant
+  gradient of bilinear Bz. Read from the sources, not tested.
+- G3b, Boris of order 0.1: met (median 0.15; LIONS median 0.19). RK4 a few times less: met (3 times). DOP853 no gain over RK4:
+  met, and it is worse, by 4.7 times in the median. No integrator shows its order: the values are not monotonic in the steps and
+  change sign, as the OPALX manual reports at finer steps. The G3b reading of erratum 4, "decreasing slowly", is only roughly
+  right: from 1440 to 2880 steps Boris falls 5 to 13 times, RK4 1.1 to 100 times, DOP853 1.4 to 10 times.
+- FDSTEP 1e-7 to 1e-5, Boris: det(M_r) moves at most 1.4%. Third instrument on H3. The earlier objection (section 24, erratum 4:
+  a central difference can mix two slopes at any h) is weak at 1e-7 m: the probe moves a step point by about 5e-6 of a 2 cm cell,
+  so straddling any cell edge in 1440 steps is rare (order-of-magnitude estimate, not measured). H3 is not supported.
+- Same field, same integrator family, different step placement: OPALX Boris and LIONS Boris have the same magnitude, but
+  det(M_r) - 1 differs in sign at many energies (152, 292, 452 MeV: -0.15, -0.19, +0.18 against +0.25, +0.41, -0.17;
+  correlation -0.36 over 24 energies). So the excess is a property of the discrete map and its step placement, not a stable
+  property of the field. OPALX subdivides at sector edges; LIONS does not.
+
+SpectralTunes (RK4, 1440 steps, 100 turns, launched from `ic.dat`, second ray 5 mm off radially and vertically: the
+`SpectralTunes.h` default, not an input): Qr against FIXPO within 2.7e-3 at 24 of 24 energies (median 1.0e-3, bin 2.5e-3),
+inside the half-integer band too, on the same bilinear field where the RK4 Jacobian misses by up to 3.2e-2. Qz within 5e-3 at 22 of
+24; misses at 72 MeV (-7.3e-3) and 530 MeV (-1.3e-2), the end points where G2 also shows shared differences. Frequency axis
+rescaled by the sampled span with the nominal turn time; the real turn time differs by about 0.2% at 72 MeV (manual), not corrected.
+
+Evidence matrix (+ supports, - contradicts, 0 neutral):
+
+| Observation | Excess is a defect of LIONS | FD Jacobian artefact (H3) | Fixed-step integration across gradient jumps, on the local Jacobian |
+|---|---|---|---|
+| OPALX Boris, independent code, 0.15 against LIONS 0.19 | - | 0 | + |
+| det(M_r) moves at most 1.4% over FDSTEP 1e-7 to 1e-5 | 0 | - | 0 |
+| Sign changes with code and step count at equal field | - | 0 | + |
+| DOP853 worse than RK4, no order | 0 | 0 | + |
+| det(M_z) - 1 of 1e-11 with Boris | 0 | - | 0 |
+| 5 mm spectral Qr within 2.7e-3 of FIXPO on the same field | - | 0 | + |
+| OPAL Qr 4.2e-4 from FIXPO with a continuous gradient | 0 | 0 | + |
+
+Proposed reading, for review: the bilinear field gives the right betatron frequency at finite amplitude and the wrong
+one-turn Jacobian at a point. The Qr error of G2 and H (1e-2 to 5e-2) and det(M_r) - 1 describe the local derivative of the
+discrete map, which depends on where the steps fall. A ray at 5 mm averages over many cells. Consistent with these
+observations; not tested on LIONS itself, and the amplitude dependence is not measured. What would change it: LIONS spectral
+tunes far from FIXPO at 5 mm, or a spectral Qr that keeps its accuracy down to amplitudes well below the 2 cm cell.
+Not separated: the end-point Qz differences; the excess of DOP853 over RK4 (large stage coefficients across kinks is a guess).
+G3c remains unregistered.

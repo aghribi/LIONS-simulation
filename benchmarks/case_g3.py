@@ -1,8 +1,8 @@
 """Case G3: OPALX 1.0.0 on the PSI Ring map (DESIGN.md section 25).
 
-usage: uv run --group bench python benchmarks/case_g3.py --step a|b|s [--outroot DIR]
+usage: uv run --group bench [--with pandas] python benchmarks/case_g3.py --step a|b|s|report [--outroot DIR]
 a: closed orbits and tunes at the 24 G2 step 3 energies; b: det(M_r) against steps and FDSTEP at 3 energies;
-s: SpectralTunes at the 24 energies.
+s: SpectralTunes at the 24 energies; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
 OPALX is run as is from its image. The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignored).
 """
 import argparse
@@ -158,11 +158,48 @@ ENDTRACK;''')
     print(f'exit {code}; see {outdir}/tunes-tunes.csv', file=sys.stderr)
 
 
+def report(outroot):
+    import pandas as pd
+    fold, g2 = case_g2.fold, outroot.parent / 'case_g2'
+    interior = lambda e: (e >= 92) & (e <= 492) & ~((e >= 386) & (e <= 430))   # as the G2 table
+    pivot = lambda t: t.pivot_table(index='energy_mev', columns='metric', values='value')
+    a = pd.read_parquet(outroot / 'step1a' / 'case_g3_a.parquet')
+    step3, step2 = pd.read_parquet(g2 / 'step3' / 'case_g2_step3.parquet'), pd.read_parquet(g2 / 'step2' / 'case_g2_step2.parquet')
+    opal = pivot(step3[step3.code == 'opal'])
+    opal = opal[abs(opal.index - 512) > 1]    # OPAL non-solution, G2 step 3
+    lions = pivot(step2[step2.code == 'lions'])
+    for name, d in a.groupby('integrator'):
+        d = pivot(d)
+        i = d[interior(d.index)]
+        j = i.join(opal, rsuffix='_o', how='inner')
+        print(name, 'failed', int(d.get('failed', pd.Series(dtype=float)).notna().sum()), 'interior', len(i),
+              'Qr clipped at', d.index[d.qr >= 0.5 - 1e-12].tolist())
+        for m in ('r_eo_rel_error', 'qr_error', 'qz_error', 'det_r_error', 'det_z_error'):
+            print(f'  |{m}| median {i[m].abs().median():.2e} max {i[m].abs().max():.2e}')
+        for m, dq in (('r', j.r_eo_rel_error - j.r_eo_rel_error_o), ('Qr', j.qr - fold(j.qr_o)), ('Qz', j.qz - fold(j.qz_o))):
+            print(f'  minus OPAL 2024.1 {m} median {dq.abs().median():.2e} max {dq.abs().max():.2e} (n={len(j)})')
+        k = d.join(lions, rsuffix='_l', how='inner')
+        print(f'  det_r correlation with LIONS det, 24 energies: {np.corrcoef(k.det_r_error, k.det_error_l)[0, 1]:+.2f}')
+    b = pd.read_parquet(outroot / 'step1b' / 'case_g3_b.parquet')
+    print(b[b.metric == 'det_r_error'].pivot_table(index=['integrator', 'steps_per_turn', 'fdstep'], columns='energy_mev',
+                                                   values='value').to_string(float_format='{:+.3e}'.format))
+    s = pd.read_csv(outroot / 'step1s' / 'tunes-tunes.csv')
+    ref = np.loadtxt(PSI / 'refsol.dat')
+    row = [int(np.argmin(abs(ref[:, 0] - e))) for e in s.energy_MeV]
+    scale = (STEPS * TURNS / TUNESAMPLE - 1) * TUNESAMPLE / STEPS / TURNS    # sampled span / 100 nominal turns
+    dr, dz = s.nu_r / scale - ref[row, 1], s.nu_y / scale - ref[row, 2]
+    print(f'spectral minus FIXPO (not folded): Qr median {dr.abs().median():.1e} max {dr.abs().max():.1e}, '
+          f'{(dr.abs() <= 5e-3).sum()} of {len(s)} within 5e-3; Qz median {dz.abs().median():.1e}, '
+          f'{(dz.abs() <= 5e-3).sum()} within 5e-3, misses at {s.energy_MeV[dz.abs() > 5e-3].tolist()}: {dz[dz.abs() > 5e-3].round(4).tolist()}')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', choices=('a', 'b', 's'), required=True)
+    parser.add_argument('--step', choices=('a', 'b', 's', 'report'), required=True)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g3')
     args = parser.parse_args()
+    if args.step == 'report':
+        sys.exit(report(args.outroot.resolve()))
     outdir = args.outroot.resolve() / f'step1{args.step}'
     outdir.mkdir(parents=True, exist_ok=True)
     {'a': step_a, 'b': step_b, 's': step_s}[args.step](outdir)
