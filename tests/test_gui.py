@@ -110,3 +110,20 @@ def test_form_keeps_every_deck_entry(app, tmp_path):
     form.load_data_file(str(tmp_path / 'deck.dat'))
     form.write_data_file(str(tmp_path / 'saved.dat'))
     assert read_deck(tmp_path / 'saved.dat') == deck
+
+
+def test_form_keeps_deck_options(app, tmp_path):
+    """interpolation shows in the form; azimuth, without a widget, is kept from the loaded deck."""
+    from lions.deck import read_deck, write_deck
+    from lions.gui.input_form import InputFormPanel
+    from test_deck import full_deck
+    deck = full_deck()
+    deck.field_interpolation, deck.field_azimuth = 'hermite', 'atan2'
+    write_deck(deck, tmp_path / 'deck.dat')
+    form = InputFormPanel()
+    form.load_data_file(str(tmp_path / 'deck.dat'))
+    assert form.field_interp_combo.currentText() == 'hermite'
+    form.write_data_file(str(tmp_path / 'saved.dat'))
+    assert read_deck(tmp_path / 'saved.dat') == deck
+    form.field_interp_combo.setCurrentText('bilinear')
+    assert form.to_deck().field_interpolation == 'bilinear'

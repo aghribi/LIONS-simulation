@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from ..constants import AMU, C_LIGHT, ELECTRON_MASS_U, MEV
-from ..deck import Deck, Deflector, Dipole, Family, FieldHarmonic, Grid, read_deck, write_deck
+from ..deck import OPTIONS, Deck, Deflector, Dipole, Family, FieldHarmonic, Grid, read_deck, write_deck
 from ..fortran_text import parse_floats
 
 
@@ -542,6 +542,14 @@ class InputFormPanel(QWidget):
             "then multiplied by this factor. Example: 1.56 T for CIME.")
         self.sec_field_files.add_row("B factor (T) :", self.b_factor_spin)
 
+        self.field_interp_combo = QComboBox()
+        self.field_interp_combo.addItems(OPTIONS['interpolation'][1])
+        self.field_interp_combo.setToolTip(
+            "Magnetic map interpolation. bilinear: the Fortran model.\n"
+            "hermite: bicubic Hermite surface, C1 across cells, about 1.8 times the field cost\n"
+            "(benchmarks/DESIGN.md, case H).")
+        self.sec_field_files.add_row("Field interpolation :", self.field_interp_combo)
+
         # ============================================================
         # Section 14: Vertical sorter
         # ============================================================
@@ -970,6 +978,7 @@ class InputFormPanel(QWidget):
         self.ficb_edit.setText(deck.bfield_file)
         self.ficv1_edit.setText(deck.central_potential_file)
         self.ficv2_edit.setText(deck.outer_potential_file)
+        self.field_interp_combo.setCurrentText(deck.field_interpolation)
         if deck.b_factor is not None:
             self.b_factor_spin.setValue(deck.b_factor)
         else:
@@ -1078,6 +1087,8 @@ class InputFormPanel(QWidget):
             b_factor=self.b_factor_spin.value(),
             bunch_load_file=kept.bunch_load_file if kept else 'no',
             bunch_save_file=kept.bunch_save_file if kept else 'no',
+            field_interpolation=self.field_interp_combo.currentText(),
+            field_azimuth=kept.field_azimuth if kept else 'arccos',
         )
 
     def write_data_file(self, path):
@@ -1323,6 +1334,7 @@ class InputFormPanel(QWidget):
             'ficv1': self.ficv1_edit.text(),
             'ficv2': self.ficv2_edit.text(),
             'b_factor': self.b_factor_spin.value(),
+            'field_interpolation': self.field_interp_combo.currentText(),
             # Vertical sorter
             'rmin_ver': self.rmin_ver.value(),
             'rmax_ver': self.rmax_ver.value(),
@@ -1448,6 +1460,7 @@ class InputFormPanel(QWidget):
         self.ficv1_edit.setText(data.get('ficv1', ''))
         self.ficv2_edit.setText(data.get('ficv2', ''))
         self.b_factor_spin.setValue(data.get('b_factor', 1.0))
+        self.field_interp_combo.setCurrentText(data.get('field_interpolation', 'bilinear'))
         # Vertical sorter
         self.rmin_ver.setValue(data.get('rmin_ver', 1000.0))
         self.rmax_ver.setValue(data.get('rmax_ver', 2000.0))
