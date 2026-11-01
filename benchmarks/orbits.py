@@ -278,6 +278,39 @@ class BorisTracker:
         return np.arange(steps + 1) * self.dt, np.array(out_pos), np.array(out_mom)
 
 
+class RK4Tracker:
+    """Classical RK4, fixed step, on dx/dt = c p / gamma and dp/dt = (q / m) (p / gamma) x B, p in beta gamma.
+
+    Same field call, time step and full-step recording as BorisTracker.
+    """
+
+    def __init__(self, field, mass_kg, charge_c, p, f_rev_hz, steps_per_turn):
+        self.field, self.p, self.n = field, p, steps_per_turn
+        self.dt = 1 / (f_rev_hz * steps_per_turn)
+        self.qm = charge_c / mass_kg
+
+    def rate(self, pos, mom):
+        gamma = np.sqrt(1 + (mom**2).sum(axis=1))[:, None]
+        b = np.column_stack(self.field(*pos.T))
+        return syn.C * mom / gamma, self.qm * np.cross(mom, b) / gamma
+
+    def track(self, states, turns):
+        pos, mom = initial_vectors(states, self.p)
+        steps = int(np.ceil(turns)) * self.n
+        h = self.dt
+        out_pos, out_mom = [pos], [mom]
+        for _ in range(steps):
+            k1x, k1p = self.rate(pos, mom)
+            k2x, k2p = self.rate(pos + h / 2 * k1x, mom + h / 2 * k1p)
+            k3x, k3p = self.rate(pos + h / 2 * k2x, mom + h / 2 * k2p)
+            k4x, k4p = self.rate(pos + h * k3x, mom + h * k3p)
+            pos = pos + h / 6 * (k1x + 2 * k2x + 2 * k3x + k4x)
+            mom = mom + h / 6 * (k1p + 2 * k2p + 2 * k3p + k4p)
+            out_pos.append(pos)
+            out_mom.append(mom)
+        return np.arange(steps + 1) * self.dt, np.array(out_pos), np.array(out_mom)
+
+
 def stack_runs(out):
     """Single-particle runs [(t, pos, mom)] to (t, pos, mom) of shape (steps, n, 3), cut to the shortest."""
     steps = min(len(o[0]) for o in out)

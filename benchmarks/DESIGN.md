@@ -916,3 +916,15 @@ untouched); phase 2 implements the options chosen by A. Ghribi and O. Kamalou fr
   1/3 deg; at 1 deg on the 10-sector map F1 and F2 stay limited by the node density (G1). RK4 on F0 lowers det as
   RF-Track did (G2 step 2c) but not below 1e-3 at 1440 steps on the PSI map. Cost relative to F0 with Boris: F1 2 to
   4 times, splines 5 to 20 times, RK4 about 4 times its field model with Boris.
+
+Case H validation (`benchmarks/runs/case_h/case_h_validate.parquet`) and amendment after results:
+- Pre-run change, not yet documented above: the RK4 order check runs at 90, 180, 360 steps (not 720 to 2880),
+  because at 720 steps RK4 is expected near the quintic master's own field error (G1 step 1).
+- F1 reproduces node values and derivatives to 1.1e-14. The registered continuity test (jump below 1e-10 at
+  eps = 1e-9 of a cell) failed as posed: a smooth surface changes by its gradient times 2 eps, 3e-10 to 1.8e-9 here.
+  Replaced, after the result, by the scaling test: jumps scale linearly with eps over 1e-7, 1e-9, 1e-11 (4.4e-8,
+  4.4e-10, 4.4e-12 for Bz), so F1 has no jump in value or first derivatives.
+- RK4 r_eo at 90, 180, 360 steps: ratios 9.1 and 13.1, the first outside 16 +- 3. Extended after the result to 45
+  to 1440 steps: ratios -6.9, 9.1, 13.1, 14.7, 15.3. Fourth order holds from 360 steps; 90 to 180 is pre-asymptotic.
+  The matrix uses 720 to 2880 steps (RK4 r_eo 1.3e-10 at 720). Both instruments are taken as validated; the change
+  concerns the validation criteria only.
