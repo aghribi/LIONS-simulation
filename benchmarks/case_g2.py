@@ -8,6 +8,7 @@ The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignor
 the run directory.
 """
 import argparse
+import contextlib
 import platform
 import re
 import shutil
@@ -24,6 +25,7 @@ from scipy.interpolate import RectBivariateSpline
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
+import case_g1  # noqa: E402
 import orbits  # noqa: E402
 from provenance import provenance  # noqa: E402
 
@@ -216,9 +218,66 @@ def step1(outdir):
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g2_step1.parquet')
 
 
+def g1_grids(r, dt_deg, bz, dbt):
+    """The map in the case_g1 grids/attrs form (T, T/m, T/rad; sign of the file), dBz/dr by OPAL's 5-point scheme."""
+    n = len(r)
+    h = r[1] - r[0]
+    dbr = np.empty_like(bz)
+    for i in range(n):
+        lo = min(max(i - 2, 0), n - 5)   # stencil clamped at the edges, as OPAL getdiffs
+        x = (np.arange(lo, lo + 5) - i) * h
+        w = np.linalg.solve(np.vander(x, increasing=True).T, [0, 1, 0, 0, 0])   # d/dr at x = 0
+        dbr[i] = w @ bz[lo:lo + 5]
+    grids = {'bz': 0.1 * bz, 'dbz_dr': 0.1 * dbr, 'dbz_dtheta': 0.1 * dbt}
+    attrs = {'sector_count': SYMMETRY, 'ri_m': r[0], 'rstep_m': h, 'nrad': n, 'theta_step_rad': np.radians(dt_deg)}
+    return grids, attrs
+
+
+def step2(outdir):
+    r, dt_deg, (bz, dbt, _, _) = read_ring(PSI / 'bfield.dat')
+    grids, attrs = g1_grids(r, dt_deg, bz, dbt)
+    species = case_g1.lions_species(MP_MEV * 1e6, 1)
+    mass_kg = case_g1.lc.AMU * (species[0] - case_g1.lc.ELECTRON_MASS_U)
+    f_rev = F_RF / HARMONIC
+    work = outdir / 'lions_map'
+    work.mkdir(parents=True, exist_ok=True)
+    with contextlib.chdir(work):
+        ntet = case_g1.write_lions_map(grids, attrs, 1)
+    spline = case_g1.smooth_field(grids, attrs, 1, 5)
+    ic, ref = np.loadtxt(PSI / 'ic.dat'), np.loadtxt(PSI / 'refsol.dat')
+    if not np.array_equal(ic[:, 0], ref[:, 0]):
+        raise ValueError('ic.dat and refsol.dat energies differ')
+    records = []
+    for (energy, r_ic, pr_ic), (_, qr_ref, qz_ref) in zip(ic, ref):
+        p = np.sqrt((1 + energy / MP_MEV)**2 - 1)
+        t = {'r_theta0_m': r_ic / 1000, 'pr_over_p_theta0': pr_ic / 1000 / p, 'f_rev_hz': f_rev}
+        q_ref = [np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi) for q in (qr_ref, qz_ref)]
+        flagged = 386 <= energy <= 430
+        for code, track in (('lions', orbits.LionsTracker(work, energy, f_rev, STEPS, species).track),
+                            ('spline', orbits.BorisTracker(spline, mass_kg, case_g1.lc.E_CHARGE, p, f_rev, STEPS).track)):
+            base = {'code': code, 'energy_mev': float(energy), 'qr_half_integer_band': flagged}
+            try:
+                values = case_g1.orbit_metrics(track, t, p, q_ref)
+            except Exception as exc:
+                records.append({**base, 'metric': 'failed', 'value': None, 'unit': f'{type(exc).__name__}: {exc}'[:200]})
+                print(f'{code} {energy} MeV failed: {exc}', file=sys.stderr)
+                continue
+            for k, (v, u) in values.items():
+                records.append({**base, 'metric': k, 'value': float(v), 'unit': u})
+            print(f'{code} {energy} MeV ' + ' '.join(f'{k}={v[0]:+.2e}' for k, v in values.items()), file=sys.stderr)
+    meta = {'case': 'G2 step 2: LIONS and the spline tracker on the PSI Ring map, no trim coil',
+            'proton_mass_mev': repr(MP_MEV), 'species': repr(species), 'rf_hz': repr(F_RF), 'harmonic': str(HARMONIC),
+            'steps_per_turn': str(STEPS), 'lions_map_columns': str(ntet),
+            'dbz_dr': '5-point differences in r, clamped stencils (OPAL getdiffs)', 'dbz_dtheta': 'file, per rad',
+            'tunes': 'folded into [0, 0.5], refsol.dat folded the same way',
+            **provenance(PSI / 'bfield.dat', PSI / 'ic.dat', PSI / 'refsol.dat'),
+            'machine': platform.platform(), 'python': platform.python_version()}
+    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g2_step2.parquet')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', type=int, choices=(1,), default=1)
+    parser.add_argument('--step', type=int, choices=(1, 2), default=1)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g2')
     args = parser.parse_args()
-    {1: step1}[args.step](args.outroot.resolve() / f'step{args.step}')
+    {1: step1, 2: step2}[args.step](args.outroot.resolve() / f'step{args.step}')
