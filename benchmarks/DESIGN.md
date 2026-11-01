@@ -1244,3 +1244,15 @@ orbit moves by about 2 cm / 1440 = 14 um, so the one-turn map is one linear piec
   about 1e-5 m. At a = 1e-4 m already above 10% at n = 1 or 2.
 - Reading: met, the Jacobian is a correct derivative of a map whose linear range is about 10 um, so it says nothing about a beam
   (H3 stays rejected). Deviation large at a = 1e-7 m: the Jacobian does not even describe the map locally, H3 returns.
+
+### G3 step 2c: commensurate turn (registered before running)
+Observation from step 2b, before its write-up: the deviation is 1e-7 to 1e-6 at n = 1 for a up to 1e-6 m and near 1 at n = 2. From
+n = 2 the distance to the closed orbit does not depend on a (152 MeV, n = 5: 5.7e-5 m at a = 1e-7, 5.8e-5 m at a = 1e-6).
+The registered reading of 2b does not cover this: the Jacobian describes the first return; what fails is the second return.
+Hypothesis S: the turn time is not an integer number of steps, so each turn starts at another step phase and is another map, with
+its own fixed point and Jacobian. Rival R: an instability or a tracker defect that does not depend on the step phase.
+- LIONS default, 152, 292, 452 MeV, 1440 steps. Iterate the step (`fhf` = 1 / T, T the closed-orbit turn time, closed orbit
+  recomputed, 6 iterations) until one turn is exactly 1440 steps. Launch and metrics as step 2b, a = 1e-7, 1e-6 m. M at the
+  final step.
+- Prediction under S: deviation below 1e-2 through n = 10 while ||u_n|| stays below about 1e-5 m, with the growth M predicts,
+  det(M_r) != 1. Under R: deviation near 1 at n = 2 as in 2b.

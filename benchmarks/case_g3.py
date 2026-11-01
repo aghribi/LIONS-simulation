@@ -3,7 +3,7 @@
 usage: uv run --group bench [--with pandas] python benchmarks/case_g3.py --step a|b|s|report [--outroot DIR]
 a: closed orbits and tunes at the 24 G2 step 3 energies; b: det(M_r) against steps and FDSTEP at 3 energies;
 s: SpectralTunes at the 24 energies; 2: LIONS and spline multi-turn tunes against amplitude (step 2); 2b: linear range of
-the LIONS Jacobian; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
+the LIONS Jacobian; 2c: the same on a commensurate turn; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
 OPALX is run as is from its image. The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignored).
 """
 import argparse
@@ -219,22 +219,35 @@ def step_2(outdir):
     write(records, outdir, 'case_g3_2.parquet', 'G3 step 2: LIONS and spline multi-turn tunes against launch amplitude')
 
 
-def step_2b(outdir):
+def step_2b(outdir, commensurate=False):
     grids, attrs, species, _, _, _ = case_g2.setup()
     work = outdir / 'lions'
     work.mkdir(exist_ok=True)
     with contextlib.chdir(work):
         case_g1.write_lions_map(grids, attrs, 1)
     records = []
+    amplitudes = LINEAR_AMPLITUDES[:2] if commensurate else LINEAR_AMPLITUDES
     for energy, r_ic, pr_ic, _, _ in fixpo()[list(G3B_ROWS)].tolist():
         p = np.sqrt((1 + energy / case_g2.MP_MEV)**2 - 1)
-        track = orbits.LionsTracker(work, energy, F_RF / HARMONIC, STEPS, species).track
+        f_rev, turn_error = F_RF / HARMONIC, None
+        track = orbits.LionsTracker(work, energy, f_rev, STEPS, species).track
         co, _ = orbits.closed_orbit(track, (r_ic / 1000, pr_ic / 1000))
+        for _ in range(6 if commensurate else 0):
+            t_turn = orbits.section_series(*track(co[None], 1.2))[0][0, 0]
+            turn_error = t_turn * f_rev - 1
+            f_rev = 1 / t_turn
+            track = orbits.LionsTracker(work, energy, f_rev, STEPS, species).track
+            co, _ = orbits.closed_orbit(track, co[:2])
+        if commensurate:
+            print(f'{energy} MeV: last turn-time correction {turn_error:.1e}, f_rev {f_rev!r}', file=sys.stderr)
         scale = np.array([1.0, co[0] / p])    # pr to m, as the Jacobian probes
         m = orbits.jacobian(track, co, 1e-7, 1e-7 * p / co[0])[:2, :2]
-        states = np.array([[co[0] + a, co[1], 0.0, 0.0] for a in LINEAR_AMPLITUDES])
+        if commensurate:
+            records.append({'energy_mev': float(energy), 'amplitude_m': None, 'turn': None, 'unit': '1',
+                            'metric': 'det_r_error', 'value': float(np.linalg.det(m) - 1)})
+        states = np.array([[co[0] + a, co[1], 0.0, 0.0] for a in amplitudes])
         series = orbits.section_series(*track(states, LINEAR_TURNS + 1.2))
-        for a, tbt in zip(LINEAR_AMPLITUDES, series):
+        for a, tbt in zip(amplitudes, series):
             u0 = np.array([a, 0.0])
             for n in LINEAR_CHECK:
                 u = tbt[n - 1, 1:3] - co[:2]
@@ -243,7 +256,9 @@ def step_2b(outdir):
                 records += [{**row, 'metric': 'deviation', 'value': float(np.linalg.norm((u - predicted) * scale) / np.linalg.norm(u * scale))},
                             {**row, 'metric': 'growth', 'value': float(np.linalg.norm(u * scale) / a)},
                             {**row, 'metric': 'growth_predicted', 'value': float(np.linalg.norm(predicted * scale) / a)}]
-    write(records, outdir, 'case_g3_2b.parquet', 'G3 step 2b: linear range of the LIONS one-turn Jacobian')
+    name, case = ('case_g3_2c.parquet', 'G3 step 2c: commensurate turn') if commensurate else \
+        ('case_g3_2b.parquet', 'G3 step 2b: linear range of the LIONS one-turn Jacobian')
+    write(records, outdir, name, case)
 
 
 def report(outroot):
@@ -283,11 +298,11 @@ def report(outroot):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', choices=('a', 'b', 's', '2', '2b', 'report'), required=True)
+    parser.add_argument('--step', choices=('a', 'b', 's', '2', '2b', '2c', 'report'), required=True)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g3')
     args = parser.parse_args()
     if args.step == 'report':
         sys.exit(report(args.outroot.resolve()))
     outdir = args.outroot.resolve() / (f'step{args.step}' if args.step.startswith('2') else f'step1{args.step}')
     outdir.mkdir(parents=True, exist_ok=True)
-    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2, '2b': step_2b}[args.step](outdir)
+    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2, '2b': step_2b, '2c': lambda d: step_2b(d, True)}[args.step](outdir)
