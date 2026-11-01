@@ -839,3 +839,44 @@ any continuous median-plane Bz preserves area, so under H1b an accurate integrat
   452 MeV; metrics as step 2b.
 - Reading: det(M_r) near 1 (below 1e-3) with RF-Track supports H1b (the non-symplectic Boris step on a kinked
   field); det as large as LIONS supports a field-model effect beyond the exact-flow argument.
+
+G2 step 2c results (`benchmarks/runs/case_g2/step2c/case_g2_step2c.parquet`): RF-Track on the bilinear field gives
+det(M_r) - 1 = +6.8e-3, -1.0e-4, -6.7e-3 at 152, 292, 452 MeV (Boris on the same field: +0.25, +0.41, -0.17), and
+Qr within 3e-3 of the spline tracker (LIONS: up to 4.5e-2 off). The registered threshold (1e-3) is met at one energy
+of three. Reading: H1b supported; most of the LIONS error on this map comes from the Boris step on the kinked
+bilinear field, not from the bilinear field as such. The residual 7e-3 with RF-Track is not separated (rkf45 also
+loses order at gradient jumps; section-crossing interpolation).
+
+G2 steps 2 and 3 results (`benchmarks/runs/case_g2/step{2,3}`; step 2 ran code 6ea15e8, its table records 59cab94,
+written after a later commit with the same step 2 logic; step 3 code 59cab94). No failure in 460 step 2 runs.
+OPAL at 512 MeV returned a non-solution without error (Qr = -5.01, Qz = 6.86, r off by 4.5%): counted as an OPAL
+failure and left out of the criterion. Absolute errors against FIXPO, interior energies (92 to 492 MeV, outside the
+386 to 430 MeV band), median / max, and at 72 and 530 MeV:
+
+| Code | r_eo | Qr | Qz | Qr at 72 / 530 | Qz at 72 / 530 |
+|---|---|---|---|---|---|
+| LIONS (bilinear, Boris) | 1.1e-5 / 2.7e-5 | 1.4e-2 / 5.1e-2 | 9.4e-4 / 2.4e-3 | 8.2e-3 / 1.4e-4 | 6.8e-3 / 7.6e-3 |
+| spline tracker (Boris) | 9.5e-6 / 1.9e-5 | 8.0e-5 / 5.3e-4 | 2.9e-4 / 1.1e-3 | 2.6e-3 / 8.2e-5 | 4.7e-3 / 2.8e-3 |
+| RF-Track (spline) | 5.4e-6 / 1.6e-5 | 9.0e-5 / 5.3e-4 | 2.7e-4 / 1.1e-3 | 2.5e-3 / 7.1e-5 | 4.6e-3 / 2.8e-3 |
+| OPAL (closed-orbit finder) | 5.9e-6 / 1.8e-5 | 4.2e-4 / 1.1e-3 | 8.2e-4 / 2.1e-3 | 5.3e-3 / 4.8e-3 | 6.7e-3 / 7.6e-3 |
+
+- LIONS det(M) - 1: 0.19 median, up to 0.42 (spline tracker 2.6e-5 median). LIONS minus spline: r 7.6e-6 median,
+  Qr 1.2e-2, Qz 1.0e-3. Prediction (Qr floor 1e-4 to 1e-3) missed by a factor 10 or more.
+- The two smooth instruments agree: RF-Track minus spline tracker r 5e-6, Qr 6e-6 (median), Qz 7e-5; they are the
+  closest codes to FIXPO. Their remaining Qz difference to FIXPO (3e-4 median, 1e-3 max) and the shared end-point
+  differences (Qz 4.6e-3 at 72 MeV, 2.8e-3 at 530 MeV, also seen by OPAL) belong to FIXPO or to the map edges; not
+  separated.
+- r against `ic.dat`: every code is within 2e-5 to 5e-5 relative (0.05 to 0.11 mm), the print resolution of `ic.dat`
+  (0.1 mm). The r comparison cannot separate the codes.
+- Criterion (step 3 registration), 21 interior and end-point energies plus 2 in the band: r 14 of 21 and 2 of 2; pr
+  21 of 21 and 2 of 2; Qr 21 of 21 and 1 of 2 (412 MeV fails); Qz 21 of 21 and 2 of 2. The r failures lie within the
+  `ic.dat` print resolution.
+- The criterion is weaker than intended: with the spline tracker at least as close to FIXPO as OPAL, the triangle
+  inequality makes |LIONS - FIXPO| <= |OPAL - FIXPO| + |LIONS - spline| hold whatever the LIONS floor. It passes for
+  Qr while LIONS is 30 times further from FIXPO than OPAL (median 1.4e-2 against 4.2e-4). Stated here because the
+  amendment was proposed by this analysis; the informative comparison is the table above.
+- Reading: on the PSI Ring map LIONS reproduces closed orbits as well as the other codes (within the reference
+  resolution) and the vertical tune to within OPAL's distance from FIXPO, but its radial tune is off by 1e-2 to 5e-2
+  and its one-turn map is far from area-preserving. Steps 2b and 2c trace this to the Boris step on the bilinear
+  field. G1 changed the field smoothness with the integrator fixed; the remedy space now includes the integrator or
+  the field derivative continuity, not only the interpolation order. Decision for A. Ghribi and O. Kamalou.
