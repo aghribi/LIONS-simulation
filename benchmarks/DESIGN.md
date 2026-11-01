@@ -727,3 +727,34 @@ Step 2 (LIONS, bilinear) and step 3 (numpy Boris, bicubic and quintic), 360 / 72
   times at 360 steps): at 1440 steps the integrator alone leaves Qr errors up to 2.3e-4 and turn-time errors of
   4e-6 to 7e-6.
 - Scope: one map, four orbits, one turn each; no acceleration.
+
+### G2 step 1: conventions of the PSI Ring files (registered before running)
+Settled from the files and the OPAL 2024.1.0 source (`Cyclotron::getFieldFromFile_Ring`, `getdiffs`, `TrimCoil`,
+`TrimCoilMirrored`), before any tracking:
+- `bfield.dat` (S03AV): header 1900 mm, 20 mm, 0 deg, -3 (1/3 deg); 141 radii, 135 azimuths per 45 deg sector,
+  8-fold. A first record of 1089 values is skipped by OPAL ("useless"); then one block per radius: Bz, dBz/dtheta,
+  d2Bz/dtheta2, d3Bz/dtheta3 (135 values each). Values about 6 kG at 2.1 m: kG, consistent with the average field
+  Brho / r = 0.58 T of a 72 MeV proton there (order-of-magnitude check).
+- OPAL does not use the file derivatives: `getdiffs` recomputes all theta derivatives from Bz by 5-point
+  differences, with stencils clamped inside the 45 deg sector (one-sided near its edges, no periodic wrap), and
+  dBz/dr by 5-point differences in r.
+- `ic.dat`: E [MeV], r [mm], pr; the OPAL example (`cyclotron1.in`) starts each orbit at PHIINIT = 0 with
+  PRINIT = pr / 1000 in units of m0 c, while the OPAL manual names the column P_r [mrad]. The two readings differ
+  by beta gamma (20% at 530 MeV, where pr = 212). FIXPO orbits end at r = 4300 mm.
+- Trim coil TC1 (`cyclotron1.in`, TYPE PSI-BFIELD-MIRRORED, RMIN 4350, RMAX 4470 mm, SLPTC 0.6): OPAL 2024.1
+  converts RMIN and RMAX to m and passes r in m, so SLPTC acts per metre and the profile is nearly flat: from the
+  formula, about +5.9e-3 kG at every radius from 2 to 4.5 m (1e-3 of the field). With r in mm the field would stay
+  within 4350 to 4470 mm. Possible units problem in OPAL [from the source, not run].
+
+Runs:
+- 1a: file dBz/dtheta against a periodic 5-point difference of Bz (per deg and per rad): max and median absolute
+  difference, to fix the units of the file derivatives.
+- 1b: closed orbits at theta = 0 with the numpy Boris tracker (validated in G1 step 3a) on a quintic spline of Bz
+  (kG to T), periodic in theta, 1440 steps per turn, at 72, 150, 300, 450 and 530 MeV (rows of `ic.dat`), both
+  directions of travel. Compare r and pr with `ic.dat` under both pr readings.
+- 1c: OPAL (container 2024.1.0) closed-orbit finder at 72 and 530 MeV, with and without TC1: shift of the
+  closed-orbit radius and tunes.
+- Success: one direction and one pr reading match `ic.dat` at the five energies within 1 mm in r and 1% in pr,
+  and the other combinations miss by at least ten times that. Otherwise stop and report. 1c reads as: a shift at
+  72 MeV (far from 4350 mm) confirms the flat TC1 profile; none refutes it. G2 tracking (LIONS, OPAL, RF-Track
+  against FIXPO) is registered after step 1, without TC1 if 1c confirms the flat profile.
