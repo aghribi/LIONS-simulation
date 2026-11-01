@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QApplication, QWidget
 
 from lions.game import physics
 from lions.game.runlog import Store
+from lions.game.missions import Mission
 from lions.game.stages import Action, load_scenario
 
 W, H = 960, 720    # virtual screen, scaled to the window
@@ -21,6 +22,7 @@ FONT = 'Menlo'
 CONTROLS = {'larmor': 'UP DOWN: FIELD B   LEFT RIGHT: ENERGY   SPACE: FIRE', 'dee_beat': 'LEFT RIGHT: RF FREQUENCY',
             'trim_coils': 'UP DOWN: FIELD TRIM', 'fallout': 'TAP UP DOWN: CORRECTOR KICK',
             'thomas': 'UP DOWN: FLUTTER F   LEFT RIGHT: SPIRAL XI'}
+MISSION_CONTROLS = 'UP DOWN: PICK A KNOB   LEFT RIGHT: TURN IT   SHIFT: FINE   HOLD SPACE: BEAM ON'
 
 
 def wrapped(text, width):
@@ -41,7 +43,8 @@ class Arcade(QWidget):
         self.resize(W, H)
         self.setFocusPolicy(Qt.StrongFocus)
         self.store = store or Store()
-        self.stages = load_scenario()
+        self.level0, self.missions = load_scenario(), load_scenario('missions')
+        self.stages = self.level0
         self.keys, self.rows = set(), []
         self.clock, self.state = 0.0, 'attract'
         self.seed_source = random.Random()
@@ -69,7 +72,15 @@ class Arcade(QWidget):
         self.update()
 
     def new_game(self):
-        self.lives, self.total, self.index = LIVES, 0, 0
+        self.lives, self.total, self.choice = LIVES, 0, 0
+        self.completed = set()
+        self.state = 'menu'
+
+    def menu_items(self):
+        return [('LEVEL 0', 'HOW A CYCLOTRON WORKS', self.level0), *((m.mission_id, m.title, [m]) for m in self.missions)]
+
+    def choose(self):
+        self.stages, self.index = self.menu_items()[self.choice][2], 0
         self.state = 'brief'
 
     def start_stage(self):
@@ -80,6 +91,7 @@ class Arcade(QWidget):
 
     def play_step(self):
         ax = (Qt.Key_Right in self.keys) - (Qt.Key_Left in self.keys)
+        ax = ax * 0.1 if Qt.Key_Shift in self.keys else ax
         ay = (Qt.Key_Up in self.keys) - (Qt.Key_Down in self.keys)
         action = Action(ax, ay, Qt.Key_Space in self.keys)
         observation, _, done = self.stage.step(action, DT)
@@ -101,7 +113,13 @@ class Arcade(QWidget):
             self.start_stage()
         elif state == 'clear':
             self.index += 1
-            self.state = 'brief' if self.index < len(self.stages) else 'won'
+            if self.index < len(self.stages):
+                self.state = 'brief'
+            else:
+                self.completed.add(self.menu_items()[self.choice][0])
+                self.state = 'won' if len(self.completed) == len(self.menu_items()) else 'menu'
+        elif state == 'menu':
+            self.choose()
         elif state == 'lost':
             self.state = 'brief'
         elif state in ('won', 'over'):
@@ -121,10 +139,12 @@ class Arcade(QWidget):
             self.new_game()
         elif self.state == 'initials':
             self.edit_initials(key)
+        elif self.state == 'menu' and key in (Qt.Key_Up, Qt.Key_Down):
+            self.choice = (self.choice + (1 if key == Qt.Key_Down else -1)) % len(self.menu_items())
         elif key in (Qt.Key_Return, Qt.Key_Enter) or (key == Qt.Key_Space and self.state != 'play'):
             self.press_start()
         elif key == Qt.Key_Escape:
-            self.state = 'attract'
+            self.state = 'over' if self.state == 'menu' else 'menu' if self.state in ('brief', 'play', 'lost', 'clear') else 'attract'
 
     def keyReleaseEvent(self, event):
         if not event.isAutoRepeat():
@@ -250,12 +270,33 @@ class Arcade(QWidget):
                             'They can be used to compare human tuning with optimisers and policies.', 56)
         self.text(W / 2, y + 60, 'Y: YES     N: NO', 24, GREEN)
 
+    def draw_menu(self):
+        self.text(W / 2, 50, 'THE SHIFT', 40, CYAN)
+        self.text(W / 2, 110, f'SCORE {self.total:07d}   IONS {self.lives}', 16, MAGENTA)
+        y = 170
+        for i, (key, title, stages) in enumerate(self.menu_items()):
+            selected = i == self.choice
+            color = GREEN if key in self.completed else YELLOW if selected else WHITE
+            if selected:
+                self.p.fillRect(QRectF(90, y - 6, W - 180, 44), QColor(255, 225, 77, 26))
+            self.text(110, y, key, 18, color, 'left')
+            self.text(260, y, title, 18, color, 'left')
+            if key in self.completed:
+                self.text(W - 110, y, 'DONE', 16, GREEN, 'right')
+            y += 58
+        request = self.menu_items()[self.choice][2][0]
+        client = getattr(request, 'client', request.brief if self.choice else 'Five stages, from the Lorentz force to Thomas focusing.')
+        self.block(H - 170, client, 66, 14, CYAN)
+        self.text(W / 2, H - 52, 'UP DOWN: CHOOSE   START: ACCEPT   ESC: END THE SHIFT', 13, DIM)
+
     def draw_brief(self):
         s = self.stages[self.index]
-        self.text(W / 2, 110, f'STAGE {self.index + 1}', 20, MAGENTA)
-        self.text(W / 2, 150, s.title, 40, CYAN)
-        y = self.block(260, s.brief, 56, 17)
-        self.text(W / 2, y + 50, CONTROLS[s.key], 15, YELLOW)
+        mission = isinstance(s, Mission)
+        self.text(W / 2, 100, s.mission_id if mission else f'STAGE {self.index + 1}', 20, MAGENTA)
+        self.text(W / 2, 140, s.title, 40, CYAN)
+        y = self.block(230, s.client, 56, 17, YELLOW) + 18 if mission else 250
+        y = self.block(y, s.brief, 56, 16)
+        self.text(W / 2, y + 40, MISSION_CONTROLS if mission else CONTROLS[s.key], 13, GREEN)
         if int(self.clock * 2) % 2:
             self.text(W / 2, H - 80, 'PRESS START', 22, GREEN)
 
@@ -293,8 +334,132 @@ class Arcade(QWidget):
         self.text(W / 2, 480, 'UP DOWN: LETTER   SPACE: NEXT', 16, DIM)
 
     def draw_play(self):
-        getattr(self, f'view_{self.stage.key}')()
+        if isinstance(self.stage, Mission):
+            self.control_room()
+        else:
+            getattr(self, f'view_{self.stage.key}')()
         self.hud()
+
+    # ---------- control room
+
+    def control_room(self):
+        s = self.stage
+        self.knob_panel(s)
+        self.plot(350, 62, 580, 110, s.beam.probe_r, s.beam.probe, CYAN, 'RADIAL PROBE, CURRENT AGAINST RADIUS', 0)
+        self.plot(350, 192, 580, 90, s.beam.probe_r, s.beam.phase, MAGENTA, 'PHASE PROBE, -90 TO +90 DEG', -90, 90, s.beam.probe > 0)
+        r = s.readings
+        y = 300
+        for label, value, color in (('CURRENT', self.current_text(r['extracted_uA']), CYAN), ('ENERGY', f"{r['w_MeV']:.2f} MEV", WHITE),
+                                    ('TRANSMISSION', f"{100 * r['transmission']:.1f}%", GREEN), ('LOST', f"{1e3 * r['lost_kW']:.1f} W", RED)):
+            self.text(30, y + 325, label, 11, color, 'left')
+            self.text(326, y + 323, value, 13, WHITE, 'right')
+            y += 22
+        self.bar(350, 300, 180, 16, s.heat, RED, '')
+        self.text(350, 318, 'INTERLOCK', 11, RED, 'left')
+        self.text(W - 30, 298, 'BEAM ON' if s.beam_on else 'BEAM OFF', 18, RED if s.beam_on else DIM, 'right')
+        self.text(W / 2 + 120, 298, f'TIME {max(s.p["time_limit"] - s.time, 0):.0f}', 16, YELLOW)
+        getattr(self, f'panel_{s.key}')(s, 350, 345, 580, 320)
+
+    @staticmethod
+    def current_text(ua):
+        return f'{ua:.1f} UA' if ua >= 1 else f'{1e3 * ua:.2f} NA'
+
+    def knob_panel(self, s):
+        y = 60
+        row = min(50, 560 / len(s.specs))
+        for i, spec in enumerate(s.specs):
+            selected = i == s.selected
+            color = YELLOW if selected else WHITE
+            if selected:
+                self.p.fillRect(QRectF(16, y - 4, 318, row - 2), QColor(255, 225, 77, 28))
+            value = s.knobs[spec['key']]
+            digits = 3 if spec['unit'] in ('MHz', 'T') else 2
+            self.text(24, y - 2, spec['label'], 12, color, 'left')
+            self.text(326, y - 2, f"{value:.{digits}f} {spec['unit'] if spec['unit'] != '1' else ''}".strip(), 13, color, 'right')
+            self.bar(24, y + 22, 302, 8, (value - spec['min']) / (spec['max'] - spec['min']), CYAN if selected else DIM)
+            y += row
+
+    def plot(self, x, y, width, height, xs, ys, color, title, low=None, high=None, mask=None):
+        self.p.setPen(QPen(DIM, 1))
+        self.p.setBrush(Qt.NoBrush)
+        self.p.drawRect(QRectF(x, y, width, height))
+        self.text(x + 6, y + 2, title, 10, DIM, 'left')
+        top = max(ys.max(), 1e-12) if high is None else high
+        bottom = 0 if low is None else low
+        pos = lambda u, v: QPointF(x + width * (u - xs[0]) / (xs[-1] - xs[0]), y + height * (1 - (min(max(v, bottom), top) - bottom) / (top - bottom)))  # noqa: E731
+        path, started = QPainterPath(), False
+        for i, (u, v) in enumerate(zip(xs, ys)):
+            if mask is not None and not mask[i]:
+                started = False
+                continue
+            path.lineTo(pos(u, v)) if started else path.moveTo(pos(u, v))
+            started = True
+        self.neon(lambda: self.p.drawPath(path), color, 1.5)
+        return pos
+
+    def crosshair(self, x, y, radius, s, limit_mm, title, spot=None):
+        scale = radius / (2 * limit_mm)
+        self.circle(x, y, limit_mm * scale, GREEN)
+        self.line(x - radius, y, x + radius, y, DIM, 1)
+        self.line(x, y - radius, x, y + radius, DIM, 1)
+        px, py = s.readings['x_mm'] * scale, s.readings['y_mm'] * scale
+        px, py = max(min(px, radius), -radius), max(min(py, radius), -radius)
+        self.circle(x + px, y - py, max((spot or s.spot()) * scale, 3), MAGENTA, 1.5)
+        self.ion(x + px, y - py, YELLOW)
+        self.text(x, y - radius - 24, title, 11, CYAN)
+
+    def lights(self, x, y, rows):
+        for label, good in rows:
+            self.p.setPen(Qt.NoPen)
+            self.p.setBrush(GREEN if good else RED)
+            self.p.drawEllipse(QPointF(x, y + 10), 6, 6)
+            self.p.setBrush(Qt.NoBrush)
+            self.text(x + 16, y, label, 12, WHITE, 'left')
+            y += 26
+
+    def panel_therapy(self, s, x, y, width, height):
+        p = s.p
+        d0, d1 = s.depth_axis[0], s.depth_axis[-1]
+        w = width - 200
+        low = x + w * (p['depth_cm'] - p['half_width_cm'] - d0) / (d1 - d0)
+        high = x + w * (p['depth_cm'] + p['half_width_cm'] - d0) / (d1 - d0)
+        self.p.fillRect(QRectF(low, y, max(high - low, 2), 170), QColor(61, 255, 122, 70))
+        self.plot(x, y, w, 170, s.depth_axis, s.bragg, YELLOW, 'DOSE AGAINST DEPTH IN WATER; GREEN: TUMOUR')
+        self.text(x, y + 176, f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   SPOT {s.spot():.1f} MM', 13, WHITE, 'left')
+        self.crosshair(x + width - 90, y + 90, 80, s, p['lateral_mm'], 'LATERAL')
+        self.bar(x, y + 230, width, 22, s.delivered / (p['dose_gy'] * (1 + p['dose_tolerance'])), GREEN,
+                 f"TUMOUR {s.delivered:.1f} / {p['dose_gy']:.1f} GY   RATE {s.rate:.2f} GY/S")
+        ok = x + width * (1 - p['dose_tolerance']) / (1 + p['dose_tolerance'])
+        self.line(ok, y + 226, ok, y + 256, YELLOW)
+        self.bar(x, y + 288, width, 14, s.healthy / p['healthy_limit_gy'], RED, f'OUTSIDE THE TUMOUR {s.healthy:.2f} GY')
+
+    def panel_isotope(self, s, x, y, width, height):
+        p = s.p
+        self.bar(x, y + 28, width - 200, 24, s.activity / p['activity_gbq'], GREEN, f"F-18 {s.activity:.1f} / {p['activity_gbq']:.0f} GBQ")
+        self.bar(x, y + 92, width - 200, 18, s.target_kw / p['target_kw'], RED if s.target_kw > 0.9 * p['target_kw'] else CYAN,
+                 f"POWER ON THE WATER {s.target_kw:.2f} / {p['target_kw']:.1f} KW")
+        limit = s.machine.max_lost_kw
+        self.bar(x, y + 150, width - 200, 18, s.beam.lost_kw / limit, RED, f'LOST IN THE MACHINE {s.beam.lost_kw:.2f} / {limit:.1f} KW')
+        self.text(x, y + 190, f"SATURATION {p['yield_gbq_ua']:.0f} GBQ/UA AT {p['w_ref']:.0f} MEV", 12, DIM, 'left')
+        self.crosshair(x + width - 90, y + 90, 80, s, p['window_mm'], 'TARGET WINDOW', spot=None)
+
+    def panel_experiment(self, s, x, y, width, height):
+        p, b = s.p, s.beam
+        energy = abs(b.w_mean / p['w_target'] - 1) <= p['w_tolerance'] if b.w_mean else False
+        self.lights(x, y, ((f"ENERGY {b.w_mean / s.ion.mass_number:.3f} MEV/U, WANT {p['w_target'] / s.ion.mass_number:.2f}", energy),
+                           (f"SPREAD {100 * b.w_spread:.2f}%, MAX {100 * p['spread_max']:.1f}%", b.w_mean > 0 and b.w_spread <= p['spread_max']),
+                           (f"CURRENT {b.extracted_ua:.2f} UA, {p['current_min']:.1f} TO {p['current_max']:.1f}", p['current_min'] <= b.extracted_ua <= p['current_max']),
+                           (f"ON AXIS {math.hypot(b.x, b.y):.1f} MM, MAX {p['position_mm']:.0f}", math.hypot(b.x, b.y) <= p['position_mm']),
+                           (f"SPOT {b.spot:.1f} MM, MAX {p['spot_max']:.1f}", b.spot <= p['spot_max'])))
+        self.crosshair(x + width - 90, y + 90, 80, s, p['position_mm'], 'ON TARGET')
+        self.bar(x, y + 190, width, 22, s.delivered / p['hold_s'], GREEN, f"BEAM IN SPEC {s.delivered:.1f} / {p['hold_s']:.0f} S   {s.ion.name}   HARMONIC {b.harmonic}")
+
+    def panel_isol(self, s, x, y, width, height):
+        p = s.p
+        self.bar(x, y + 28, width - 200, 22, s.delivered / p['energy_goal_kws'], GREEN, f"ON TARGET {s.delivered:.1f} / {p['energy_goal_kws']:.0f} KJ")
+        self.bar(x, y + 90, width - 200, 18, s.power() / p['power_limit_kw'], CYAN, f"POWER {s.power():.2f} / {p['power_limit_kw']:.1f} KW")
+        self.bar(x, y + 148, width - 200, 18, s.density() / p['density_limit'], RED, f"POWER DENSITY {1e3 * s.density():.1f} / {1e3 * p['density_limit']:.0f} W/MM2")
+        self.crosshair(x + width - 90, y + 90, 80, s, p['target_radius_mm'], 'TARGET')
 
     # ---------- stage views
 

@@ -47,3 +47,34 @@ def qr_squared(k, n_sectors, flutter, spiral_rad):
     """Smooth approximation: Qr^2 = 1 + k + 3 N^2 / ((N^2 - 1)(N^2 - 4)) F (1 + tan^2 xi)."""
     n2 = n_sectors**2
     return 1 + k + 3 * n2 / ((n2 - 1) * (n2 - 4)) * flutter * (1 + math.tan(spiral_rad)**2)
+
+
+# Beam on matter. Water, protons: Bortfeld, Med. Phys. 24, 2024 (1997). Highland form of multiple scattering.
+BRAGG_ALPHA, BRAGG_P = 0.0022, 1.77     # R [cm] = alpha E [MeV]^p
+STRAGGLING_A, STRAGGLING_B = 0.012, 0.935     # sigma [cm] = a R [cm]^b
+WATER_X0_CM = 36.08    # radiation length [UNVERIFIED: the usual value, from memory]
+GY_PER_FLUENCE = 1.602e-10    # Gy per (MeV cm2/g) per (proton/cm2), from 1 MeV = 1.602e-13 J and 1 g = 1e-3 kg
+
+
+def proton_range(w_mev):
+    """Range in water [cm], Bragg-Kleeman rule."""
+    return BRAGG_ALPHA * w_mev**BRAGG_P
+
+
+def energy_at_range(range_cm):
+    return (range_cm / BRAGG_ALPHA)**(1 / BRAGG_P)
+
+
+def straggling(range_cm):
+    return STRAGGLING_A * range_cm**STRAGGLING_B
+
+
+def scattering_angle(w_mev, thickness_cm):
+    """Highland: rms projected angle [rad] of a proton through water, with the energy at the entrance."""
+    if thickness_cm <= 0:
+        return 0.0
+    g = gamma(w_mev)
+    beta = math.sqrt(1 - 1 / g**2)
+    p_mev = beta * g * PROTON_MEV
+    x = thickness_cm / WATER_X0_CM
+    return 13.6 / (beta * p_mev) * math.sqrt(x) * (1 + 0.038 * math.log(x))

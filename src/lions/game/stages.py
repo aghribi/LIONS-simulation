@@ -13,6 +13,7 @@ Action = namedtuple('Action', 'x y fire', defaults=(0, 0, False))   # x, y in [-
 
 def load_scenario(name='level0'):
     """Stage objects from a scenario file. A parameter whose unit differs from the one the stage expects is an error."""
+    import lions.game.missions  # noqa: F401, E402   registers the mission stages
     text = resources.files('lions.game').joinpath('scenarios', f'{name}.yaml').read_text()
     scenario = yaml.safe_load(text)
     stages = []

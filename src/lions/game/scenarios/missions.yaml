@@ -1,0 +1,280 @@
+# Missions. Every machine is a training machine, built to be consistent with the formulas, not a copy of a real one.
+# SOURCED, used as given:
+# - Proton range and straggling in water: Bortfeld, Med. Phys. 24, 2024 (1997), in lions.game.physics.
+# - Eye tumours are treated at about 70 MeV, ranges up to 35 mm: HZB and IBA facility descriptions.
+# - 18O(p,n)18F saturation yield 7.8 to 8.5 GBq/uA at 18 MeV: Niroomand-Rad 2003; Silva et al. (IBA 18 MeV).
+# - K = 265, 1.5 m, 0.75 to 1.56 T, harmonics 2 to 5: GANIL CIME papers. Its RF range here is derived from these, not quoted.
+# - Target power 1.4 kW: the first SPIRAL limit, GANIL papers.
+# UNVERIFIED, from memory: half-life of 18F 109.8 min; threshold of 18O(p,n) 2.6 MeV.
+# ILLUSTRATIVE, no source: noise, drift, hidden errors, heat rate, space charge, limits on lost beam, spot and density limits, and the
+# linear yield against energy. Each score records them in its switches.
+scenario: missions
+stages:
+  - stage: therapy
+    id: EYE
+    title: EYE TUMOUR
+    client: "HOSPITAL: melanoma at 28 mm in a water phantom. Bragg peak on the tumour, 60 Gy, not more. Degrade the 230 MeV beam."
+    brief: "Put the Bragg peak on the tumour with the degrader, steer onto the axis, then hold SPACE and release at the prescription."
+    lesson: "A cyclotron gives one energy. The degrader sets the depth, and pays for it in scattering and lost protons."
+    switches: {noise: illustrative, drift: illustrative, errors: illustrative}
+    ion: {name: p, mass_number: 1, charge: 1}
+    harmonic: 4
+    machine: &m230
+      radius: {value: 1.05, unit: m}
+      sectors: {value: 4, unit: "1"}
+      flutter: {value: 0.12, unit: "1"}
+      spiral_deg: {value: 60.0, unit: deg}
+      dees: {value: 2, unit: "1"}
+      dee_angle_deg: {value: 36.0, unit: deg}
+      w_injection: {value: 0.05, unit: MeV/u}
+      z_injection: {value: 3.0, unit: mm}
+      z_aperture: {value: 15.0, unit: mm}
+      deflector_scale: {value: 0.2, unit: kV/MV}
+      r_size: {value: 0.3, unit: mm}
+      septum: {value: 0.1, unit: mm}
+      deflector_gain: {value: 300.0, unit: mm}
+      spot_base: {value: 3.0, unit: mm}
+      spot_quad_width: {value: 0.1, unit: "1"}
+      drift: {value: 0.15, unit: m}
+      theta_accept: {value: 0.02, unit: rad}
+      space_charge: {value: 0.002, unit: 1/uA}
+      max_lost_kw: {value: 0.5, unit: kW}
+    knobs:
+      - {key: degrader_cm, label: DEGRADER, unit: cm, min: 0.0, max: 34.0, rate: 2.0, start_error: 8.0}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.05, start_error: 0.05}
+      - {key: b0, label: FIELD, unit: T, min: 1.6, max: 2.0, rate: 0.002, start_error: 0.002}
+      - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
+      - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 40.0, max: 120.0, rate: 2.0, start_error: 4.0}
+      - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: steer_y, label: STEER Y, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+    params:
+      w_target: {value: 230.0, unit: MeV}
+      dee_kv: {value: 100.0, unit: kV}
+      source_ua: {value: 0.003, unit: uA}
+      time_limit: {value: 120.0, unit: s}
+      noise: {value: 0.005, unit: "1"}
+      drift: {value: 0.00001, unit: 1/s^0.5}
+      field_error: {value: 0.0005, unit: "1"}
+      steer_error: {value: 5.0, unit: mm}
+      quad_error: {value: 0.02, unit: "1"}
+      phase_error: {value: 15.0, unit: deg}
+      heat_rate: {value: 0.2, unit: 1/s}
+      depth_cm: {value: 2.8, unit: cm}
+      half_width_cm: {value: 0.4, unit: cm}
+      lateral_mm: {value: 3.0, unit: mm}
+      dose_gy: {value: 60.0, unit: Gy}
+      dose_tolerance: {value: 0.05, unit: "1"}
+      healthy_limit_gy: {value: 6.0, unit: Gy}
+      field_area_cm2: {value: 3.0, unit: cm2}
+      real_s_per_s: {value: 1.0, unit: "1"}
+  - stage: therapy
+    id: DEEP
+    title: DEEP TUMOUR
+    client: "HOSPITAL: deep tumour at 15 cm in a water phantom. 2 Gy on it, little in front of it, nothing behind."
+    brief: "Less degrader, higher energy, more range straggling. The dose is small: release on time."
+    lesson: "The peak widens with range, and the entrance dose rises. Depth has a price."
+    switches: {noise: illustrative, drift: illustrative, errors: illustrative}
+    ion: {name: p, mass_number: 1, charge: 1}
+    harmonic: 4
+    machine: *m230
+    knobs:
+      - {key: degrader_cm, label: DEGRADER, unit: cm, min: 0.0, max: 34.0, rate: 2.0, start_error: 8.0}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 104.0, max: 112.0, rate: 0.05, start_error: 0.05}
+      - {key: b0, label: FIELD, unit: T, min: 1.6, max: 2.0, rate: 0.002, start_error: 0.002}
+      - {key: trim, label: TRIM, unit: "1", min: 0.9, max: 1.1, rate: 0.01, start_error: 0.005}
+      - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 40.0, max: 120.0, rate: 2.0, start_error: 4.0}
+      - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: steer_y, label: STEER Y, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+    params:
+      w_target: {value: 230.0, unit: MeV}
+      dee_kv: {value: 100.0, unit: kV}
+      source_ua: {value: 0.002, unit: uA}
+      time_limit: {value: 120.0, unit: s}
+      noise: {value: 0.005, unit: "1"}
+      drift: {value: 0.00001, unit: 1/s^0.5}
+      field_error: {value: 0.0005, unit: "1"}
+      steer_error: {value: 5.0, unit: mm}
+      quad_error: {value: 0.02, unit: "1"}
+      phase_error: {value: 15.0, unit: deg}
+      heat_rate: {value: 0.2, unit: 1/s}
+      depth_cm: {value: 15.0, unit: cm}
+      half_width_cm: {value: 0.8, unit: cm}
+      lateral_mm: {value: 3.0, unit: mm}
+      dose_gy: {value: 2.0, unit: Gy}
+      dose_tolerance: {value: 0.05, unit: "1"}
+      healthy_limit_gy: {value: 0.2, unit: Gy}
+      field_area_cm2: {value: 25.0, unit: cm2}
+      real_s_per_s: {value: 1.0, unit: "1"}
+  - stage: isotope
+    id: F18
+    title: FLUORINE-18
+    client: "RADIOPHARMACY: 120 GBq of F-18 for the morning PET list, by end of shift. It decays while it waits."
+    brief: "18 MeV protons on enriched water. More current, more activity, but the water must not boil and lost beam activates the machine."
+    lesson: "Activity saturates: A = Y I (1 - exp(-lambda t)). Extraction efficiency is what lets you run high current."
+    switches: {noise: illustrative, drift: illustrative, errors: illustrative, yield_against_energy: illustrative}
+    ion: {name: p, mass_number: 1, charge: 1}
+    harmonic: 2
+    machine:
+      radius: {value: 0.45, unit: m}
+      sectors: {value: 4, unit: "1"}
+      flutter: {value: 0.1, unit: "1"}
+      spiral_deg: {value: 0.0, unit: deg}
+      dees: {value: 2, unit: "1"}
+      dee_angle_deg: {value: 30.0, unit: deg}
+      w_injection: {value: 0.03, unit: MeV/u}
+      z_injection: {value: 3.0, unit: mm}
+      z_aperture: {value: 15.0, unit: mm}
+      deflector_scale: {value: 1.0, unit: kV/MV}
+      r_size: {value: 0.5, unit: mm}
+      septum: {value: 0.2, unit: mm}
+      deflector_gain: {value: 200.0, unit: mm}
+      spot_base: {value: 4.0, unit: mm}
+      spot_quad_width: {value: 0.1, unit: "1"}
+      drift: {value: 0.5, unit: m}
+      theta_accept: {value: 0.05, unit: rad}
+      space_charge: {value: 0.00002, unit: 1/uA}
+      max_lost_kw: {value: 0.6, unit: kW}
+    knobs:
+      - {key: source_ua, label: SOURCE, unit: uA, min: 5.0, max: 400.0, rate: 25.0, start_error: 80.0}
+      - {key: buncher, label: BUNCHER, unit: "1", min: 0.0, max: 2.5, rate: 0.4, start_error: 0.7}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 38.0, max: 46.0, rate: 0.05, start_error: 0.06}
+      - {key: b0, label: FIELD, unit: T, min: 1.2, max: 1.6, rate: 0.003, start_error: 0.003}
+      - {key: dee_kv, label: DEE VOLTAGE, unit: kV, min: 15.0, max: 60.0, rate: 5.0, start_error: 10.0}
+      - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
+      - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 10.0, max: 60.0, rate: 2.0, start_error: 3.0}
+      - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+    params:
+      w_target: {value: 18.0, unit: MeV}
+      dee_kv: {value: 40.0, unit: kV}
+      source_ua: {value: 120.0, unit: uA}
+      time_limit: {value: 120.0, unit: s}
+      noise: {value: 0.005, unit: "1"}
+      drift: {value: 0.00001, unit: 1/s^0.5}
+      field_error: {value: 0.001, unit: "1"}
+      steer_error: {value: 5.0, unit: mm}
+      quad_error: {value: 0.0, unit: "1"}
+      phase_error: {value: 15.0, unit: deg}
+      heat_rate: {value: 0.2, unit: 1/s}
+      activity_gbq: {value: 120.0, unit: GBq}
+      yield_gbq_ua: {value: 8.0, unit: GBq/uA}
+      w_ref: {value: 18.0, unit: MeV}
+      w_threshold: {value: 2.6, unit: MeV}
+      half_life_min: {value: 109.8, unit: min}
+      real_min_per_s: {value: 3.0, unit: min/s}
+      target_kw: {value: 1.3, unit: kW}
+      window_mm: {value: 6.0, unit: mm}
+  - stage: experiment
+    id: NEON
+    title: NEON BEAM
+    client: "NUCLEAR PHYSICS: Ne-20 4+ at 10 MeV per nucleon. Energy within 0.3%, spread under 0.1%, 0.1 to 0.5 uA, for 25 s of beam."
+    brief: "The field sets the energy, the RF must follow, and it can lock on harmonic 2 or 3. Close the energy slit until the spread fits, but keep the current."
+    lesson: "E/A = K (Q/A)^2 sets what a machine can reach. Harmonic, field and frequency are one system."
+    switches: {noise: illustrative, drift: illustrative, errors: illustrative}
+    ion: {name: Ne-20 4+, mass_number: 20, charge: 4}
+    harmonic: 3
+    machine:
+      radius: {value: 1.5, unit: m}
+      sectors: {value: 4, unit: "1"}
+      flutter: {value: 0.1, unit: "1"}
+      spiral_deg: {value: 0.0, unit: deg}
+      dees: {value: 2, unit: "1"}
+      dee_angle_deg: {value: 40.0, unit: deg}
+      w_injection: {value: 0.02, unit: MeV/u}
+      z_injection: {value: 3.0, unit: mm}
+      z_aperture: {value: 15.0, unit: mm}
+      deflector_scale: {value: 0.1, unit: kV/MV}
+      r_size: {value: 0.5, unit: mm}
+      septum: {value: 0.1, unit: mm}
+      deflector_gain: {value: 200.0, unit: mm}
+      spot_base: {value: 1.5, unit: mm}
+      spot_quad_width: {value: 0.1, unit: "1"}
+      drift: {value: 2.0, unit: m}
+      theta_accept: {value: 0.02, unit: rad}
+      space_charge: {value: 0.002, unit: 1/uA}
+      max_lost_kw: {value: 0.5, unit: kW}
+    knobs:
+      - {key: b0, label: FIELD, unit: T, min: 0.75, max: 1.56, rate: 0.01, start_error: 0.02}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 9.0, max: 15.0, rate: 0.05, start_error: 0.03}
+      - {key: dee_kv, label: DEE VOLTAGE, unit: kV, min: 20.0, max: 100.0, rate: 8.0, start_error: 15.0}
+      - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
+      - {key: slit, label: ENERGY SLIT, unit: "1", min: 0.0, max: 0.02, rate: 0.002, start_error: 0.01}
+      - {key: source_ua, label: SOURCE, unit: uA, min: 0.1, max: 8.0, rate: 0.5, start_error: 1.5}
+      - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 3.0, max: 30.0, rate: 1.0, start_error: 2.0}
+      - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: steer_y, label: STEER Y, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: quad, label: QUADRUPOLE, unit: "1", min: -0.5, max: 0.5, rate: 0.1, start_error: 0.2}
+    params:
+      w_target: {value: 200.0, unit: MeV}
+      dee_kv: {value: 60.0, unit: kV}
+      source_ua: {value: 0.6, unit: uA}
+      time_limit: {value: 150.0, unit: s}
+      noise: {value: 0.005, unit: "1"}
+      drift: {value: 0.00001, unit: 1/s^0.5}
+      field_error: {value: 0.001, unit: "1"}
+      steer_error: {value: 5.0, unit: mm}
+      quad_error: {value: 0.05, unit: "1"}
+      phase_error: {value: 15.0, unit: deg}
+      heat_rate: {value: 0.2, unit: 1/s}
+      w_tolerance: {value: 0.003, unit: "1"}
+      spread_max: {value: 0.001, unit: "1"}
+      current_min: {value: 0.1, unit: uA}
+      current_max: {value: 0.5, unit: uA}
+      position_mm: {value: 2.0, unit: mm}
+      spot_max: {value: 2.5, unit: mm}
+      hold_s: {value: 25.0, unit: s}
+  - stage: isol
+    id: ISOL
+    title: HOT TARGET
+    client: "RADIOACTIVE BEAMS: 70 MeV protons on a production target. Up to 1.4 kW, spread out, for 40 kJ. Melt it and the campaign is over."
+    brief: "Power is what makes the isotopes. Too much melts the target; too small a spot makes a hot spot; too large a spot misses it."
+    lesson: "A target limits the beam as much as the machine does. A small focus is not always the goal."
+    switches: {noise: illustrative, drift: illustrative, errors: illustrative, density_limit: illustrative}
+    ion: {name: p, mass_number: 1, charge: 1}
+    harmonic: 3
+    machine:
+      radius: {value: 0.9, unit: m}
+      sectors: {value: 4, unit: "1"}
+      flutter: {value: 0.1, unit: "1"}
+      spiral_deg: {value: 30.0, unit: deg}
+      dees: {value: 2, unit: "1"}
+      dee_angle_deg: {value: 36.0, unit: deg}
+      w_injection: {value: 0.03, unit: MeV/u}
+      z_injection: {value: 3.0, unit: mm}
+      z_aperture: {value: 15.0, unit: mm}
+      deflector_scale: {value: 0.2, unit: kV/MV}
+      r_size: {value: 0.5, unit: mm}
+      septum: {value: 0.2, unit: mm}
+      deflector_gain: {value: 200.0, unit: mm}
+      spot_base: {value: 2.0, unit: mm}
+      spot_quad_width: {value: 0.1, unit: "1"}
+      drift: {value: 1.0, unit: m}
+      theta_accept: {value: 0.05, unit: rad}
+      space_charge: {value: 0.00002, unit: 1/uA}
+      max_lost_kw: {value: 1.0, unit: kW}
+    knobs:
+      - {key: source_ua, label: SOURCE, unit: uA, min: 1.0, max: 150.0, rate: 8.0, start_error: 20.0}
+      - {key: rf_mhz, label: RF, unit: MHz, min: 45.0, max: 65.0, rate: 0.05, start_error: 0.05}
+      - {key: b0, label: FIELD, unit: T, min: 0.8, max: 1.3, rate: 0.002, start_error: 0.002}
+      - {key: trim, label: TRIM, unit: "1", min: 0.9, max: 1.1, rate: 0.01, start_error: 0.01}
+      - {key: dee_kv, label: DEE VOLTAGE, unit: kV, min: 30.0, max: 120.0, rate: 8.0, start_error: 15.0}
+      - {key: phase_deg, label: PHASE, unit: deg, min: -90.0, max: 90.0, rate: 20.0, start_error: 25.0}
+      - {key: deflector_kv, label: DEFLECTOR, unit: kV, min: 5.0, max: 60.0, rate: 2.0, start_error: 3.0}
+      - {key: steer_x, label: STEER X, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: steer_y, label: STEER Y, unit: mm, min: -30.0, max: 30.0, rate: 8.0, start_error: 6.0}
+      - {key: quad, label: QUADRUPOLE, unit: "1", min: -1.0, max: 1.0, rate: 0.15, start_error: 0.1}
+    params:
+      w_target: {value: 70.0, unit: MeV}
+      dee_kv: {value: 70.0, unit: kV}
+      source_ua: {value: 40.0, unit: uA}
+      time_limit: {value: 150.0, unit: s}
+      noise: {value: 0.005, unit: "1"}
+      drift: {value: 0.00001, unit: 1/s^0.5}
+      field_error: {value: 0.001, unit: "1"}
+      steer_error: {value: 5.0, unit: mm}
+      quad_error: {value: 0.05, unit: "1"}
+      phase_error: {value: 15.0, unit: deg}
+      heat_rate: {value: 0.2, unit: 1/s}
+      power_limit_kw: {value: 1.4, unit: kW}
+      density_limit: {value: 0.012, unit: kW/mm2}
+      target_radius_mm: {value: 20.0, unit: mm}
+      energy_goal_kws: {value: 40.0, unit: kW s}

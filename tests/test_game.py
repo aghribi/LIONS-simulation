@@ -158,7 +158,7 @@ def test_arcade_full_flow(tmp_path):
     QTest.keyClick(window, Qt.Key_Return)
     assert window.state == 'consent'
     QTest.keyClick(window, Qt.Key_Y)
-    assert window.state == 'brief' and window.store.consent is True
+    assert window.state == 'menu' and window.store.consent is True
     for _ in range(LIVES):    # lose the first stage until the lives run out
         while window.state != 'play':
             QTest.keyClick(window, Qt.Key_Return)
@@ -185,3 +185,114 @@ def test_arcade_full_flow(tmp_path):
     assert b'score' in meta and b'AAA' not in b''.join(meta.values())
     app.processEvents()
 
+
+
+# ---------- missions
+
+MISSIONS = {s.mission_id: s for s in load_scenario('missions')}
+
+
+def tuned(mission, seed=1, **changes):
+    """A mission reset, with the knobs at their best settings."""
+    mission.reset(seed)
+    mission.knobs = {**mission.ideal(), **changes}
+    mission.refresh()
+    return mission
+
+
+def test_extraction_energy_follows_the_field():
+    """The energy at the extraction radius is set by B rho = p / q, whatever the path."""
+    from lions.game import machine as mc
+    s = tuned(MISSIONS['NEON'])
+    assert s.beam.w_mean / 20 == pytest.approx(10.0, rel=0.01)
+    assert mc.Ion('Ne', 20, 4).rigidity(200.0) == pytest.approx(s.ideal()['b0'] * (1 + s.errors.field) * mc.Ion('Ne', 20, 4).gamma(200.0) / mc.Ion('Ne', 20, 4).gamma(0.4) * s.machine.radius, rel=1e-9)
+
+
+def test_turns_match_the_energy_gain():
+    from lions.game import machine as mc
+    s = tuned(MISSIONS['F18'])
+    per_turn = mc.energy_gain(s.machine, s.ion, s.knobs['dee_kv'], s.harmonic, 0.0)
+    assert 18.0 / per_turn < s.beam.turns < 3 * 18.0 / per_turn + 51
+
+
+@pytest.mark.parametrize('knob, factor', [('rf_mhz', 1.01), ('b0', 1.01), ('trim', 0.8)])
+def test_off_tune_loses_the_beam(knob, factor):
+    s = MISSIONS['EYE']
+    good = tuned(s).beam.transmission
+    ideal = s.ideal()
+    assert tuned(s, **{knob: ideal[knob] * factor}).beam.transmission < 0.5 * good
+
+
+def test_the_rf_locks_on_two_harmonics():
+    """Harmonic 2 and 3 both accelerate, with their own transit factors; between them nothing does."""
+    s = MISSIONS['NEON']
+    rf3 = tuned(s).ideal()['rf_mhz']
+    h3, h2 = tuned(s).beam, tuned(s, rf_mhz=rf3 * 2 / 3).beam
+    assert (h3.harmonic, h2.harmonic) == (3, 2)
+    assert h3.transmission > 0.3 and h2.transmission > 0.3 and h2.turns > h3.turns
+    assert tuned(s, rf_mhz=rf3 * 5 / 6).beam.transmission == 0
+
+
+def test_buncher_increases_transmission():
+    s = MISSIONS['F18']
+    assert tuned(s, buncher=1.0).beam.transmission > 1.3 * tuned(s, buncher=0.0).beam.transmission
+
+
+def test_higher_dee_voltage_separates_turns():
+    s = MISSIONS['F18']
+    assert tuned(s, dee_kv=60.0).beam.lost_kw < tuned(s, dee_kv=20.0).beam.lost_kw
+
+
+@pytest.mark.parametrize('w, cm', [(70.0, 4.0), (230.0, 33.0)])
+def test_proton_range(w, cm):
+    assert physics.proton_range(w) == pytest.approx(cm, rel=0.05)
+
+
+def test_bragg_peak_at_the_residual_range():
+    s = tuned(MISSIONS['DEEP'])
+    assert s.depth_axis[int(np.argmax(s.bragg))] == pytest.approx(s.p['depth_cm'], abs=0.8)
+
+
+def test_f18_saturates_at_the_sourced_yield(monkeypatch):
+    s = tuned(MISSIONS['F18'])
+    s.beam.w_mean, s.beam.extracted_ua, s.beam.x, s.beam.y = 18.0, 10.0, 0.0, 0.0
+    monkeypatch.setitem(s.p, 'activity_gbq', 1e9)
+    for _ in range(5000):
+        s.deliver(1.0)
+    assert s.activity == pytest.approx(80.0, rel=1e-3)     # 8 GBq/uA x 10 uA
+
+
+def deliver_all(s, dt=0.05):
+    """Beam on at the tuned setting, off at the prescription for a therapy mission."""
+    t = 0.0
+    while not s.done and t < s.p['time_limit']:
+        ready = hasattr(s, 'healthy') and s.delivered >= s.p['dose_gy']
+        s.step(Action(fire=not ready), dt)
+        s.knobs = {**s.ideal(), **s.fixes}
+        t += dt
+    return s
+
+
+FIXES = {'EYE': {}, 'DEEP': {}, 'F18': {'dee_kv': 60.0}, 'NEON': {'slit': 0.0015, 'source_ua': 1.0}, 'ISOL': {'quad': 0.25}}
+
+
+@pytest.mark.parametrize('name', sorted(MISSIONS))
+@pytest.mark.parametrize('seed', range(2))
+def test_mission_can_be_won_when_tuned(name, seed):
+    s = tuned(MISSIONS[name], seed)
+    s.fixes = FIXES[name]
+    s.knobs = {**s.ideal(), **s.fixes}
+    s.refresh()
+    deliver_all(s)
+    assert s.success, f'{name}: {s.message} {s.metrics()}'
+
+
+@pytest.mark.parametrize('name', sorted(MISSIONS))
+def test_untuned_start_delivers_little(name):
+    s = MISSIONS[name]
+    s.reset(1)
+    t = 0.0
+    while not s.done and t < 5.0:
+        s.step(Action(fire=True), DT)
+        t += DT
+    assert not s.success, s.message
