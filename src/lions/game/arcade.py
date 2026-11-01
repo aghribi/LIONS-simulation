@@ -268,7 +268,7 @@ class Arcade(QWidget):
         width = 76 if mission else 118
         lines = wrapped(advice.why, width)[:2]
         if mission:
-            lines = [*lines[:1], *wrapped(KNOB_HELP[self.stage.specs[self.stage.selected]['key']], width)[:1]]
+            lines = [*lines[:1], *wrapped(KNOB_HELP[advice.knob or self.stage.specs[self.stage.selected]['key']], width)[:1]]
         for i, line in enumerate(lines):
             self.text(left + 10, H - 46 + 18 * i, line, 10, WHITE if i == 0 or not mission else CYAN, 'left')
 
@@ -607,7 +607,8 @@ class Arcade(QWidget):
         self.text(x, 370, 'COMBO', 14, YELLOW)
         self.text(x, 392, f'x{min(s.combo, 20)}', 26, YELLOW)
         self.bar(x - 110, 490, 220, 22, s.w / s.p['w_target'], GREEN, f'{s.w:.2f} MEV')
-        self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
+        if not self.tutorial:
+            self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
 
     def view_trim_coils(self):
         s = self.stage
@@ -621,7 +622,8 @@ class Arcade(QWidget):
         self.text(x, 370, 'GAMMA', 14, MAGENTA)
         self.text(x, 392, f'{physics.gamma(s.w):.3f}', 24)
         self.bar(x - 110, 490, 220, 22, s.w / s.p['w_target'], GREEN, f'{s.w:.1f} MEV')
-        self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
+        if not self.tutorial:
+            self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
 
     def tunnel(self, top=110, bottom=470):
         s = self.stage
