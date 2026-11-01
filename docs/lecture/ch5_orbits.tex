@@ -38,7 +38,7 @@ full-step positions and momenta.
 LIONS keeps momenta at half steps, so the harness forms full-step momenta by a half Boris kick of $\vect p^{\,n-1/2}$.
 That is the exact inverse of the start-up, so the recorded map is conjugate to the Boris map.
 The interpolation is not symplectic, and its error is $O(\Delta t^4)$.
-At 1440 steps per turn it is below the finite-difference floor of the Jacobian.
+At 1440 steps per turn it is below the finite-difference noise of the Jacobian.
 
 \section{Closed orbit}
 The closed orbit is the fixed point $T(X^*) = X^*$.
@@ -80,7 +80,7 @@ This is why the PSI energies where $\Qr$ crosses $1.5$ are reported separately.
 When $\det M_u\ne1$, the trace formula still returns a number, but it no longer is the tune of an area-preserving
 oscillation; the consistent definition is then $\cos\mu = \operatorname{tr}M_u/(2\sqrt{\det M_u})$.
 The benchmark harness uses $\operatorname{tr}M_u/2$.
-A $\det M_u - 1$ of \num{0.2}, as found for LIONS on the PSI map, means the formula is used outside its validity.
+A $\det M_u - 1$ of \GPsiLionsDetMed{} (median), as found for LIONS on the PSI map, means the formula is used outside its validity.
 
 \section{Conditioning of the closed orbit}\label{sec:conditioning}
 For an area-preserving block,

@@ -1,8 +1,8 @@
 \chapter{Field-model options for LIONS}\label{ch:options}
 
-\section{Case H: which option removes the floor, at what cost}\label{sec:caseH}
+\section{Case H: which option removes the excess, at what cost}\label{sec:caseH}
 \textbf{Question.}
-Which opt-in additions to LIONS remove the G1 and G2 floors, and at what cost per particle-step?
+Which opt-in additions to LIONS remove the G1 and G2 excess errors, and at what cost per particle-step?
 The bilinear field and the Boris step stay the default, and the Fortran bit-identity of the default path is kept.
 
 \textbf{Design} (registered before running).
@@ -18,15 +18,17 @@ F1 reproduces node values and derivatives to \HFOneNodes, and RK4 shows fourth o
 \textbf{Result} (\cref{fig:H}, \cref{tab:Hdecision,tab:Hcost}).
 \begin{itemize}
 \item F0 never meets the target, with either integrator.
-RK4 does not fix it: on the 10-sector and PSI maps $\det M - 1$ stays between $10^{-2}$ and $10^{-1}$ at 1440 steps.
-The gradient jumps limit every integrator.
+RK4 does not fix it: on the 10-sector and PSI maps its worst $|\det M - 1|$ at 1440 steps is \HFzeroRkDetMin{} to
+\HFzeroRkDetMax, \HBorisOverRkMin{} to \HBorisOverRkMax{} times below Boris on all maps.
+Both decrease with the step count, slowly: fixed-step integration across the gradient jumps limits every integrator.
 \item F1 with Boris meets the target wherever any option does, at the lowest cost per turn, on the FROM\_ORBIT maps:
 720 steps on the 3-sector map, 2880 on the 10-sector map at \thirddeg{}.
 \item No option meets it on the 10-sector map at \SI{1}{\degree}: too few nodes per harmonic period
 (\cref{ch:interpolation}).
 \item On the PSI map the reference is RF-Track on F3, which favours F3; only F3 meets the target against it.
 Against FIXPO, the external reference, F1 with Boris at 1440 steps is the closest model: median $|\Delta\Qr|$
-\HFixpoHermQrMed{} and $|\Delta\Qz|$ \HFixpoHermQzMed, against \HFixpoBilQrMed{} and \HFixpoBilQzMed{} for F0.
+\HFixpoHermQrMed{} and $|\Delta\Qz|$ \HFixpoHermQzMed, against \HFixpoBilQrMed{} and \HFixpoBilQzMed{} for F0,
+\HFixpoCubQrMed{} and \HFixpoCubQzMed{} for F2, \HFixpoQuinQrMed{} and \HFixpoQuinQzMed{} for F3.
 FIXPO's own interpolation is unknown; that F1 shares its use of the file derivatives is a hypothesis.
 \end{itemize}
 
@@ -68,8 +70,8 @@ Validation against the harness: one turn agrees within \HPhaseTwoOneTurn{} relat
 Closed orbits, turn times and $\Qz$ agree to rounding.
 $\Qr$ and $\det M - 1$ differ by up to \HPhaseTwoJacMax.
 The registered tolerance was $10^{-9}$, so the validation failed as written.
-The residual comes from the finite-difference Jacobian acting on the remaining rounding noise, and it is 300 or more times
-below the decision target.
+The residual is attributed to the finite-difference Jacobian acting on the remaining rounding noise (not tested), and
+it is \HTargetRatio{} or more times below the decision target.
 The cost is \HPhaseTwoCostRatio{} times the default on the PSI map at $10^5$ particles.
 
 The first implementation took the azimuth from $\arccos$ (\cref{sec:azimuth}).
@@ -99,7 +101,8 @@ On the C$^1$ Hermite field the same azimuth change worked, which fits this hypot
 \begin{itemize}
 \item For tune or Jacobian work on measured maps: \texttt{interpolation=hermite}.
 Its effect on autograd gradients has not been measured: the PyTorch port is bilinear only.
-It removes the $\det$ floor at \HCostHerm{} times the cost of the default.
+It lowers $|\det M-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps, for \HCostHerm{} times the cost of
+the default; on the PSI map it still leaves \HFoneDetPsi{} at 1440 steps, which needs 2880 steps to meet the target.
 \item Check the node density per harmonic period of the map (\cref{ch:interpolation}) before trusting any interpolation.
 \item The default stays for reproducing Fortran results.
 \end{itemize}

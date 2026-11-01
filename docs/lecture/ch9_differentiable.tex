@@ -34,13 +34,16 @@ differences (\cref{tab:Egrad}).
 \item B0, the smooth field, passes the $10^{-6}$ criterion.
 \item A, the uniform field, fails on \EAFailCount{} entries.
 The large failures are $\partial\phi/\partial r_0$ and $\partial\phi/\partial p_{r0}$.
-These derivatives are small because the uniform field is isochronous (the phase does not depend on the orbit size), and
+These derivatives are small: in a uniform field, at fixed $|\vect p|$, the revolution period does not depend on $r_0$ or
+$p_{r0}$, and
 the finite-difference reference carries a rounding error of order $10^{-8}$ absolute on a phase of $2\pi$: there the
 finite difference is the noisy side.
 The other failures are at most \EAFailOtherMax{} and were not analysed.
 \item B, the bilinear 4-sector map, is the instructive case (\cref{fig:Efd}).
 At 3600 steps the disagreement reaches \ESweepLargeH{} at $h = 10^{-4}$, falls to \ESweepSmallH{} at $h = 10^{-8}$, and
 rises again at $h = 10^{-9}$ (\ESweepTinyH) from rounding.
+(The summary of this sweep and of the case A failures in \nolinkurl{benchmarks/DESIGN.md}, section 19, does not match
+the table; the numbers here are from the table.)
 Example: $\partial r/\partial s = \EExampleAutograd$ from autograd, against \EExampleFD{} from finite differences at
 $h = 10^{-6}$.
 \end{itemize}
@@ -61,17 +64,17 @@ On a bilinear map the discrete map is only piecewise $C^1$: its derivative jumps
 edge.
 A finite difference with a step larger than the spacing of these jumps averages over them.
 For an optimiser this means the local gradient and the gradient over a finite parameter change differ: after ten turns,
-by up to \ESweepLargeH{} for a relative change of $10^{-4}$.
+by up to \ESweepLargeH{} for a relative change of $10^{-4}$ of the map scale $s$.
 A $C^1$ field (F1) removes the jumps; whether it closes the gap for gradients has not been measured.
 \end{reading}
 
 \paragraph{Memory and time.}
-Without checkpointing the autograd graph costs about \SI{140}{kB} per step for one particle, dominated by about 60 small
-operations per step (\nolinkurl{benchmarks/DESIGN.md}, section 19).
+Without checkpointing the autograd graph costs about \EKBPerStep~kB per step for one particle (from the $10^3$ and $10^4$
+step runs), which \nolinkurl{benchmarks/DESIGN.md} (section 19) attributes to about 60 small operations per step.
 The measurements (\cref{tab:Ecost}) do not follow the textbook picture.
 Checkpointing reduces memory only with $10^3$ particles; with one particle it uses more.
 It costs \ECkptTimeMin{} to \ECkptTimeMax{} times the time, not about two.
-At $10^5$ steps it still needs about \SI{5}{GB} above the imports, far more than $\sqrt N$ stored states.
+At $10^5$ steps it still needs several GB above the imports, far more than $\sqrt N$ stored states.
 The cause was not investigated.
 
 \begin{table}[h]
@@ -90,8 +93,9 @@ This is the go criterion for building a differentiable backend.
 Compiled float64 reaches \EtwoRatioH{} times plain LIONS at $10^5$ particles on an H100 (\EtwoBestH{} particle-steps per
 second), \EtwoRatioA{} times on an A100, and \EtwoRatioM{} times on the M3 CPU.
 At $10^3$ particles no device reaches 10.
-float32 gives no speed gain on the GPUs and loses accuracy: about $10^{-5}$ in $r$ after ten turns.
-GPU float64 agrees with CPU float64 to about $10^{-14}$.
+float32 gives no speed gain on the GPUs and loses accuracy: up to \EtwoGpuFloatThirtyTwoR{} relative in $r$ after ten
+turns.
+GPU float64 agrees with CPU float64 within \EtwoGpuFloatSixtyFourR.
 
 \begin{table}[h]
 \centering\small
@@ -111,7 +115,7 @@ Dashed: plain LIONS on the CPU of the same node.}
 \end{figure}
 
 \begin{reading}
-The go criterion is met at large batch on GPUs.
+The go criterion is met at $10^5$ particles, on the GPUs and on the M3 CPU.
 On the A100 the wall time hardly changes from 1 to $10^5$ particles, so the run is launch-bound and $10^5$ is not the
 ceiling.
 Small-batch gradients are faster on the CPU.

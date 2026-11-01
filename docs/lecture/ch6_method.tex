@@ -48,8 +48,8 @@ and RF-Track runs on splines; there the field models differ by design and the co
 In case B0, $B_z$ agrees within \BzeroParityBz~T and $B_x$, $B_y$ within \BzeroParityBxy~T, below the derived bound of
 the LIONS chord error.
 A failed parity check stops the run.
-One did: the first case B2 check, written for \num{1e-13}~T on all components, failed at \num{4.9e-5}~T, and the bound
-was rederived before running (\texttt{DESIGN.md}, section 14).
+One did: the first case B2 check, written for \num{1e-13}~T on all components, failed at \num{4.9e-5}~T (as recorded in
+\nolinkurl{benchmarks/DESIGN.md}, section 14), and the bound was rederived before running.
 
 \section{Separate the error sources}
 A tracking result mixes three errors: the field model (interpolation), the integrator (step), and the measurement
@@ -66,35 +66,48 @@ for anything else.
 \section{Competing hypotheses}
 When a result is unexpected, the rival explanations are written down with the observation that would separate them,
 and a discriminating run is registered.
-\Cref{tab:evidence} shows the evidence matrix that built up for the bilinear-map noise across cases B, G1 and G2.
+\Cref{tab:evidence} shows the evidence matrix that built up for the excess errors of one-turn maps on bilinear fields,
+across cases B, G1, G2 and H.
+Tunes and $\det M$ are separated, because they answer different questions: the exact flow on a continuous field
+preserves area (\cref{ch:integrators}), so a field model alone can shift tunes but cannot make $\det M_r\ne1$; a
+$\det$ excess must come from the discretisation.
 
 \begin{table}[t]
 \centering\small
-\caption{Evidence matrix for the noise of LIONS one-turn maps on bilinear maps.
-H1: the bilinear field (kinks at cell edges). H1b: the Boris step on a kinked field. H2: a LIONS-specific defect.
-H3: the finite-difference Jacobian. H4: a near-integer tune amplifying small errors.
+\caption{Evidence matrix for the excess errors of one-turn maps on bilinear fields.
+H1: the bilinear field model itself (its interpolation error changes the exact dynamics).
+H1b: fixed-step integration across the gradient jumps of the bilinear field (any fixed-step integrator).
+H2: a LIONS-specific defect. H3: an artefact of the finite-difference Jacobian.
+H4: a near-integer tune amplifying small map errors.
 $+$ supports, $-$ contradicts, $\cdot$ neutral.}
 \label{tab:evidence}
-\begin{tabular}{p{7.4cm}ccccc}
+\begin{tabular}{p{7.6cm}ccccc}
 \toprule
 Observation & H1 & H1b & H2 & H3 & H4\\
 \midrule
-B0 (bilinear exact in $B_z$): orbit order 2, $\det-1\sim10^{-9}$ & $+$ & $\cdot$ & $-$ & $-$ & $\cdot$\\
-B: RF-Track on the closed-form field is clean at the same tune & $+$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$\\
-B-gradient: OPAL spread follows $1/(2\sin\pi\Qr)$, LIONS partly & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $+/-$\\
-B: halving the map step does not reduce the scatter & $-$ (as $O(h^2)$) & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$\\
-G1 step 3: same Boris, same nodes, spline field removes the floor & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
-G2 2b: numpy Boris on the bilinear field equals LIONS & $+$ & $+$ & $-$ & $\cdot$ & $\cdot$\\
+B0 (no kinks in $B_z$): orbit order 2, $|\det-1|\le\BzeroLionsDet$ & $+$ & $+$ & $-$ & $-$ & $\cdot$\\
+B: RF-Track on the closed-form field (no map) is clean at the same tune & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+B: halving the map step does not reduce the tune scatter & $-$ & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$\\
+B2: spread reduction vs.\ $1/(2\sin\pi\Qr)$: OPAL near it, LIONS mostly below & $\cdot$ & $\cdot$ & $\cdot$ & $\cdot$ & $+/-$\\
+G1 step 3, tunes: same Boris, same nodes, splines remove the excess & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G1 step 3, $\det$: same comparison & $-$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G2 2b: numpy Boris on the bilinear field equals LIONS & $\cdot$ & $\cdot$ & $-$ & $\cdot$ & $\cdot$\\
 G2 2b: $\det$ changes at most \GTwoBJacVar\,\% from $h=10^{-7}$ to $10^{-5}$ m & $\cdot$ & $\cdot$ & $\cdot$ & $-$ & $\cdot$\\
-G2 2c: RF-Track on the bilinear field, $|\det-1|$ \GTwoCRatioMin{} to \GTwoCRatioMax{} times smaller & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
-H: F1 (C$^1$) with Boris removes the $\det$ floor on all maps & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G2 2c: adaptive RF-Track on the bilinear field, $|\det-1|$ \GTwoCRatioMin{} to \GTwoCRatioMax{} times smaller than Boris & $-$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+H: fixed-step RK4 on F0 keeps $|\det-1|$ at \HFzeroRkDetMin{} to \HFzeroRkDetMax{} (1440 steps) & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+H: F1 (C$^1$) lowers $|\det-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The current best explanation is H1b: the Boris step crossing gradient jumps of a bilinear field.
-H1 as first stated, an $O(h^2)$ interpolation error, failed its own prediction.
-In case B, halving the azimuthal step left the scatter unchanged (ratio \BHalfDegQrRatioMin{} to
-\BHalfDegQrRatioMax), where $O(h^2)$ predicts 0.25.
-Kinks of any spacing (H1$'$) remain consistent with every observation.
-A direct test, a Jacobian step scan with the closed orbit moved across a cell edge, has not been run.
+The current best explanation has two parts.
+The $\det$ excess comes from fixed-step integration across the gradient jumps (H1b): it appears with Boris and with RK4,
+it shrinks with the step count, and it nearly disappears with an adaptive integrator or a $C^1$ field.
+The tune excess has both contributions: the field model (H1) and the discretisation (H1b); they were not separated.
+H1 as first stated, an $O(h^2)$ interpolation error setting the scatter, failed its own prediction in case B: halving the
+azimuthal step left the scatter unchanged (ratio \BHalfDegQrRatioMin{} to \BHalfDegQrRatioMax), where $O(h^2)$
+predicts 0.25.
+The registered reading threshold of G2 2c ($|\det-1|<10^{-3}$ with RF-Track) was met at one energy of three, so the
+adaptive run supports H1b without closing the case.
+A direct test, the convergence order of $\det M_r - 1$ with the step count on a bilinear field and a Jacobian step scan
+with the closed orbit moved across a cell edge, has not been run.

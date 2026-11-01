@@ -7,7 +7,8 @@ The code was written in Fortran~90 by P.~Bertrand (GANIL) for the CIME cyclotron
 O.~Kamalou.
 \nolinkurl{tests/test_fortran.py} runs six cases through the Python port and a \texttt{gfortran} build of the Fortran
 (\texttt{-ffp-contract=off}): final bunches agree within $10^{-12}$, and bit for bit on macOS arm64.
-Two known differences remain (the random bunch generator and the vertical spread of \texttt{6d} bunches).
+Two known differences affect tracked results (the random bunch generator and the vertical spread of \texttt{6d}
+bunches); the README lists the others.
 
 These notes explain the physics and the numerical methods behind the Phase~5 benchmarks.
 The benchmarks ask five questions (\nolinkurl{benchmarks/DESIGN.md}, section~1):

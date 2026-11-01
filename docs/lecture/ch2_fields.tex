@@ -26,7 +26,7 @@ LIONS and OPAL keep \cref{eq:br-expansion} and $B_z = B$ (OPAL), or $B_z = B - (
 Every benchmark here sets $D = 0$, as OPAL does.
 With $D = 0$ the truncated field is exactly curl-free: for example $\partial_z B_r - \partial_r B_z = \partial_r B - \partial_r B = 0$,
 and the other two components vanish the same way.
-(With $D\ne0$, $(\nabla\times\vect B)_r = -(z^2/2r)\,\partial_\theta D$.)
+(With $D\ne0$, $(\nabla\times\vect B)_r = -(z^2/2r)\,\partial_\theta D$ and $(\nabla\times\vect B)_\theta = (z^2/2)\,\partial_r D$.)
 It is not divergence-free:
 \begin{equation}
 \nabla\cdot\vect B = \frac{1}{r}\partial_r(r B_r) + \frac{1}{r}\partial_\theta B_\theta + \partial_z B_z
@@ -37,12 +37,14 @@ For the linear tunes this does not matter, because the term is second order in $
 For long-term invariants at finite $z$ it does.
 A divergent field has no vector potential, so the motion off the plane is not Hamiltonian and the canonical angular
 momentum is no longer an invariant ($|\vect p|$ still is, as for any magnetic field).
+The Lorentz flow even keeps preserving phase-space volume, since $\partial_{\vect p}\cdot(\vect v\times\vect B) = 0$ for any
+$\vect B$: a determinant test cannot detect the divergence.
 Case D2 (\cref{sec:caseD}) therefore uses planar motion only.
 
 \paragraph{The $D$ map in LIONS.}
 The LIONS map file stores a second block after $B_z$, documented as $\partial^2B_z/\partial r^2$, which multiplies $-z^2/2$.
-\Cref{eq:bz-expansion} shows that it must hold the transverse Laplacian $\nabla_\perp^2B$ to keep $\nabla\cdot\vect B =
-O(z^3)$.
+\Cref{eq:bz-expansion} shows that it must hold the transverse Laplacian $\nabla_\perp^2B$; with that choice and the
+truncated $B_r$, $B_\theta$, $\nabla\cdot\vect B = 0$ exactly, at the price of a curl of order $z^2$.
 The field-harmonic routine of LIONS adds the Laplacian of the harmonic polynomial to it, consistent with
 \cref{eq:bz-expansion}.
 What the CIME map files contain in that column has not been checked here.
@@ -57,7 +59,8 @@ sections 3, 7 and 21).
 \begin{description}
 \item[LIONS.] An $(r,\theta)$ grid over \SI{360}{\degree}, endpoint included, with $B_z$, $D$, $\partial B/\partial x$ and
 $\partial B/\partial y$ in \si{T} and \si{T/m}.
-The limits are 250 radii and 1081 azimuths; 1081 columns at \thirddeg{} is the native PSI resolution.
+The Python port accepts 250 radii and 1081 azimuths (the Fortran: 721 azimuths); 1081 columns at \thirddeg{} is the
+native PSI resolution.
 $B_z<0$ for counter-clockwise positive ions.
 \item[OPAL \texttt{CARBONCYCL}.] Header $r_{\min}$ [\si{mm}], $\Delta r$ [\si{mm}], $\theta_{\min}$ [\si{\degree}],
 $\Delta\theta$ [\si{\degree}], then $B_z$ in \si{kG} on $n_r\times n_\theta$ nodes, with no \SI{360}{\degree} endpoint.

@@ -2,7 +2,9 @@
 
 A tracking code needs $B$ and its first derivatives at arbitrary points, from values on a grid.
 The choice of interpolation sets the smoothness of the field the integrator sees.
-In the benchmarks this mattered more than the choice of integrator.
+In the benchmarks this mattered more than the choice of integrator: on bilinear maps, RK4 instead of Boris lowers
+$|\det M-1|$ by \HBorisOverRkMin{} to \HBorisOverRkMax{} times; a $C^1$ field instead of a bilinear one lowers it by
+\HDetRatioMin{} to \HDetRatioMax{} times (\cref{sec:caseH}).
 
 \section{Bilinear interpolation (LIONS default, field model F0)}
 Let the grid have steps $h_r$ and $h_\theta$.
@@ -98,6 +100,8 @@ It is available in LIONS as the deck option \texttt{interpolation=hermite}.
 Cubic (F2) and quintic (F3) splines are global $C^2$ and $C^4$ interpolants, periodic in $\theta$.
 The benchmark harness builds separate splines of $B$, $\partial_rB$ and $\partial_\theta B$ (FITPACK through SciPy).
 They are the smooth reference interpolants of case G and are used by the RF-Track runs.
+Because the three splines are built separately, $\partial_r$ of the $B$ spline is not exactly the $\partial_rB$ spline:
+F2 and F3 share the small inconsistency of F0, unlike F1.
 They cost \HCostCub{} and \HCostQuin{} times F0 in the harness.
 
 \section{The azimuth}\label{sec:azimuth}
@@ -106,7 +110,7 @@ LIONS, as in the Fortran, takes
 \begin{equation}
 \theta = \arccos(x/r)\quad (y\ge0),\qquad \theta = 2\pi-\arccos(x/r)\quad (y<0).
 \end{equation}
-Near $\theta = 0$ this formula is ill-conditioned.
+Near $\theta = 0$ (and $\theta = \pi$) this formula is ill-conditioned.
 With $u = x/r$, $\dd\theta/\dd u = -1/\sin\theta$, and $u$ carries a rounding error of order the machine epsilon
 $\varepsilon = 2^{-52}$.
 So the absolute error in $\theta$ is of order $\varepsilon/\theta$ and the relative error of order $\varepsilon/\theta^2$.
@@ -116,7 +120,7 @@ The function $\operatorname{atan2}(y,x)$ has no such loss (\cref{fig:azimuth}).
 
 This matters for the benchmarks because the Poincar\'e section is at $\theta = 0$ (\cref{ch:orbits}).
 At $\theta = 10^{-6}$, the relative error of $\arccos$ reaches \AcosErrAtOneMicro{} in the test of \cref{fig:azimuth}.
-Its largest absolute value is of order $\sqrt{\varepsilon}\approx\num{1e-8}$~rad, a few tenths of a micrometre at a
+Its largest absolute value is of order $\sqrt{\varepsilon}\approx\num{1.5e-8}$~rad, a few tenths of a micrometre at a
 radius of \SI{25}{m}.
 That is a noise source for finite-difference Jacobians with probe steps of \SI{1}{\micro m} (\cref{sec:caseH}).
 LIONS offers \texttt{azimuth=atan2} as a deck option; the default stays the Fortran formula.

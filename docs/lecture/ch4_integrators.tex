@@ -103,8 +103,8 @@ J^\mathsf{T} S J = S,\qquad S = \begin{pmatrix}0 & I_d\\ -I_d & 0\end{pmatrix}.
 This implies $\det J = 1$.
 The converse holds only for $d = 1$, where symplectic and area-preserving are the same.
 The exact flow of a Hamiltonian system is symplectic.
-For a smooth Hamiltonian, a symplectic integrator exactly conserves a modified Hamiltonian close to the true one, up to
-exponentially small terms, so its energy error stays bounded over very long times \cite{hairer2006}.
+For an analytic Hamiltonian and a fixed step, a symplectic integrator of order $p$ nearly conserves a modified
+Hamiltonian, and its energy error stays $O(\Delta t^p)$ over times of order $\exp(c/\Delta t)$ \cite{hairer2006}.
 The argument needs smoothness; it does not cover a field with gradient jumps, such as a bilinear map.
 A merely volume-preserving map has no such guarantee.
 
@@ -113,8 +113,11 @@ Two consequences used later:
 \item The Poincar\'e map of a Hamiltonian flow on a section at fixed energy is symplectic in the reduced coordinates.
 For planar motion this is a two-dimensional map $(r,P_r)\mapsto(r',P_r')$, so $\det M_r = 1$ exactly for the exact
 flow.
-This holds for a continuous $B_z$ whose gradient jumps at cell edges: the variational equation $\dot J = A(t)J$ has a
-trace-free $A$, and with transversal crossings of the edges the exact one-turn map stays $C^1$.
+This holds for a continuous $B_z$ whose gradient jumps at cell edges.
+With $\theta$ as the independent variable, the planar motion is a one-degree-of-freedom Hamiltonian system with
+$K = -P_\theta(r,P_r;\theta)$; its variational equation $\dd J/\dd\theta = A(\theta)J$ has a trace-free $A$, also when $A$
+jumps.
+The force is continuous, so the exact one-turn map stays $C^1$.
 The slope changes discussed in \cref{ch:orbits} belong to the discrete map, not to the exact flow.
 \item A numerical one-turn map built from a non-symplectic step, here Boris (volume-preserving in the full phase space,
 but not symplectic), has no such property on the section.

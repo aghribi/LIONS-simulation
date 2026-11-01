@@ -226,10 +226,11 @@ def case_a():
     axes[0].loglog(n, (2 * np.pi / n)**2 / 8, 'k--', lw=0.7, label=r'$(\omega\Delta t)^2/8$')
     axes[0].loglog(n, (2 * np.pi)**6 / (144 * n**5.0), 'k:', lw=0.7, label=r'$(2\pi)^6/(144 n^5)$')
     wdt = 2 * np.pi / n
-    axes[1].loglog(n, (n - 1) * (wdt - 2 * np.arctan(wdt / 2)) / (2 * np.pi), 'k--', lw=0.7,
-                   label='Boris phase lag, closed form')
+    nn = np.geomspace(90, 1440, 50)
+    x = 2 * np.pi / nn
+    axes[1].loglog(nn, 1 - 2 * np.arctan(x / 2) / x, 'k--', lw=0.7, label=r'$1-2\arctan(\omega\Delta t/2)/\omega\Delta t$')
     axes[0].set_ylabel('relative radius error')
-    axes[1].set_ylabel('phase error per turn')
+    axes[1].set_ylabel('relative phase error')
     for ax in axes:
         ax.set_xlabel('steps per turn')
         ax.legend(fontsize=6)
@@ -242,6 +243,7 @@ def case_a():
     num('ARkFourRadThreeSixty', abs(v['opal', 'RK4', 360, 'radius_rel_error']), 3)
     num('ARkFourPred', (2 * np.pi)**6 / (144 * 360**5), 3)
     num('LeapfrogPred', (1 + (2 * np.pi / 360)**2)**180 - 1, 4)
+    num('ARkFourPhaseFloor', abs(v['opal', 'RK4', 1440, 'phase_rel_error']), 1)
     num('ALFTwoP', v['opal', 'LF2'].xs('p_rel_change', level='metric').abs().max(), 1)
 
 
@@ -274,6 +276,10 @@ def case_b():
     num('BzeroLionsOrderMin', min(order(a, b) for a, b in zip(e[720], e[1440])), 4)
     num('BzeroLionsFourteenMax', e[1440].max())
     tun = b0[(b0.code == 'lions') & (b0.steps_per_turn == 1440) & b0.metric.isin(['qz'])]
+    num('BzeroLionsDet', b0[(b0.code == 'lions') & (b0.steps_per_turn == 1440) & (b0.metric == 'det_error')]
+        .value.abs().max(), 1)
+    opal = b0[(b0.code == 'opal') & (b0.integrator == 'RK4') & (b0.steps_per_turn == 1440) & (b0.metric == 'r_eo')]
+    num('BzeroOpalOffset', opal.apply(err, axis=1).max(), 1)
     num('BzeroLionsQzErrMax', max(abs(s.value - exact[s.energy_mev, 'qz']) for _, s in tun.iterrows()))
     lf = b0[(b0.code == 'lions') & (b0.steps_per_turn == 1440)].pivot_table(index='energy_mev', columns='metric',
                                                                            values='value')
@@ -304,6 +310,7 @@ def case_b():
     q = b[(b.metric == 'qr') & (b.code != 'rf_track')]
     num('BQrSpreadMax', q.groupby(['code', 'integrator']).value.agg(np.ptp).max())
     num('BsmoothQrSpread', np.ptp(s.value))
+    num('BLionsQrSpread', np.ptp(q[q.code == 'lions'].value))
     det = b[(b.metric == 'det_error') & (b.code != 'rf_track')].value.abs()
     num('BDetMin', det.min(), 1)
     num('BDetMax', det.max(), 1)
@@ -383,6 +390,8 @@ def case_e():
     num('ESweepTinyH', sweep[1e-9])
     fail = reg[(reg.case == 'A') & (reg.rel_diff > 1e-6)]
     num('EAFailCount', len(fail), 1)
+    cost1 = table('case_e/case_e_cost.parquet').query('particles == 1 and not checkpoint').set_index('steps').peak_rss_mb
+    num('EKBPerStep', (cost1[10000] - cost1[1000]) * 2**20 / 1e3 / 9000, 2)   # peak RSS in MiB
     num('EAFailOtherMax', fail[~((fail.output == 'phase') & fail.param.isin(['r0', 'pr0']))].rel_diff.max(), 1)
     val = d[d.param == 'validation']
     num('EPortMax', val.rel_diff.max(), 1)
@@ -429,6 +438,10 @@ def case_e2():
         if len(best64):
             num(f'EtwoBest{key}', best64[100000], 3)
             num(f'EtwoRatio{key}', best64[100000] / base[100000], 3)
+    gpu = pd.concat([table(E2_SITES[k]) for k in ('A100 (Jean-Zay)', 'H100 NVL (CC-IN2P3)')])
+    num('EtwoGpuFloatThirtyTwoR', gpu[gpu.metric == 'cuda_float32_r_max_rel'].value.max())
+    num('EtwoGpuFloatSixtyFourR', gpu[gpu.metric.isin(['cuda_float64_r_max_rel', 'cuda_float64_compiled_r_max_rel'])]
+        .value.max(), 1)
     ax.set_xlabel('particles')
     ax.set_ylabel('particle-steps per second')
     ax.legend(fontsize=6, loc='upper left')
@@ -476,12 +489,17 @@ def g1():
                                   & d3.interpolation.isin(['bicubic', 'quintic'])])):
             for metric, key in (('qr_error', 'Qr'), ('det_error', 'Det'), ('r_eo_rel_error', 'Reo')):
                 num(f'G{name}{tag}{key}Max', d[d.metric == metric].value.abs().max())
+        q360 = d2[(d2['map'] == '1/3 deg') & (d2.steps_per_turn == 360) & (d2.metric == 'qr_error')].value.abs().max()
+        num(f'G{name}BilQrMaxThreeSixty', q360)
         f4 = d2[d2['map'] == '4 deg']
         raw(f'G{name}FourDegFailed', f'{len(f4[f4.metric == "failed"])} of {len(f4.groupby(["a", "steps_per_turn"]))}')
     val = pd.concat([table(p)[lambda x: x.metric == 'validation_vs_lions'] for p in
                      ('case_g1/step3/case_g1_step3.parquet', 'case_g1/10sector/step3/case_g1_step3.parquet')])
     num('GValidationMax', val.value.abs().max())
     t = table('case_g1/step1/case_g1_step1.parquet')
+    t10 = table('case_g1/10sector/step1/case_g1_step1.parquet')
+    num('GTenRefQr', t10[t10.metric.isin(['qr_error', 'qz_error'])].value.abs().max())
+    num('GTenRefOrbit', t10[t10.metric == 'r_eo_rel_error'].value.abs().max())
     num('GThreeRefQr', t[t.metric == 'qr_error'].value.abs().max())
     num('GThreeRefQz', t[t.metric == 'qz_error'].value.abs().max())
     num('GThreeRefOrbit', t[t.metric == 'r_eo_rel_error'].value.abs().max())
@@ -549,6 +567,7 @@ def g2():
     num('GTwoBJacVar', 100 * var.max(), 1)
     ratio = (lb[lb.jacobian_step_m == 1e-6].set_index('energy_mev').value.abs()
              / det(c, 'rftrack_bilinear').set_index('energy_mev').value.abs())
+    num('GTwoCRfMax', det(c, 'rftrack_bilinear').value.abs().max(), 1)
     num('GTwoCRatioMin', ratio.min())
     num('GTwoCRatioMax', ratio.max(), 1)
     write_table('g2_det', ['$E$ [MeV]', 'LIONS', 'numpy Boris, bilinear', 'RF-Track, bilinear',
@@ -596,12 +615,29 @@ def case_h():
     rft = s3[s3.code == 'rftrack'].set_index(['energy_mev', 'metric']).value
     opal_e = s3[(s3.code == 'opal') & (s3.energy_mev.round() != 512)].energy_mev.unique()
     keep = psi.energy.isin(opal_e) & (psi.energy > 80) & (psi.energy < 520) & ~psi.energy.between(*PSI_BAND)
-    for field, key in (('F0_bilinear', 'Bil'), ('F1_hermite', 'Herm')):
+    for field, key in (('F0_bilinear', 'Bil'), ('F1_hermite', 'Herm'), ('F2_cubic', 'Cub'), ('F3_quintic', 'Quin')):
         for metric, mk in (('qr_error', 'Qr'), ('qz_error', 'Qz')):
             x = psi[keep & (psi.field == field) & (psi.integrator == 'boris') & (psi.steps_per_turn == 1440)
                     & (psi.metric == metric)]
             err = (x.value + [rft[e, metric] for e in x.energy]).abs()
             num(f'HFixpo{key}{mk}Med', err.median())
+    # det(M) - 1 alone, worst case per option, 1440 steps
+    det = {m: table(p).pipe(lambda d: d[~d.case.str.extract(r'E=([\d.]+)')[0].astype(float).between(*PSI_BAND)])
+           .pipe(lambda d: d[(d.metric == 'det_error') & (d.steps_per_turn == 1440)])
+           .assign(v=lambda d: d.value.abs()).groupby(['spacing', 'field', 'integrator']).v.max()
+           for m, p in H_MAPS.items()}
+    f0f1 = [det[m][sp, 'F0_bilinear', 'boris'] / det[m][sp, 'F1_hermite', 'boris'] for m in det
+            for sp in det[m].index.get_level_values(0).unique()]
+    num('HDetRatioMin', min(f0f1))
+    num('HDetRatioMax', max(f0f1))
+    br = [det[m][sp, 'F0_bilinear', 'boris'] / det[m][sp, 'F0_bilinear', 'rk4'] for m in det
+          for sp in det[m].index.get_level_values(0).unique()]
+    num('HBorisOverRkMin', min(br))
+    num('HBorisOverRkMax', max(br))
+    rk = [det[m][sp, 'F0_bilinear', 'rk4'] for m in ('10-sector', 'psi') for sp in det[m].index.get_level_values(0).unique()]
+    num('HFzeroRkDetMin', min(rk))
+    num('HFzeroRkDetMax', max(rk))
+    num('HFoneDetPsi', det['psi']['1/3 deg', 'F1_hermite', 'boris'])
     cost = table('case_h/case_h_cost.parquet')
     c = cost[(cost.metric == 's_per_particle_step') & (cost.particles == 1e5)].set_index('code').value
     base = c['F0_bilinear_boris']
@@ -631,6 +667,7 @@ def case_h():
     num('HPhaseTwoOneTurn', ot.max())
     dif = p2[p2.metric.isin(['qr_error', 'det_error'])]
     num('HPhaseTwoJacMax', (dif.value - dif.harness).abs().max())
+    num('HTargetRatio', 1e-4 / (dif.value - dif.harness).abs().max(), 1)
     pc = p2[p2.metric == 's_per_particle_step'].set_index('case').value
     num('HPhaseTwoCostRatio', pc['lions_hermite_100000'] / pc['lions_bilinear_100000'])
     az = table('case_h/case_h_azimuth.parquet')

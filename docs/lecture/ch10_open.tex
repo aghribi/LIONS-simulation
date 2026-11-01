@@ -4,7 +4,7 @@
 \begin{itemize}
 \item \textbf{CIME.}
 The CIME field map is not available to the benchmarks yet.
-The node density per harmonic period of the CIME map, and the size of the bilinear floor on it, are therefore unknown.
+The node density per harmonic period of the CIME map, and the size of the bilinear excess on it, are therefore unknown.
 Case C (acceleration through the dees) does not need it, but waits for a check of the RF time convention of each
 code on a one-gap test.
 \item \textbf{Extraction (case F).}
@@ -18,12 +18,12 @@ compare between LIONS, Xsuite and Cheetah yet.
 The bilinear one-turn map is only piecewise smooth, and probes that straddle a cell edge mix two slopes.
 Test: a Jacobian step scan with the closed orbit moved across a cell edge.
 \item \textbf{Residual on RF-Track with the bilinear field.}
-RF-Track on the bilinear PSI field still leaves $|\det M_r - 1|$ near $7\times10^{-3}$ at two energies (\cref{tab:G2det}).
+RF-Track on the bilinear PSI field still leaves $|\det M_r - 1|$ up to \GTwoCRfMax{} (\cref{tab:G2det}).
 Adaptive Runge--Kutta also loses order at gradient jumps, and the section crossing adds its own error.
 These were not separated.
 \item \textbf{OPAL offsets.}
 In B0, OPAL has an energy-dependent closed-orbit offset of order $10^{-8}$ shared by LF2 and RK4.
-In A, OPAL RK4 has a phase floor near $5\times10^{-11}$.
+In A, OPAL RK4 has a phase error floor near \ARkFourPhaseFloor.
 Neither is explained.
 \item \textbf{Gradients on F1.}
 Whether the Hermite field closes the gap between autograd and finite differences on measured maps has not been measured.
@@ -40,13 +40,13 @@ This is wrong for families after the first.
 
 \section{Lessons}
 \begin{enumerate}
-\item The interpolation sets the floor.
+\item The field smoothness sets the error level more than the integrator does.
 On the bilinear maps of case H, neither Boris nor RK4 meets the $10^{-4}$ target at any step count up to 2880 per turn
 (\cref{tab:Hdecision}).
-A $C^1$ interpolation at \HCostHerm{} times the cost removes the $\det$ floor.
+A $C^1$ interpolation at \HCostHerm{} times the cost lowers $|\det M-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times.
 \item Count nodes per harmonic period, not degrees.
-\item A non-symplectic step on a kinked field breaks area preservation of the one-turn map by orders of magnitude more
-than on a smooth field.
+\item Fixed-step integration across gradient jumps breaks area preservation of the one-turn map by orders of magnitude
+more than on a smooth field, with Boris and with RK4.
 \item Every convention (units, signs, direction, reference azimuth) should be settled by a two-reading run.
 \item A criterion built by the analysis that it judges can be tautological.
 Write the triangle inequality down before using one.
