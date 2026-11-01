@@ -128,6 +128,7 @@ def opal_closed_orbit(work, energy_mev, r_mm, pr_ic, trim):
     gev = energy_mev / 1000
     # FMLOWE, FMHIGHE, DENERGY in GeV in OPAL 2024.1; the element cannot be named RING (protected keyword).
     (work / 'tune.in').write_text(f'''OPTION, ECHO=FALSE;
+OPTION, VERSION=20240;
 OPTION, CLOTUNEONLY=TRUE;
 TITLE, STRING="PSI Ring closed orbit";
 {TC1 if trim else ''}
