@@ -111,7 +111,8 @@ From a read of the Python port against the Fortran source (2026-10-30).
 7. **Correlation outputs only partly ported.** With `iflcor != 0`, the Fortran also writes the sigma and grid matrices, the window-filtered matrices (two extra prompts at the end) and the inflector output to `ficmat`, and the dc matrices to `ficdc`. The Python opens these files and leaves them empty.
 8. **`6d` bunch differs from the Fortran.** The Fortran adds the vertical offsets (dz, dpz) of the sampled bunch only when `espace = '3d'` (`lions_2.0_ep.f90` line 498). The Python adds them for `3d` and `6d`. The CIME example deck uses `6d`: the Fortran keeps all particles at z0, the Python spreads them vertically. Which behaviour is intended is open.
 9. **Correlations wrong for families after the first, in both codes.** The orbit radius uses `mass_c[k]` (Fortran `am0c(k)`), the particle array indexed by the family number instead of the family's first particle.
-10. **Untested paths.** Multiple families, the vertical sorter, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
+10. **Second-harmonic dBz/dy sign, in both codes.** In `add_harmonics` (Fortran line 2351) the k = 0 term of the second harmonic adds `-coef * s3` to dBz/dy, where `s3` is the y-derivative of the harmonic polynomial `s`; the derivative gives `+coef * s3`. The first harmonic and the k >= 1 terms have the consistent sign. Changes results only with second-harmonic coefficients. Not changed: decision for the LIONS authors.
+11. **Untested paths.** Multiple families, the vertical sorter, harmonics, `ficmat`/`ficdc`. No comparison on CIME maps yet.
 
 ## Tests
 

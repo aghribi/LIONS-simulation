@@ -315,10 +315,10 @@ Field parity at the map nodes: Bz within 1.1e-15 T, Bx and By at 0.92 of the bou
 - LIONS: r_eo spread 1.4e-6 to 1.7e-5 m (case B: 9.5e-6 to 2.1e-5 m), Qr spread 2e-4 to 2.5e-3.
   OPAL LF2: 7.7e-7 to 1.1e-5 m; RK4: 3.0e-7 to 2.1e-6 m. det(M) - 1 from 8e-6 to 1.4e-2 for the map codes.
 - Spread times det(M_rr - I): case B 1.3e-8 to 6.2e-8 m; B-gradient 8e-8 to 6.6e-6 m. Not the same size.
-  The spread falls by 1.3 (LIONS) to 55 (OPAL RK4), short of the conditioning ratio.
+  The spread falls by 1.3 (LIONS) to 55 (OPAL RK4), short of the conditioning ratio. [Erratum 1, section 24]
 
 ### Reading
-- H4 (near-integer tune as the amplifier) is rejected by its own prediction: the spread does not follow the
+- [Withdrawn, erratum 1, section 24] H4 (near-integer tune as the amplifier) is rejected by its own prediction: the spread does not follow the
   conditioning, and RF-Track is clean at the same near-integer tune.
 - The map is the source: same field, same harness, same tunes, clean without the map and scattered with it.
   H1' (kinks at any spacing) is consistent with all observations so far; it is not shown directly.
@@ -422,10 +422,11 @@ relative. Pass.
 - A: fails the 1e-6 criterion on d(phase)/d(pr0) and d(phase)/d(r0) only. These gradients are small
   (3.0e-5 and 1.1e-3 at 360 steps: the uniform field is isochronous), and the round-off of a central difference
   on a phase of 6.3 rad with h = 1e-7 is of order 3e-8 absolute. The sweep agrees: the difference falls as h grows
-  (1.7e-6 at h = 1e-4). Every other entry is within 1e-6. Reading, made after the run: the reference is noisy,
+  (1.7e-6 at h = 1e-4). Every other entry is within 1e-6. [Erratum 2, section 24] Reading, made after the run: the reference is noisy,
   not the autograd value. A criterion mixing relative and absolute error would pass; it was not registered.
 - B: the prediction of section 17 failed in part. At 360 steps autograd and finite differences agree (2.3e-8).
   At 3600 steps they differ by 1e-4 to 7e-3 for h from 1e-7 to 1e-4, and agree within 2e-8 for h of 1e-8 and 1e-9.
+  [Erratum 2, section 24]
   This fits the piecewise-C1 picture of section 15: autograd returns the local derivative of the discrete map;
   finite differences with h above the spacing of the derivative jumps average over them. Example at 3600 steps:
   dr/ds = -0.9824 (autograd) and -0.9897 (h = 1e-6). On a bilinear map, a gradient-based optimiser over
@@ -664,7 +665,7 @@ G1 step 3 results (`benchmarks/runs/case_g1/step3/case_g1_step3.parquet`, code 1
   integrator dominates.
 - det(M) - 1 does not converge at a clean order and differs by up to a factor 3 between the two splines. Not
   separated: the finite-difference Jacobian (1e-6 m), spline derivative noise, and the Boris step being exactly
-  volume-preserving only in a uniform field. It stays at or below 2.3e-6.
+  volume-preserving only in a uniform field [erratum 3, section 24]. It stays at or below 2.3e-6.
 - Isochronism with a smooth field is limited by the step: 2.2e-6 at 1440 steps. The phase-slip estimate of step 2
   therefore holds in part for any field interpolation at that step count [estimate, not simulated].
 - Scope: one map (3-sector, ideal), three orbits, one turn. Changing the LIONS interpolation changes results and
@@ -1049,3 +1050,30 @@ bilinear against the numpy bilinear tracker, at h = 1e-4 / 1e-6 / 1e-7 m:
 - Cost: 1.28e-7 against 1.20e-7 s per particle-step (1e5 particles, PSI map): +7%.
 - The option is kept as implemented (exact azimuth at theta near 0 and pi, `tests/test_run.py`); its benefit for
   derivative measurements on the bilinear field is partial.
+
+## 24. Errata (2026-11-01, found while verifying the lecture notes in docs/lecture)
+
+The tables are unchanged; these entries correct readings and summaries above. Numbers below are from the Parquet tables.
+
+1. Section 15, H4. The registered B2 prediction scaled the closed-orbit sensitivity as 1 / det(M_rr - I). For an
+   area-preserving block the fixed-point shift is (I - M)^-1 delta, of norm 1 / (2 sin pi Q) = 1 / sqrt(det(M - I)) in
+   normalised coordinates. Per energy (1 to 5 MeV, Qr of LIONS at 1440 steps), det(M_rr - I) grows by 29 to 290 from case
+   B to B-gradient, so the sensitivity falls by 5.4 to 17. The r_eo spread across steps falls by 1.2 to 10 (LIONS), 2.0
+   to 57 (OPAL LF2), 5.8 to 82 (OPAL RK4) (the summary "1.3 to 55" above does not match the table). OPAL is within a
+   factor of a few of the corrected prediction; LIONS follows it at 2 MeV only. The clean RF-Track run shows the map is the
+   source of the errors; it does not test amplification. Corrected reading: the map is the source; near-integer
+   amplification (H4) is not rejected and may add to the scatter at low energy.
+2. Section 19, case E. Case A fails the 1e-6 criterion on 6 entries, not on the phase derivatives only: also d(r)/d(pr0)
+   at 360 steps (1.9e-6) and d(pr)/d(s) at 3600 steps (2.6e-6). Case B at 3600 steps: the worst disagreement is 0.14 at
+   h = 1e-4 (dr/ds), 7.0e-7 at h = 1e-8 and 1.7e-5 at h = 1e-9 (rounding), not "1e-4 to 7e-3" and "within 2e-8". The
+   reading (piecewise-C1 discrete map) stands. Also "the uniform field is isochronous" is imprecise: at fixed |p| the
+   period does not depend on r0 or pr0, which is why those derivatives are small.
+3. Section 22, G1 step 3. Boris is volume-preserving in any static magnetic field (Qin et al. 2013), not only in a
+   uniform one; it is not symplectic.
+4. Section 22, G2 step 2c, and case H. The det(M) - 1 excess on bilinear fields is not specific to Boris: fixed-step RK4
+   on F0 keeps |det(M) - 1| at 1.2e-2 to 0.13 at 1440 steps on the 10-sector and PSI maps (3 to 4.5 times below Boris),
+   and both decrease slowly with the step count. The reading "the Boris step on the kinked field" (H1b) becomes
+   "fixed-step integration across gradient jumps"; consistent with the evidence, not tested directly. The h-insensitivity
+   of the G2 2b determinant is a weak argument against H3, since a central difference on a piecewise-smooth map can mix
+   two slopes at any h. Discriminating test, not run: the autograd Jacobian of the PyTorch bilinear port.
+
