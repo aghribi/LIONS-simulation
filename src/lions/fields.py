@@ -103,12 +103,17 @@ def prepare_hermite(field, ntheta_all):
                                                        edge_order=2)
 
 
-def hermite_bz(field, ivec, jvec, veca, vecb, r, theta):
-    """Bicubic Hermite Bz in the cell (ivec, jvec) at offsets (veca, vecb), and its Cartesian gradient.
+def hermite_bz(field, ivec, veca, x, y, r):
+    """Bicubic Hermite Bz in the radial cell ivec at offset veca, and its Cartesian gradient.
 
-    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells.
+    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells. The azimuth comes from atan2: the
+    arccos(x / r) of the bilinear path loses precision near theta = 0 and pi (rounding over sin theta), which
+    puts non-smooth noise of order 1e-12 m per kick into the one-turn map at r of a few metres.
     """
-    u, v = veca / field.dr, vecb / field.dtheta
+    theta = np.arctan2(y, x) % (2.0 * np.pi)
+    theta[theta >= 2.0 * np.pi] = 0.0
+    jvec = (theta / field.dtheta).astype(np.int32)
+    u, v = veca / field.dr, (theta - jvec * field.dtheta) / field.dtheta
 
     def basis(s):
         s2, s3 = s * s, s * s * s
@@ -130,8 +135,8 @@ def hermite_bz(field, ivec, jvec, veca, vecb, r, theta):
                 + frt * dt * dsu[a] * sv[b]
             ds_t = ds_t + f * hu[a] * dhv[b] / dt + fr * dr * su[a] * dhv[b] / dt + ft * hu[a] * dsv[b] \
                 + frt * dr * su[a] * dsv[b]
-    c, s = np.cos(theta), np.sin(theta)
     with np.errstate(divide='ignore', invalid='ignore'):   # r = 0 only outside the map, overwritten by the callers
+        c, s = x / r, y / r
         return bz, c * ds_r - s * ds_t / r, s * ds_r + c * ds_t / r
 
 
@@ -217,7 +222,7 @@ def compute_fields(d):
     B, D = d.field.bz[ik, jk], d.field.d2bz[ik, jk]
     if d.field.interpolation == 'hermite':
         # Bz and its gradient from one C1 surface; the z^2 term stays bilinear
-        bz, gx, gy = hermite_bz(d.field, ivec, jvec, veca, vecb, d.bunch.r, d.bunch.theta)
+        bz, gx, gy = hermite_bz(d.field, ivec, veca, d.bunch.x, d.bunch.y, d.bunch.r)
         d.bunch.bz[:] = bz - vecz * (c1 * D[0, 0] - c2 * D[1, 0] + c3 * D[1, 1] - c4 * D[0, 1]) * hrhtetm1
         d.bunch.bx[:] = gx * d.bunch.z
         d.bunch.by[:] = gy * d.bunch.z
@@ -491,8 +496,7 @@ def compute_bfield(bunch, field):
     vecy1[mask], vecy2[mask], vecy3[mask], vecy4[mask] = Y[0, 0], Y[1, 0], Y[1, 1], Y[0, 1]
 
     if field.interpolation == 'hermite':
-        bz, gx, gy = hermite_bz(field, ivec[mask], jvec[mask], veca[mask], vecb[mask], bunch.r[mask],
-                                bunch.theta[mask])
+        bz, gx, gy = hermite_bz(field, ivec[mask], veca[mask], bunch.x[mask], bunch.y[mask], bunch.r[mask])
         bunch.bz[mask] = bz + (vecp1[mask] * vec1[mask] + vecp2[mask] * vec2[mask] +
                                vecp3[mask] * vec3[mask] + vecp4[mask] * vec4[mask]) / hrhtet
         bunch.bx[mask] = bunch.z[mask] * gx
