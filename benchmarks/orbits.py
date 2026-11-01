@@ -294,6 +294,9 @@ def one_turn(track, states):
     """Map section states (n, 4) through one turn. track(states, turns) -> (t, pos, mom)."""
     t, pos, mom = track(states, 1.2)
     series = section_series(t, pos, mom)
+    lost = [i for i, s in enumerate(series) if len(s) == 0]
+    if lost:
+        raise RuntimeError(f'particles {lost} never crossed the section (lost from the map or invalid start)')
     return np.array([s[0, 1:] for s in series])
 
 
