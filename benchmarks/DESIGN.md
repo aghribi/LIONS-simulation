@@ -803,3 +803,15 @@ Step 2:
   LIONS minus spline of order 1e-5 to 1e-4 relative in r and 1e-4 to 1e-3 in the tunes (bilinear at 1/3 deg on a
   field with 8-fold spiral sectors, between the two G1 maps); OPAL minus FIXPO tunes about 5e-3 (step 1c), so the
   step 3 criterion is expected to hold unless LIONS has a defect beyond interpolation.
+
+### G2 step 3: OPAL and RF-Track, and the criterion (registered before running)
+- Energies: every tenth `ic.dat` row (72 to 512 MeV by 20 MeV) and 530 MeV: 24 energies.
+- OPAL 2024.1 closed-orbit finder, RING reader, no trim coil, 1440 steps (as step 1c), one run per energy at the
+  exact `ic.dat` energy: r, pr at theta = 0 (`tunes.dat`, r to 0.01 mm at most), Qr, Qz.
+- RF-Track `rkf45`, tolerance 1e-12, 2880 samples per turn (G1 step 1) on the step 2 quintic spline: closed orbit,
+  Qr, Qz, det(M) - 1.
+- Criterion (section 21 as amended in step 2): at each of the 24 energies and for r, pr, Qr, Qz,
+  |LIONS - FIXPO| <= |OPAL - FIXPO| + |LIONS - spline|. Reported per metric as the number of energies where it holds,
+  the half-integer band (386 to 430 MeV) counted separately.
+- Reading of RF-Track: a second smooth-field instrument; RF-Track minus spline tracker measures the Boris step error
+  at 1440 steps on this map.

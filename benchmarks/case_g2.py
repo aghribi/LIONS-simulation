@@ -34,6 +34,7 @@ MP_MEV = physical_constants['proton mass energy equivalent in MeV'][0]
 F_RF, HARMONIC, SYMMETRY = 50.65e6, 6, 8
 ENERGIES = [72, 150, 300, 450, 530]     # MeV, nearest ic.dat rows
 STEPS = 1440
+RFT_SAMPLES, RFT_TOL = 2880, 1e-12    # as G1 step 1
 PAD = 5
 FLOAT = re.compile(r'[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?')
 TC1 = 'tc1: TRIMCOIL, TYPE="PSI-BFIELD-MIRRORED", RMIN=4350.0, RMAX=4470.0, BMAX=1.4e-3, SLPTC=0.6;'
@@ -233,25 +234,39 @@ def g1_grids(r, dt_deg, bz, dbt):
     return grids, attrs
 
 
-def step2(outdir):
+def fold(q):
+    return np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi)
+
+
+def setup():
+    """Map in the G1 form, LIONS species and its mass, the quintic spline field, FIXPO rows (E, r, pr, Qr, Qz)."""
     r, dt_deg, (bz, dbt, _, _) = read_ring(PSI / 'bfield.dat')
     grids, attrs = g1_grids(r, dt_deg, bz, dbt)
     species = case_g1.lions_species(MP_MEV * 1e6, 1)
     mass_kg = case_g1.lc.AMU * (species[0] - case_g1.lc.ELECTRON_MASS_U)
+    ic, ref = np.loadtxt(PSI / 'ic.dat'), np.loadtxt(PSI / 'refsol.dat')
+    if not np.array_equal(ic[:, 0], ref[:, 0]):
+        raise ValueError('ic.dat and refsol.dat energies differ')
+    return grids, attrs, species, mass_kg, case_g1.smooth_field(grids, attrs, 1, 5), np.hstack([ic, ref[:, 1:]])
+
+
+def reference(energy, r_ic, pr_ic, qr_ref, qz_ref):
+    """p, the orbit_metrics reference dict and the folded FIXPO tunes."""
+    p = np.sqrt((1 + energy / MP_MEV)**2 - 1)
+    return p, {'r_theta0_m': r_ic / 1000, 'pr_over_p_theta0': pr_ic / 1000 / p, 'f_rev_hz': F_RF / HARMONIC}, \
+        [fold(qr_ref), fold(qz_ref)]
+
+
+def step2(outdir):
+    grids, attrs, species, mass_kg, spline, fixpo = setup()
     f_rev = F_RF / HARMONIC
     work = outdir / 'lions_map'
     work.mkdir(parents=True, exist_ok=True)
     with contextlib.chdir(work):
         ntet = case_g1.write_lions_map(grids, attrs, 1)
-    spline = case_g1.smooth_field(grids, attrs, 1, 5)
-    ic, ref = np.loadtxt(PSI / 'ic.dat'), np.loadtxt(PSI / 'refsol.dat')
-    if not np.array_equal(ic[:, 0], ref[:, 0]):
-        raise ValueError('ic.dat and refsol.dat energies differ')
     records = []
-    for (energy, r_ic, pr_ic), (_, qr_ref, qz_ref) in zip(ic, ref):
-        p = np.sqrt((1 + energy / MP_MEV)**2 - 1)
-        t = {'r_theta0_m': r_ic / 1000, 'pr_over_p_theta0': pr_ic / 1000 / p, 'f_rev_hz': f_rev}
-        q_ref = [np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi) for q in (qr_ref, qz_ref)]
+    for energy, r_ic, pr_ic, qr_ref, qz_ref in fixpo:
+        p, t, q_ref = reference(energy, r_ic, pr_ic, qr_ref, qz_ref)
         flagged = 386 <= energy <= 430
         for code, track in (('lions', orbits.LionsTracker(work, energy, f_rev, STEPS, species).track),
                             ('spline', orbits.BorisTracker(spline, mass_kg, case_g1.lc.E_CHARGE, p, f_rev, STEPS).track)):
@@ -275,9 +290,48 @@ def step2(outdir):
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g2_step2.parquet')
 
 
+def step3(outdir):
+    """OPAL closed-orbit finder (RING reader, no trim coil) and RF-Track on the spline, every 20 MeV and 530 MeV."""
+    _, attrs, _, mass_kg, spline, fixpo = setup()
+    r_max = attrs['ri_m'] + attrs['rstep_m'] * (attrs['nrad'] - 1)
+    records = []
+    for energy, r_ic, pr_ic, qr_ref, qz_ref in [*fixpo[::10], fixpo[-1]]:
+        p, t, q_ref = reference(energy, r_ic, pr_ic, qr_ref, qz_ref)
+
+        def opal():
+            r_o, pr_o, qr, qz = opal_closed_orbit(outdir / f'opal_{energy:.3f}', energy, r_ic, pr_ic, False)
+            return {'r_eo_rel_error': (r_o / t['r_theta0_m'] - 1, '1'),
+                    'pr_eo_error_over_p': ((pr_o - p * t['pr_over_p_theta0']) / p, '1'),
+                    'qr_error': (fold(qr) - q_ref[0], '1'), 'qz_error': (fold(qz) - q_ref[1], '1'),
+                    'qr': (qr, '1'), 'qz': (qz, '1')}
+
+        def rftrack():
+            tracker = orbits.RFTrackTracker(spline, r_max, mass_kg, p, HARMONIC / F_RF, RFT_SAMPLES, RFT_TOL)
+            return case_g1.orbit_metrics(tracker.track, t, p, q_ref)
+
+        for code, run in (('opal', opal), ('rftrack', rftrack)):
+            base = {'code': code, 'energy_mev': float(energy), 'qr_half_integer_band': bool(386 <= energy <= 430)}
+            try:
+                values = run()
+            except Exception as exc:
+                records.append({**base, 'metric': 'failed', 'value': None, 'unit': f'{type(exc).__name__}: {exc}'[:200]})
+                print(f'{code} {energy} MeV failed: {exc}', file=sys.stderr)
+                continue
+            for k, (v, u) in values.items():
+                records.append({**base, 'metric': k, 'value': float(v), 'unit': u})
+            print(f'{code} {energy} MeV ' + ' '.join(f'{k}={v[0]:+.2e}' for k, v in values.items()), file=sys.stderr)
+    meta = {'case': 'G2 step 3: OPAL (RING reader, closed-orbit finder) and RF-Track (spline) on the PSI Ring map',
+            'proton_mass_mev': repr(MP_MEV), 'rf_hz': repr(F_RF), 'harmonic': str(HARMONIC),
+            'opal_image': orbits.OPAL_IMAGE, 'opal_steps_per_turn': str(STEPS), 'rftrack_samples': str(RFT_SAMPLES),
+            'rftrack_tolerance': str(RFT_TOL), 'trim_coil': 'none',
+            **provenance(PSI / 'bfield.dat', PSI / 'ic.dat', PSI / 'refsol.dat'),
+            'machine': platform.platform(), 'python': platform.python_version()}
+    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_g2_step3.parquet')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', type=int, choices=(1, 2), default=1)
+    parser.add_argument('--step', type=int, choices=(1, 2, 3), default=1)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g2')
     args = parser.parse_args()
-    {1: step1, 2: step2}[args.step](args.outroot.resolve() / f'step{args.step}')
+    {1: step1, 2: step2, 3: step3}[args.step](args.outroot.resolve() / f'step{args.step}')
