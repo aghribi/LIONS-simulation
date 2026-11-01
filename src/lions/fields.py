@@ -87,6 +87,54 @@ def add_harmonics(rmin, rmax, nr, ntheta, bz, d2bz, dbzdx, dbzdy, n_coef, coef, 
     d2bz[:, ntheta - 1] = d2bz[:, 0]
 
 
+def prepare_hermite(field, ntheta_all):
+    """Node slopes of the bicubic Hermite option from the map: dBz/dr, dBz/dtheta, d2Bz/drdtheta.
+
+    The cross derivative is a second-order difference of dBz/dtheta in r (one-sided at the map edges).
+    """
+    nr = field.nr
+    r = field.rmin + field.dr * np.arange(nr)[:, None]
+    theta = field.dtheta * np.arange(ntheta_all)[None, :]
+    gx, gy = field.dbzdx[:nr, :ntheta_all], field.dbzdy[:nr, :ntheta_all]
+    field.dbzdr, field.dbzdtheta, field.d2bzdrdtheta = (np.zeros_like(field.bz) for _ in range(3))
+    field.dbzdr[:nr, :ntheta_all] = np.cos(theta) * gx + np.sin(theta) * gy
+    field.dbzdtheta[:nr, :ntheta_all] = r * (np.cos(theta) * gy - np.sin(theta) * gx)
+    field.d2bzdrdtheta[:nr, :ntheta_all] = np.gradient(field.dbzdtheta[:nr, :ntheta_all], field.dr, axis=0,
+                                                       edge_order=2)
+
+
+def hermite_bz(field, ivec, jvec, veca, vecb, r, theta):
+    """Bicubic Hermite Bz in the cell (ivec, jvec) at offsets (veca, vecb), and its Cartesian gradient.
+
+    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells.
+    """
+    u, v = veca / field.dr, vecb / field.dtheta
+
+    def basis(s):
+        s2, s3 = s * s, s * s * s
+        return ((2 * s3 - 3 * s2 + 1, -2 * s3 + 3 * s2), (s3 - 2 * s2 + s, s3 - s2),
+                (6 * s2 - 6 * s, -6 * s2 + 6 * s), (3 * s2 - 4 * s + 1, 3 * s2 - 2 * s))
+
+    hu, su, dhu, dsu = basis(u)
+    hv, sv, dhv, dsv = basis(v)
+    dr, dt = field.dr, field.dtheta
+    bz = ds_r = ds_t = 0.0
+    for a in (0, 1):
+        for b in (0, 1):
+            ik, jk = ivec + a, jvec + b
+            f, fr = field.bz[ik, jk], field.dbzdr[ik, jk]
+            ft, frt = field.dbzdtheta[ik, jk], field.d2bzdrdtheta[ik, jk]
+            bz = bz + f * hu[a] * hv[b] + fr * dr * su[a] * hv[b] + ft * dt * hu[a] * sv[b] \
+                + frt * dr * dt * su[a] * sv[b]
+            ds_r = ds_r + f * dhu[a] * hv[b] / dr + fr * dsu[a] * hv[b] + ft * dt * dhu[a] * sv[b] / dr \
+                + frt * dt * dsu[a] * sv[b]
+            ds_t = ds_t + f * hu[a] * dhv[b] / dt + fr * dr * su[a] * dhv[b] / dt + ft * hu[a] * dsv[b] \
+                + frt * dr * su[a] * dsv[b]
+    c, s = np.cos(theta), np.sin(theta)
+    with np.errstate(divide='ignore', invalid='ignore'):   # r = 0 only outside the map, overwritten by the callers
+        return bz, c * ds_r - s * ds_t / r, s * ds_r + c * ds_t / r
+
+
 def compute_fields(d):
     """Magnetic and electric fields at all particles for the current time."""
     hrhtetm1 = 1.0 / (d.field.dr * d.field.dtheta)
@@ -167,10 +215,17 @@ def compute_fields(d):
     jk = jvec + np.arange(2)[None, :, None]
     c1, c2, c3, c4 = vecd1 * vecd2, veca * vecd2, veca * vecb, vecd1 * vecb
     B, D = d.field.bz[ik, jk], d.field.d2bz[ik, jk]
-    d.bunch.bz[:] = (c1 * (B[0, 0] - vecz * D[0, 0]) - c2 * (B[1, 0] - vecz * D[1, 0]) +
-                     c3 * (B[1, 1] - vecz * D[1, 1]) - c4 * (B[0, 1] - vecz * D[0, 1])) * hrhtetm1
-    for out, g in ((d.bunch.bx, d.field.dbzdx[ik, jk]), (d.bunch.by, d.field.dbzdy[ik, jk])):
-        out[:] = (c1 * g[0, 0] - c2 * g[1, 0] + c3 * g[1, 1] - c4 * g[0, 1]) * d.bunch.z * hrhtetm1
+    if d.field.interpolation == 'hermite':
+        # Bz and its gradient from one C1 surface; the z^2 term stays bilinear
+        bz, gx, gy = hermite_bz(d.field, ivec, jvec, veca, vecb, d.bunch.r, d.bunch.theta)
+        d.bunch.bz[:] = bz - vecz * (c1 * D[0, 0] - c2 * D[1, 0] + c3 * D[1, 1] - c4 * D[0, 1]) * hrhtetm1
+        d.bunch.bx[:] = gx * d.bunch.z
+        d.bunch.by[:] = gy * d.bunch.z
+    else:
+        d.bunch.bz[:] = (c1 * (B[0, 0] - vecz * D[0, 0]) - c2 * (B[1, 0] - vecz * D[1, 0]) +
+                         c3 * (B[1, 1] - vecz * D[1, 1]) - c4 * (B[0, 1] - vecz * D[0, 1])) * hrhtetm1
+        for out, g in ((d.bunch.bx, d.field.dbzdx[ik, jk]), (d.bunch.by, d.field.dbzdy[ik, jk])):
+            out[:] = (c1 * g[0, 0] - c2 * g[1, 0] + c3 * g[1, 1] - c4 * g[0, 1]) * d.bunch.z * hrhtetm1
 
     mask_bz0 = (d.bunch.in_box & (d.bunch.bz == 0.0)) | (~d.bunch.in_box)
     d.bunch.bx[mask_bz0] = 0.0
@@ -435,18 +490,26 @@ def compute_bfield(bunch, field):
     vecx1[mask], vecx2[mask], vecx3[mask], vecx4[mask] = X[0, 0], X[1, 0], X[1, 1], X[0, 1]
     vecy1[mask], vecy2[mask], vecy3[mask], vecy4[mask] = Y[0, 0], Y[1, 0], Y[1, 1], Y[0, 1]
 
-    vec1[mask] += vecb1[mask]
-    vec2[mask] += vecb2[mask]
-    vec3[mask] += vecb3[mask]
-    vec4[mask] += vecb4[mask]
-    bunch.bz[mask] = (vecp1[mask] * vec1[mask] + vecp2[mask] * vec2[mask] +
-                  vecp3[mask] * vec3[mask] + vecp4[mask] * vec4[mask]) / hrhtet
-    bunch.bx[mask] = bunch.z[mask] * (
-        vecp1[mask] * vecx1[mask] + vecp2[mask] * vecx2[mask] +
-        vecp3[mask] * vecx3[mask] + vecp4[mask] * vecx4[mask]) / hrhtet
-    bunch.by[mask] = bunch.z[mask] * (
-        vecp1[mask] * vecy1[mask] + vecp2[mask] * vecy2[mask] +
-        vecp3[mask] * vecy3[mask] + vecp4[mask] * vecy4[mask]) / hrhtet
+    if field.interpolation == 'hermite':
+        bz, gx, gy = hermite_bz(field, ivec[mask], jvec[mask], veca[mask], vecb[mask], bunch.r[mask],
+                                bunch.theta[mask])
+        bunch.bz[mask] = bz + (vecp1[mask] * vec1[mask] + vecp2[mask] * vec2[mask] +
+                               vecp3[mask] * vec3[mask] + vecp4[mask] * vec4[mask]) / hrhtet
+        bunch.bx[mask] = bunch.z[mask] * gx
+        bunch.by[mask] = bunch.z[mask] * gy
+    else:
+        vec1[mask] += vecb1[mask]
+        vec2[mask] += vecb2[mask]
+        vec3[mask] += vecb3[mask]
+        vec4[mask] += vecb4[mask]
+        bunch.bz[mask] = (vecp1[mask] * vec1[mask] + vecp2[mask] * vec2[mask] +
+                      vecp3[mask] * vec3[mask] + vecp4[mask] * vec4[mask]) / hrhtet
+        bunch.bx[mask] = bunch.z[mask] * (
+            vecp1[mask] * vecx1[mask] + vecp2[mask] * vecx2[mask] +
+            vecp3[mask] * vecx3[mask] + vecp4[mask] * vecx4[mask]) / hrhtet
+        bunch.by[mask] = bunch.z[mask] * (
+            vecp1[mask] * vecy1[mask] + vecp2[mask] * vecy2[mask] +
+            vecp3[mask] * vecy3[mask] + vecp4[mask] * vecy4[mask]) / hrhtet
 
     mask_rle = bunch.r <= field.rmin
     bunch.bx[mask_rle] = 0.0

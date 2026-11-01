@@ -75,10 +75,13 @@ class LionsTracker:
 
     w_mev: kinetic energy per nucleon; fhf_hz: RF frequency at harmonic 1 (one turn = steps_per_turn steps);
     species: (atomic mass in u, mass number, charge state), protons by default.
+    interpolation: the LIONS deck option ('bilinear', the default, or 'hermite').
     """
 
-    def __init__(self, workdir, w_mev, fhf_hz, steps_per_turn, species=(syn.HYDROGEN, 1, 1)):
+    def __init__(self, workdir, w_mev, fhf_hz, steps_per_turn, species=(syn.HYDROGEN, 1, 1),
+                 interpolation='bilinear'):
         self.workdir, self.w, self.fhf, self.n, self.species = Path(workdir), w_mev, fhf_hz, steps_per_turn, species
+        self.tail = () if interpolation == 'bilinear' else ('no no', f'interpolation={interpolation}')
 
     def track(self, states, turns):
         """Full-step trajectories (t, pos, mom) of shape (steps, n, 3), momenta at full steps."""
@@ -86,7 +89,7 @@ class LionsTracker:
         n_part = len(states)
         with contextlib.chdir(self.workdir):
             syn.write_deck('deck.dat', fhf=self.fhf, r0=states[0, 0], w0=self.w, turns=int(np.ceil(turns)),
-                           npaspt=self.n, nbrion=n_part, species=self.species)
+                           npaspt=self.n, nbrion=n_part, species=self.species, tail=self.tail)
             d = lions.State()
             d.run.swap_bytes = 'n'
             quiet = contextlib.redirect_stdout(io.StringIO())

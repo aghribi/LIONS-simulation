@@ -196,14 +196,79 @@ def cost(outdir):
     write(records, outdir, 'cost', 'Case H cost on the PSI map, 1/3 deg, M3 CPU')
 
 
-def lions_cost(grids, attrs, pos, mom, outdir, steps=20):
+PHASE2 = {'3-sector': (3, 1), '10-sector': (1, 1), 'psi': (1, 11)}   # map spacing, case index for one turn
+
+
+def lions_option(outdir):
+    """Phase 2: LIONS with interpolation=hermite against the harness F1 with Boris; cost against LIONS default."""
+    records = []
+    for name, (check_every, check_case) in PHASE2.items():
+        grids, attrs, cases, mass_kg, charge_c = load_map(name)
+        # the particle every other case used: CODATA protons on the PSI map, the FROM_ORBIT species on G1
+        species = (case_g1.lions_species(case_g2.MP_MEV * 1e6, 1) if name == 'psi' else
+                   case_g1.lions_species(float(attrs['mass_ev']), float(attrs['charge_e'])))
+        rest_mev = mass_kg * syn.C**2 / case_g1.lc.E_CHARGE / 1e6
+        for every in SPACINGS[name]:
+            spacing = case_g1.EVERY[every]
+            work = outdir / f'lions_{name}_every{every}'
+            work.mkdir(parents=True, exist_ok=True)
+            with contextlib.chdir(work):
+                case_g1.write_lions_map(grids, attrs, every)
+            f1 = fieldmodels.hermite_field(*fieldmodels.node_arrays(grids, attrs, every))
+
+            def lions(t, p, n):
+                w = (np.sqrt(1 + p**2) - 1) * rest_mev / species[1]
+                return orbits.LionsTracker(work, w, t['f_rev_hz'], n, species, interpolation='hermite').track
+
+            def harness(t, p, n):
+                return orbits.BorisTracker(f1, mass_kg, charge_c, p, t['f_rev_hz'], n).track
+
+            if every == check_every:
+                label, t, p, _ = cases[check_case]
+                start = np.array([[t['r_theta0_m'], p * t['pr_over_p_theta0'], 0.0, 0.0]])
+                a, b = orbits.one_turn(lions(t, p, 360), start), orbits.one_turn(harness(t, p, 360), start)
+                diff = float(np.max(np.abs(a - b)[0, :2] / np.array([t['r_theta0_m'], p])))
+                records.append({'map': name, 'spacing': spacing, 'case': label, 'steps_per_turn': 360,
+                                'metric': 'one_turn_vs_harness', 'value': diff, 'harness': None, 'unit': '1'})
+                print(f'{name} {spacing} {label}: LIONS hermite vs harness F1, one turn: {diff:.2e}', file=sys.stderr)
+                if diff > 1e-12:
+                    raise RuntimeError(f'{name}: LIONS hermite differs from the harness by {diff:.2e}')
+            for n in (1440, 2880):
+                for label, t, p, q_ref in cases:
+                    got = case_g1.orbit_metrics(lions(t, p, n), t, p, q_ref)
+                    ref = case_g1.orbit_metrics(harness(t, p, n), t, p, q_ref)
+                    for key, (v, u) in got.items():
+                        records.append({'map': name, 'spacing': spacing, 'case': label, 'steps_per_turn': n,
+                                        'metric': key, 'value': float(v), 'harness': float(ref[key][0]), 'unit': u})
+                    worst = max(abs(got[m][0] - ref[m][0]) for m in got if m != 'residual')
+                    print(f'{name} {spacing} {label} {n}: max |LIONS - harness| {worst:.1e}', file=sys.stderr)
+    # cost: LIONS default and LIONS with the option, PSI map
+    grids, attrs, cases, *_ = psi_map()
+    p = cases[11][2]
+    rng = np.random.default_rng(1)
+    for n_part in COST_PARTICLES:
+        r = rng.uniform(2.2, 4.2, n_part)
+        th = rng.uniform(0, 2 * np.pi, n_part)
+        pos = np.column_stack([r * np.cos(th), r * np.sin(th), rng.uniform(-5e-3, 5e-3, n_part)])
+        mom = p * np.column_stack([-np.sin(th), np.cos(th), np.zeros(n_part)])
+        for interpolation in ('bilinear', 'hermite'):
+            samples = [lions_cost(grids, attrs, pos, mom, outdir, interpolation=interpolation) for _ in range(3)]
+            records.append({'map': 'psi', 'spacing': '1/3 deg', 'case': f'lions_{interpolation}', 'steps_per_turn': n_part,
+                            'metric': 's_per_particle_step', 'value': float(np.median(samples)), 'harness': None,
+                            'unit': f's, {n_part} particles'})
+            print(f'LIONS {interpolation} {n_part}: {np.median(samples):.2e} s/particle-step', file=sys.stderr)
+    write(records, outdir, 'phase2', 'Case H phase 2: LIONS interpolation=hermite against the harness')
+
+
+def lions_cost(grids, attrs, pos, mom, outdir, steps=20, interpolation='bilinear'):
     """LIONS itself: plain tracking loop over `steps` steps, per particle-step."""
     work = outdir / 'lions_cost'
     work.mkdir(parents=True, exist_ok=True)
+    tail = () if interpolation == 'bilinear' else ('no no', f'interpolation={interpolation}')
     with contextlib.chdir(work):
         case_g1.write_lions_map(grids, attrs, 1)
         syn.write_deck('deck.dat', fhf=case_g2.F_RF / case_g2.HARMONIC, r0=3.0, w0=300.0, turns=1, npaspt=steps,
-                       nbrion=len(pos))
+                       nbrion=len(pos), tail=tail)
         d = lions.State()
         d.run.swap_bytes = 'n'
         with contextlib.redirect_stdout(io.StringIO()):
@@ -236,7 +301,7 @@ def memory(grids, attrs):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('task', choices=('validate', 'matrix', 'cost'))
+    parser.add_argument('task', choices=('validate', 'matrix', 'cost', 'lions'))
     parser.add_argument('--outroot', type=Path, default=RUNS / 'case_h')
     args = parser.parse_args()
-    {'validate': validate, 'matrix': matrix, 'cost': cost}[args.task](args.outroot.resolve())
+    {'validate': validate, 'matrix': matrix, 'cost': cost, 'lions': lions_option}[args.task](args.outroot.resolve())

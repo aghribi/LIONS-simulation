@@ -88,6 +88,10 @@ class FieldMap:
     harmonic_phase: np.ndarray = field(default_factory=lambda: np.zeros(10))
     db_over_b: float = 0.0
     b_factor: Optional[float] = None  # T: max|Bz| imposed on the map; None = map used as read
+    interpolation: str = 'bilinear'   # 'hermite': bicubic Hermite Bz from the arrays below (fields.prepare_hermite)
+    dbzdr: Optional[np.ndarray] = None         # T/m
+    dbzdtheta: Optional[np.ndarray] = None     # T/rad
+    d2bzdrdtheta: Optional[np.ndarray] = None  # T/(m rad)
 
 
 @dataclass

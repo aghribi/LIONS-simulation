@@ -66,3 +66,27 @@ def test_run_from_deck_object(workdir):
     from_object = syn.quiet_run(read_deck('deck.dat'))
     for name in ('x', 'y', 'z', 'px', 'py', 'pz'):
         np.testing.assert_array_equal(getattr(from_object.bunch, name), getattr(from_file.bunch, name))
+
+
+def test_interpolation_option_round_trip(tmp_path):
+    deck = full_deck()
+    deck.field_interpolation = 'hermite'
+    write_deck(deck, tmp_path / 'deck.dat')
+    assert read_deck(tmp_path / 'deck.dat') == deck
+
+
+def test_interpolation_option_follows_the_bunch_files(tmp_path):
+    """The Fortran reads ficloa ficsto after the file names: the option must come after them."""
+    deck = read_deck(EXAMPLES[0])
+    deck.field_interpolation = 'hermite'
+    write_deck(deck, tmp_path / 'deck.dat')
+    assert (tmp_path / 'deck.dat').read_text().splitlines()[-2:] == ["'no' 'no'", 'interpolation=hermite']
+    assert read_deck(tmp_path / 'deck.dat') == deck
+
+
+@pytest.mark.parametrize('token', ['interpolation=spline', 'integrator=rk4'])
+def test_bad_deck_option(tmp_path, token):
+    text = EXAMPLES[0].read_text().rstrip('\n') + f"\n'no' 'no'\n{token}\n"
+    (tmp_path / 'deck.dat').write_text(text)
+    with pytest.raises(ValueError):
+        read_deck(tmp_path / 'deck.dat')

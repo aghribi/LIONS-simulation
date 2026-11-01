@@ -9,7 +9,7 @@ from .state import (Bunch, DeflectorElement, DipoleElement, GridElement, IonFami
                     CENTRAL_NX, CENTRAL_NY, MAP_NR, MAP_NTHETA, OUTER_NX, OUTER_NY)
 from .constants import AMU, C_LIGHT, ELECTRON_MASS_U, E_CHARGE, MEV
 from .beam import distribute_bunch
-from .fields import add_harmonics
+from .fields import add_harmonics, prepare_hermite
 
 
 def prompt(prompt=''):
@@ -327,8 +327,16 @@ def load(d, deck):
         d.field.dbzdy *= scale
         print(f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.field.b_factor:.6f} T')
 
+    d.field.interpolation = deck.field_interpolation
+    if d.field.interpolation == 'hermite':
+        prepare_hermite(d.field, ntheta_all)
+
     d.field.bz *= (1.0 + d.field.db_over_b)
     d.field.d2bz *= (1.0 + d.field.db_over_b)
+    if d.field.interpolation == 'hermite':
+        # the Hermite surface is Bz itself: its slopes scale with it
+        for arr in (d.field.dbzdr, d.field.dbzdtheta, d.field.d2bzdrdtheta):
+            arr *= (1.0 + d.field.db_over_b)
 
     if d.files.central_potential != 'no':
         pot = read_central_potential(d.files.central_potential, d.run.swap_bytes == 'y')

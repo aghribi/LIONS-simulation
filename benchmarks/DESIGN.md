@@ -977,3 +977,18 @@ Reading:
   prediction. RK4 on F0 above 1e-3 in det at 1440 steps on PSI: held (0.1). Cost: F1 1.8 times (predicted 2 to 4),
   splines 3.9 to 5.9 times (predicted 5 to 20), RK4 3.8 to 3.9 times its Boris cost (predicted about 4).
 - Scope: one turn, no acceleration, three maps, median-plane maps with first-order vertical field.
+
+### Case H phase 2: F1 in LIONS (registered before running, option approved 2026-11-01)
+Implementation: deck token `interpolation=hermite` after `ficloa ficsto` (the Fortran never reads it), API field
+`Deck.field_interpolation` ('bilinear' default, 'hermite'). Bilinear code path unchanged; `tests/test_fortran.py`
+passes, and a new test shows the Fortran gives byte-identical output with and without the token. LIONS derives the
+Hermite slopes from its map (dBz/dr and dBz/dtheta from dBz/dx, dBz/dy; cross derivative as F1), so no new input.
+In `compute_bfield` (initial bunch) and `compute_fields`; the d2Bz term stays bilinear; with db_over_b the Hermite
+slopes are scaled with Bz.
+Validation:
+- One turn from the reference orbit, LIONS with the option against the harness F1 with Boris: within 1e-12 relative
+  on the 3-sector map at 1 deg (a = 0.24), the 10-sector map at 1/3 deg (a = 0.8632) and the PSI map (292 MeV),
+  360 steps (G1 step 3a criterion).
+- The case H decision cases for F1 with Boris at 1440 and 2880 steps, through LIONS: every metric equal to the
+  harness value within 1e-9 absolute (Newton and the finite-difference Jacobian amplify rounding).
+- Cost: LIONS with the option against LIONS default, per particle-step, 1e3 and 1e5 particles, PSI map.

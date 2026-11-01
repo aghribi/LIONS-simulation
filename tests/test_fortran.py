@@ -178,3 +178,19 @@ def test_python_matches_fortran(tmp_path, fortran, name, rewrite):
     for out in ['z.out', 'xy.out', *extra]:
         assert_rows_match(tmp_path / 'f' / out, tmp_path / 'p' / out)
         assert syn.numeric_rows(tmp_path / 'p' / out), f'{out} empty: case not exercised'
+
+
+def test_fortran_ignores_deck_options(tmp_path, fortran):
+    """A deck with interpolation=hermite gives the Fortran the same run as the plain deck."""
+    def with_option(bunch_file):
+        out = case_outer(bunch_file)
+        deck = read_deck('deck.dat')
+        deck.field_interpolation = 'hermite'
+        write_deck(deck, 'deck.dat')
+        return out
+
+    extra = run_in(tmp_path / 'plain', [str(fortran)], case_outer, None, False)
+    run_in(tmp_path / 'option', [str(fortran)], with_option, None, False)
+    assert (tmp_path / 'plain' / 'final.bin').read_bytes() == (tmp_path / 'option' / 'final.bin').read_bytes()
+    for out in ['z.out', 'xy.out', *extra]:
+        assert (tmp_path / 'plain' / out).read_text() == (tmp_path / 'option' / out).read_text()
