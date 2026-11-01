@@ -11,19 +11,19 @@ import numpy as np
 from lions.game import physics
 
 KNOB_HELP = {
-    'rf_mhz': 'RF: the kick rhythm. It must be a whole multiple of the revolution frequency, or the phase slips.',
-    'b0': 'FIELD: sets the energy at the extraction radius, and the revolution frequency. Move it and the RF must follow.',
-    'trim': 'TRIM: how fast the field grows with gamma. At the right value the turn time is the same at every radius.',
-    'dee_kv': 'DEE VOLTAGE: energy gain per turn. More gain separates the last turns, so less beam hits the septum.',
+    'rf_mhz': 'RF: the kick rhythm. A whole multiple of the turn rate, or the phase slips.',
+    'b0': 'FIELD: sets the energy at extraction and the turn rate. The RF must follow.',
+    'trim': 'TRIM: how fast the field grows with gamma. Right: same turn time at all radii.',
+    'dee_kv': 'DEE VOLTAGE: gain per turn. More gain: last turns apart, less on the septum.',
     'phase_deg': 'PHASE: when the bunch arrives. On the crest it gains most.',
-    'buncher': 'BUNCHER: packs the source beam into the RF acceptance. Too strong and it overbunches.',
+    'buncher': 'BUNCHER: packs the beam into the RF acceptance. Too strong overbunches.',
     'source_ua': 'SOURCE: current in. Current out, losses and power all scale with it.',
-    'deflector_kv': 'DEFLECTOR: pulls the last turn out of the machine. It must match the beam rigidity.',
+    'deflector_kv': 'DEFLECTOR: pulls the last turn out. It must match the beam rigidity.',
     'steer_x': 'STEER X: moves the beam sideways on the target.',
     'steer_y': 'STEER Y: moves the beam up and down on the target.',
-    'quad': 'QUADRUPOLE: focuses. Around the best value the spot is smallest; either side it opens.',
+    'quad': 'QUADRUPOLE: focuses. Smallest spot at the best value, wider on either side.',
     'slit': 'ENERGY SLIT: cuts the energy tails. Less spread, less current.',
-    'degrader_cm': 'DEGRADER: slows the beam. More material, lower energy, more scattering, fewer protons.',
+    'degrader_cm': 'DEGRADER: more material, lower energy, more scattering, fewer protons.',
 }
 
 @dataclass

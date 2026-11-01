@@ -421,10 +421,11 @@ def test_following_the_helper_finishes_each_stage(key):
 def test_every_knob_has_help():
     from lions.game.coach import KNOB_HELP
     assert {s['key'] for m in MISSIONS.values() for s in m.specs} <= set(KNOB_HELP)
+    assert max(len(text) for text in KNOB_HELP.values()) <= 80      # one line of the helper box
 
 
-def test_tutorial_from_the_menu_on_every_entry(tmp_path):
-    """T on the menu starts the helper on every channel, level 0 stages included, and a failed tutorial costs no life."""
+def test_tutorial_for_each_challenge_with_real_keys(tmp_path):
+    """Down to each line, T: that challenge's own walkthrough, then its helper. A failed tutorial costs no life."""
     import os
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
     from PyQt5.QtCore import Qt
@@ -437,17 +438,39 @@ def test_tutorial_from_the_menu_on_every_entry(tmp_path):
     w.timer.stop()
     w.show()
     w.new_game()
-    for choice in range(len(w.menu_items())):
-        w.state, w.choice = 'menu', choice
+    items = w.menu_items()
+    for line, (key, title, stages) in enumerate(items):
+        w.state, w.choice = 'menu', 0
+        for _ in range(line):
+            QTest.keyClick(w, Qt.Key_Down)
+        assert w.choice == line
+        w.grab()
         QTest.keyClick(w, Qt.Key_T)
-        assert w.state == 'play' and w.coach is not None
-        lives = w.lives
-        for i in range(len(w.stages)):      # every stage of the entry draws with its helper
-            w.index = i
-            w.start_stage(tutorial=True)
-            w.frame()
+        if line:
+            assert w.state == 'walkthrough' and w.stages[0].mission_id == key
             w.grab()
+            QTest.keyClick(w, Qt.Key_Return)
+        assert w.state == 'play' and w.tutorial and w.stage is stages[0]
+        w.frame()
+        w.grab()
+        lives = w.lives
         w.stage.finish(False, 'TEST')
         w.frame()
         assert w.state == 'clear' and w.lives == lives and w.total == 0
+    w.state, w.choice = 'menu', 1
+    QTest.keyClick(w, Qt.Key_A)      # A and ENTER accept the highlighted line
+    assert w.state == 'brief' and w.stages[0].mission_id == items[1][0]
     app.processEvents()
+
+
+@pytest.mark.parametrize('name', sorted(MISSIONS))
+def test_walkthrough_covers_every_knob_and_the_helper(name):
+    """Each challenge has its own steps, naming every knob it offers; the helper's advice always maps to one."""
+    from lions.game.coach import Coach
+    s = MISSIONS[name]
+    named = [k for step in s.walkthrough for k in step['knobs']]
+    missing = {spec['key'] for spec in s.specs} - set(named)
+    assert not missing, f'{name}: {missing}'
+    s.reset(3)
+    advice = Coach(s).advise()
+    assert advice.knob in named or not advice.knob

@@ -18,6 +18,11 @@ stages:
     client: "HOSPITAL: melanoma at 28 mm in a water phantom. Bragg peak on the tumour, 60 Gy, not more. Degrade the 230 MeV beam."
     brief: "Put the Bragg peak on the tumour with the degrader, steer onto the axis, then hold SPACE and release at the prescription."
     lesson: "A cyclotron gives one energy. The degrader sets the depth, and pays for it in scattering and lost protons."
+    tutorial:
+      - {title: "GET THE BEAM OUT", text: "The radial probe shows how far the beam gets. The phase probe tells why it stops: rising, the RF is too high; falling, too low. Then bring the phase near zero.", knobs: [rf_mhz, phase_deg, b0]}
+      - {title: "PUT THE PEAK ON THE TUMOUR", text: "Bragg peak deeper than 28 mm: more degrader. Shallower: less. The green band is the tumour.", knobs: [degrader_cm]}
+      - {title: "CENTRE THE BEAM", text: "The magenta circle must sit in the green one. Deflector for large errors, steerers for the rest.", knobs: [deflector_kv, steer_x, steer_y]}
+      - {title: "DELIVER 60 GY", text: "Hold SPACE. Release when the bar passes the yellow mark. Past the end of the bar is an overdose.", knobs: []}
     switches: {noise: illustrative, drift: illustrative, errors: illustrative}
     ion: {name: p, mass_number: 1, charge: 1}
     harmonic: 4
@@ -75,6 +80,11 @@ stages:
     client: "HOSPITAL: deep tumour at 15 cm in a water phantom. 2 Gy on it, little in front of it, nothing behind."
     brief: "Less degrader, higher energy, more range straggling. The dose is small: release on time."
     lesson: "The peak widens with range, and the entrance dose rises. Depth has a price."
+    tutorial:
+      - {title: "GET THE BEAM OUT", text: "Rising phase: RF too high. Falling: too low. A phase that bends with radius: turn the trim.", knobs: [rf_mhz, trim, b0]}
+      - {title: "PUT THE PEAK ON THE TUMOUR", text: "15 cm needs much less degrader than the eye. The peak is wider here: range straggling grows with depth.", knobs: [degrader_cm]}
+      - {title: "CENTRE THE BEAM", text: "The magenta circle must sit in the green one.", knobs: [deflector_kv, steer_x, steer_y]}
+      - {title: "DELIVER 2 GY", text: "Hold SPACE and release at the yellow mark. The dose is small: be ready.", knobs: []}
     switches: {noise: illustrative, drift: illustrative, errors: illustrative}
     ion: {name: p, mass_number: 1, charge: 1}
     harmonic: 4
@@ -113,6 +123,12 @@ stages:
     client: "RADIOPHARMACY: 120 GBq of F-18 for the morning PET list, by end of shift. It decays while it waits."
     brief: "18 MeV protons on enriched water. More current, more activity, but the water must not boil and lost beam activates the machine."
     lesson: "Activity saturates: A = Y I (1 - exp(-lambda t)). Extraction efficiency is what lets you run high current."
+    tutorial:
+      - {title: "GET THE BEAM OUT", text: "Rising phase: RF too high. Falling: too low. Then bring the phase near zero.", knobs: [rf_mhz, phase_deg, b0]}
+      - {title: "BUNCH, AND CUT THE LOSSES", text: "Buncher near 1 lets more beam into the RF. More dee voltage separates the last turns, so less beam hits the septum.", knobs: [buncher, dee_kv]}
+      - {title: "SET THE CURRENT", text: "You need at least 30 uA on target, under 1.3 kW on the water, and under the loss limit.", knobs: [source_ua]}
+      - {title: "HIT THE TARGET WINDOW", text: "Off centre, the beam breaks the window.", knobs: [deflector_kv, steer_x]}
+      - {title: "IRRADIATE", text: "Hold SPACE. Activity builds up and saturates: it slows down as it climbs. Lost beam heats the interlock.", knobs: []}
     switches: {noise: illustrative, drift: illustrative, errors: illustrative, yield_against_energy: illustrative}
     ion: {name: p, mass_number: 1, charge: 1}
     harmonic: 2
@@ -173,6 +189,14 @@ stages:
     client: "NUCLEAR PHYSICS: Ne-20 4+ at 10 MeV per nucleon. Energy within 0.3%, spread under 0.1%, 0.1 to 0.5 uA, for 25 s of beam."
     brief: "The field sets the energy, the RF must follow, and it can lock on harmonic 2 or 3. Close the energy slit until the spread fits, but keep the current."
     lesson: "E/A = K (Q/A)^2 sets what a machine can reach. Harmonic, field and frequency are one system."
+    tutorial:
+      - {title: "GET THE BEAM OUT", text: "Rising phase: RF too high. Falling: too low. The RF can lock on harmonic 2 or 3. Dee voltage sets the gain per turn.", knobs: [rf_mhz, phase_deg, dee_kv]}
+      - {title: "SET THE ENERGY", text: "The radius is fixed, so the field sets the energy. Move it a little, then let the RF follow.", knobs: [b0]}
+      - {title: "CLOSE THE ENERGY SLIT", text: "The spread must be under 0.1%. Closing the slit also cuts the current.", knobs: [slit]}
+      - {title: "SET THE CURRENT", text: "0.1 to 0.5 uA: the detectors have limits on both sides.", knobs: [source_ua]}
+      - {title: "CENTRE THE BEAM", text: "Deflector for large errors, steerers for the rest.", knobs: [deflector_kv, steer_x, steer_y]}
+      - {title: "FOCUS THE SPOT", text: "The spot has no sign: turn the quadrupole and watch whether it shrinks.", knobs: [quad]}
+      - {title: "TAKE DATA", text: "Hold SPACE. The bar only fills while all five lights are green.", knobs: []}
     switches: {noise: illustrative, drift: illustrative, errors: illustrative}
     ion: {name: Ne-20 4+, mass_number: 20, charge: 4}
     harmonic: 3
@@ -232,6 +256,13 @@ stages:
     client: "RADIOACTIVE BEAMS: 70 MeV protons on a production target. Up to 1.4 kW, spread out, for 40 kJ. Melt it and the campaign is over."
     brief: "Power is what makes the isotopes. Too much melts the target; too small a spot makes a hot spot; too large a spot misses it."
     lesson: "A target limits the beam as much as the machine does. A small focus is not always the goal."
+    tutorial:
+      - {title: "GET THE BEAM OUT", text: "Rising phase: RF too high. Falling: too low. A phase that bends with radius: turn the trim.", knobs: [rf_mhz, trim, phase_deg, b0]}
+      - {title: "CUT THE LOSSES", text: "More dee voltage separates the last turns.", knobs: [dee_kv]}
+      - {title: "OPEN THE SPOT", text: "Power density melts the target: open the spot with the quadrupole before raising the power.", knobs: [quad]}
+      - {title: "SET THE POWER", text: "Between 0.8 and 1.4 kW. Power is what makes the isotopes.", knobs: [source_ua]}
+      - {title: "CENTRE THE BEAM", text: "The whole spot must stay on the target.", knobs: [deflector_kv, steer_x, steer_y]}
+      - {title: "IRRADIATE", text: "Hold SPACE until 40 kJ are on target.", knobs: []}
     switches: {noise: illustrative, drift: illustrative, errors: illustrative, density_limit: illustrative}
     ion: {name: p, mass_number: 1, charge: 1}
     harmonic: 3
@@ -289,6 +320,13 @@ stages:
     client: "QUALIFICATION LAB: a material sample for a satellite, 20 mm wide. 60 MeV protons, flux 1e7 to 1e8 per cm2 per s, 80% edge over centre, 1e10 per cm2."
     brief: "Degrade to 60 MeV. Open the spot with the quadrupole until the edge of the sample gets its share, while the flux stays in the window. Dose out of spec spoils the test."
     lesson: "A test beam is wide and weak on purpose. Fluence, flux and uniformity decide what a qualification result is worth: the beam line is the test bench."
+    tutorial:
+      - {title: "GET THE BEAM OUT", text: "Rising phase: RF too high. Falling: too low. Then bring the phase near zero.", knobs: [rf_mhz, phase_deg, b0]}
+      - {title: "SET THE ENERGY ON THE SAMPLE", text: "60 MeV on the sample: the degrader takes it down from 230 MeV.", knobs: [degrader_cm]}
+      - {title: "CENTRE THE BEAM", text: "An off-centre beam starves one edge of the sample.", knobs: [deflector_kv, steer_x, steer_y]}
+      - {title: "OPEN THE SPOT", text: "The edge must get at least 80% of the centre: the spot must be much wider than the sample.", knobs: [quad]}
+      - {title: "SET THE FLUX", text: "1e7 to 1e8 per cm2 per s. A wider spot lowers it, the source raises it.", knobs: [source_ua]}
+      - {title: "IRRADIATE", text: "Hold SPACE until 1e10 per cm2. Dose out of spec spoils the test.", knobs: []}
     switches: {noise: illustrative, drift: illustrative, errors: illustrative, fluence: illustrative}
     ion: {name: p, mass_number: 1, charge: 1}
     harmonic: 4

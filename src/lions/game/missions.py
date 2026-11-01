@@ -36,7 +36,7 @@ class Mission(Stage):
         super().__init__(scenario, entry, params)
         self.machine = mc.Machine(**checked(entry['machine'], MACHINE_UNITS, f'{self.key}.machine'))
         self.ion = mc.Ion(**entry['ion'])
-        self.client, self.mission_id = entry['client'], entry['id']
+        self.client, self.mission_id, self.walkthrough = entry['client'], entry['id'], entry['tutorial']
         self.specs = entry['knobs']
         for spec in self.specs:
             if spec['unit'] != KNOB_UNITS[spec['key']]:

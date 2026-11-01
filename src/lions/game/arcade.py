@@ -151,17 +151,21 @@ class Arcade(QWidget):
             self.new_game()
         elif self.state == 'initials':
             self.edit_initials(key)
-        elif self.state == 'brief' and key == Qt.Key_T:
-            self.start_stage(tutorial=True)
-        elif self.state == 'menu' and key == Qt.Key_T:
-            self.choose()
+        elif self.state in ('brief', 'menu') and key == Qt.Key_T:
+            if self.state == 'menu':
+                self.choose()
+            if isinstance(self.stages[self.index], Mission):
+                self.state = 'walkthrough'
+            else:
+                self.start_stage(tutorial=True)
+        elif self.state == 'walkthrough' and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_T):
             self.start_stage(tutorial=True)
         elif self.state == 'menu' and key in (Qt.Key_Up, Qt.Key_Down):
             self.choice = (self.choice + (1 if key == Qt.Key_Down else -1)) % len(self.menu_items())
-        elif key in (Qt.Key_Return, Qt.Key_Enter) or (key == Qt.Key_Space and self.state != 'play'):
+        elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_A) or (key == Qt.Key_Space and self.state != 'play'):
             self.press_start()
         elif key == Qt.Key_Escape:
-            self.state = 'over' if self.state == 'menu' else 'menu' if self.state in ('brief', 'play', 'lost', 'clear') else 'attract'
+            self.state = 'over' if self.state == 'menu' else 'menu' if self.state in ('brief', 'walkthrough', 'play', 'lost', 'clear') else 'attract'
 
     def keyReleaseEvent(self, event):
         if not event.isAutoRepeat():
@@ -257,6 +261,16 @@ class Arcade(QWidget):
         elif s.message:
             self.text(W / 2, H - 42, s.message, 16, YELLOW)
 
+    def step_label(self, advice):
+        """The walkthrough step this advice belongs to."""
+        steps = getattr(self.stage, 'walkthrough', None)
+        if not steps:
+            return ''
+        for i, step in enumerate(steps):
+            if advice.knob in step['knobs'] or (not step['knobs'] and not advice.knob):
+                return f'STEP {i + 1}/{len(steps)}: '
+        return ''
+
     def helper(self):
         mission = isinstance(self.stage, Mission)
         if not mission:
@@ -264,8 +278,8 @@ class Arcade(QWidget):
         advice, left = self.advice, 345 if mission else 16
         self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(20, 18, 5, 215))
         self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(255, 225, 77, 34))
-        self.text(left + 10, H - 72, advice.text, 15, YELLOW, 'left')
-        width = 76 if mission else 118
+        self.text(left + 10, H - 72, f'{self.step_label(advice)}{advice.text}', 15, YELLOW, 'left')
+        width = 80 if mission else 118
         lines = wrapped(advice.why, width)[:2]
         if mission:
             lines = [*lines[:1], *wrapped(KNOB_HELP[advice.knob or self.stage.specs[self.stage.selected]['key']], width)[:1]]
@@ -284,7 +298,7 @@ class Arcade(QWidget):
             y += 28
             self.text(W / 2, y, f"{row['initials']}  {row['points']:07d}", 16)
         if int(self.clock * 2) % 2:
-            self.text(W / 2, H - 56, 'PRESS START', 22, GREEN)
+            self.text(W / 2, H - 56, 'PRESS ENTER', 22, GREEN)
 
     def spiral(self, cx, cy, radius):
         turns, n = 5, 400
@@ -321,8 +335,24 @@ class Arcade(QWidget):
         request = self.menu_items()[self.choice][2][0]
         client = getattr(request, 'client', request.brief if self.choice else 'Five stages, from the Lorentz force to Thomas focusing.')
         self.block(H - 170, client, 66, 14, CYAN)
-        self.text(W / 2, H - 76, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO', 16, GREEN)
-        self.text(W / 2, H - 44, 'UP DOWN: CHOOSE   START: ACCEPT   ESC: END THE SHIFT', 13, DIM)
+        name = self.menu_items()[self.choice][1]
+        self.text(W / 2, H - 92, f'T: TUTORIAL ON {name}', 17, GREEN)
+        self.text(W / 2, H - 62, f'ENTER: PLAY {name}', 15, YELLOW)
+        self.text(W / 2, H - 32, 'UP DOWN: CHOOSE A LINE   ESC: END THE SHIFT', 13, DIM)
+
+    def draw_walkthrough(self):
+        s = self.stages[self.index]
+        self.text(W / 2, 28, f'TUTORIAL: {s.title}', 28, CYAN)
+        y = self.block(78, s.client, 74, 13, YELLOW) + 8
+        for i, step in enumerate(s.walkthrough):
+            self.text(50, y, f"{i + 1}. {step['title']}", 14, GREEN, 'left')
+            y += 24
+            for line in wrapped(step['text'], 86):
+                self.text(74, y, line, 11, WHITE, 'left')
+                y += 19
+            y += 4
+        self.text(W / 2, H - 56, MISSION_CONTROLS, 12, CYAN)
+        self.text(W / 2, H - 30, 'ENTER: START, THE HELPER GUIDES YOU   ESC: BACK', 14, GREEN)
 
     def draw_brief(self):
         s = self.stages[self.index]
@@ -334,7 +364,7 @@ class Arcade(QWidget):
         self.text(W / 2, y + 40, MISSION_CONTROLS if mission else CONTROLS[s.key], 13, GREEN)
         self.text(W / 2, y + 80, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE', 14, YELLOW)
         if int(self.clock * 2) % 2:
-            self.text(W / 2, H - 80, 'PRESS START', 22, GREEN)
+            self.text(W / 2, H - 80, 'PRESS ENTER', 22, GREEN)
 
     def draw_clear(self):
         s = self.stage
@@ -342,25 +372,25 @@ class Arcade(QWidget):
         self.text(W / 2, 180, s.message, 22, GREEN if s.success else RED)
         self.text(W / 2, 240, f'+{s.points} POINTS', 24, CYAN)
         self.block(330, s.lesson, 54, 18)
-        self.text(W / 2, H - 80, 'PRESS START', 20, GREEN)
+        self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_lost(self):
         s = self.stage
         self.text(W / 2, 200, s.message, 28, RED)
         self.text(W / 2, 280, f'{self.lives} IONS LEFT', 22, MAGENTA)
         self.block(370, s.brief, 56, 15, DIM)
-        self.text(W / 2, H - 80, 'PRESS START', 20, GREEN)
+        self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_over(self):
         self.text(W / 2, 230, 'GAME OVER', 56, RED)
         self.text(W / 2, 340, f'SCORE {self.total:07d}', 26, CYAN)
-        self.text(W / 2, H - 80, 'PRESS START', 20, GREEN)
+        self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_won(self):
         self.text(W / 2, 170, 'LEVEL 0 CLEAR', 46, GREEN)
         self.text(W / 2, 280, f'SCORE {self.total:07d}', 26, CYAN)
         self.block(370, 'Next: the real machine. Central region, deflector, the CIME layout. Needs the CIME map.', 54, 16, YELLOW)
-        self.text(W / 2, H - 80, 'PRESS START', 20, GREEN)
+        self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_initials(self):
         self.text(W / 2, 170, 'NEW HIGH SCORE', 38, YELLOW)
@@ -469,15 +499,15 @@ class Arcade(QWidget):
         w = width - 200
         low = x + w * (p['depth_cm'] - p['half_width_cm'] - d0) / (d1 - d0)
         high = x + w * (p['depth_cm'] + p['half_width_cm'] - d0) / (d1 - d0)
-        self.p.fillRect(QRectF(low, y, max(high - low, 2), 170), QColor(61, 255, 122, 70))
-        self.plot(x, y, w, 170, s.depth_axis, s.bragg, YELLOW, 'DOSE AGAINST DEPTH IN WATER; GREEN: TUMOUR')
-        self.text(x, y + 176, f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   SPOT {s.spot():.1f} MM', 13, WHITE, 'left')
+        self.p.fillRect(QRectF(low, y, max(high - low, 2), 150), QColor(61, 255, 122, 70))
+        self.plot(x, y, w, 150, s.depth_axis, s.bragg, YELLOW, 'DOSE AGAINST DEPTH IN WATER; GREEN: TUMOUR')
+        self.text(x, y + 154, f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   SPOT {s.spot():.1f} MM', 13, WHITE, 'left')
         self.crosshair(x + width - 90, y + 90, 80, s, p['lateral_mm'], 'LATERAL')
-        self.bar(x, y + 230, width, 22, s.delivered / (p['dose_gy'] * (1 + p['dose_tolerance'])), GREEN,
+        self.bar(x, y + 206, width, 20, s.delivered / (p['dose_gy'] * (1 + p['dose_tolerance'])), GREEN,
                  f"TUMOUR {s.delivered:.1f} / {p['dose_gy']:.1f} GY   RATE {s.rate:.2f} GY/S")
         ok = x + width * (1 - p['dose_tolerance']) / (1 + p['dose_tolerance'])
-        self.line(ok, y + 226, ok, y + 256, YELLOW)
-        self.bar(x, y + 288, width, 14, s.healthy / p['healthy_limit_gy'], RED, f'OUTSIDE THE TUMOUR {s.healthy:.2f} GY')
+        self.line(ok, y + 202, ok, y + 230, YELLOW)
+        self.bar(x, y + 258, width, 14, s.healthy / p['healthy_limit_gy'], RED, f'OUTSIDE THE TUMOUR {s.healthy:.2f} GY')
 
     def panel_isotope(self, s, x, y, width, height):
         p = s.p
