@@ -1,6 +1,6 @@
 # LIONS training game: specification (draft for review)
 
-Status: draft, nothing built. Decisions marked **D1** to **D8** are open for A. Ghribi and O. Kamalou.
+Status: draft, nothing built. Decisions **D1** to **D8** are recorded in §12.
 "Lecture §n" is chapter n of the lecture notes in `docs/lecture`. Other "§n" are sections of this document.
 
 ## 1. Purpose
@@ -41,8 +41,8 @@ same observations. That makes the game both a trainer and a benchmark.
 Gaps to close before levels 3 to 5 (not built):
 - The PyTorch port has the bilinear field and the Boris push only: no RF dees, no central region, no extraction elements.
   It must reach parity with LIONS on these, validated as in Lecture §7 (field parity, then tracking parity).
-- The CIME field map is needed for the CIME scenarios (**D1**: availability and licence of `cime700rec.1804.pbob1.lio.dat`
-  and the CIME decks for training use).
+- The CIME field map is needed for the CIME scenarios. **D1**: the CIME map `cime700rec.1804.pbob1.lio.dat` and the CIME
+  decks may be used for training once available.
 - Field model: `interpolation=hermite` for tune and Jacobian work (Lecture §9); the bilinear default for Fortran
   reproduction.
 
@@ -93,9 +93,8 @@ species; restart after a field cycle (hysteresis).
 
 ## 5. GUI
 
-**D2**: build on the existing PyQt5 GUI (`lions.gui`: parameter form, live plots, field viewer; `uv run lions-gui`) or a
-separate web front end. Recommendation: extend the PyQt5 GUI for the first version. The engine, form and plots already
-exist, and the scenario API (§8) keeps a later web front end possible.
+**D2**: extend the existing PyQt5 GUI (`lions.gui`: parameter form, live plots, field viewer; `uv run lions-gui`). The
+scenario API (§9) keeps a later web front end possible.
 
 Screens:
 - **Level map** with tracks and progress.
@@ -118,8 +117,8 @@ Screens:
 | Misalignments | dee and deflector offsets drawn per episode | **D3** |
 | Initial beam | sigma matrix drawn around nominal | from the CIME deck |
 
-Each magnitude needs a source (machine data or operator knowledge). Until it has one, the switch is labelled
-"illustrative" in the GUI and in every score.
+**D3**: magnitudes come from CIME data. Until a magnitude has a source, the switch is labelled "illustrative" in the GUI
+and in every score.
 
 ## 7. Measures and baselines
 
@@ -130,7 +129,8 @@ Metrics: success (target met), time and number of evaluations to target, transmi
 and the number of unsafe actions (§8).
 
 Baselines, at equal evaluation budget and on the same observations:
-- **Operator procedure**, scripted from the CIME tuning practice (**D4**: who writes it down; Omar and the operators).
+- **Operator procedure**, scripted from the CIME tuning practice. **D4**: written by the CIME operations team; not written
+  yet, so level 5 has no operator baseline until it is.
 - **Nelder-Mead**.
 - **Bayesian optimisation**.
 - **Random search**.
@@ -157,7 +157,9 @@ A Gymnasium environment per level (3 to 5), on the same scenario API as the GUI:
 - At least 5 training seeds, with the spread. Training curves are diagnostics; the held-out evaluation is the result.
 - Against the baselines of §7 at equal budget. An agent that does not beat Bayesian optimisation and the operator
   procedure on held-out conditions is reported as such.
-- Libraries: **D5** (Stable-Baselines3 for PPO and SAC first; PufferLib if throughput limits).
+- Libraries (**D5**, proposal): Gymnasium API; Stable-Baselines3 for PPO, SAC and TD3, already used in the RL4AA 2026
+  experiments. The environment exposes the batched T2 model as a vectorised environment. PufferLib only if profiling
+  shows the trainer, not the physics, limits throughput.
 
 ### Policies in the game
 - **Watch**: replay a policy on a scenario, with its observations and actions.
@@ -167,8 +169,8 @@ A Gymnasium environment per level (3 to 5), on the same scenario API as the GUI:
 
 ### Human data
 Every human run is logged (observations, actions, outcomes) as Parquet with units and metadata. It feeds imitation
-learning and offline RL, and a comparison of human and agent strategies. **D6**: consent and anonymisation for operator
-and student logs.
+learning and offline RL, and a comparison of human and agent strategies. **D6**: human runs are logged, with consent
+recorded and player identities anonymised.
 
 ### Toward the real machine
 Out of scope for this specification. A policy is a candidate for CIME only after held-out evaluation, a named sim-to-real
@@ -181,7 +183,9 @@ One scenario definition drives the GUI, the baselines and the RL environment:
 - a LIONS deck (or the level's T0 model), the knobs with ranges and step sizes, the observables, the target, the budget,
   the switches and their magnitudes, and the seed;
 - `reset(seed) -> observation`, `step(action) -> observation, metrics, done`, `score() -> record`;
-- format: **D7** (YAML on top of the existing `Deck` dataclass is the obvious option).
+- format (**D7**): FAIR and compatible with openPMD and its beam physics extension (`EXT_BeamPhysics`). Scenario
+  definitions in YAML on top of the existing `Deck` dataclass, with units on every quantity; bunches and particle
+  outputs as openPMD files (`openpmd-beamphysics`); run logs as Parquet with units and metadata.
 
 ## 10. Validation before release
 
@@ -200,17 +204,17 @@ One scenario definition drives the GUI, the baselines and the RL environment:
 | v2 | PyTorch port with dees and extraction, validated; levels 3 and 4; Gymnasium environments; first policies |
 | v3 | CIME (level 5) with the CIME map and decks; sim-to-real switches with sourced magnitudes; held-out evaluation |
 
-**D8**: priority between the educational track (v0, v1) and the RL track (v2) if they compete for time.
+**D8**: the educational track (v0, v1) has priority over the RL track (v2).
 
-## 12. Open decisions
+## 12. Decisions
 
-| Id | Decision |
-|---|---|
-| D1 | CIME map and decks: availability and licence for a training tool |
-| D2 | GUI platform: extend PyQt5 (recommended) or web |
-| D3 | Magnitudes of noise, saturation, drift, hysteresis, actuator speed, misalignments (CIME data) |
-| D4 | Who writes down the operator tuning procedure |
-| D5 | RL library |
-| D6 | Consent and anonymisation of human logs |
-| D7 | Scenario file format |
-| D8 | Priority between educational and RL tracks |
+| Id | Decision | Status |
+|---|---|---|
+| D1 | CIME map and decks for training | yes, when available |
+| D2 | GUI platform | extend PyQt5 |
+| D3 | Sim-to-real magnitudes | from CIME data |
+| D4 | Operator tuning procedure | CIME operations team; not written yet |
+| D5 | RL library | proposal: Gymnasium + Stable-Baselines3; PufferLib if the trainer limits |
+| D6 | Human logs | yes, with consent and anonymisation |
+| D7 | Scenario and data format | FAIR, openPMD compatible (beam physics extension) |
+| D8 | Priority | educational track first |
