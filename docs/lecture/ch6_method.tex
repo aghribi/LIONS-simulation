@@ -40,9 +40,10 @@ Their error is not known in advance; it is bounded by comparing them with each o
 
 \section{Field parity}
 Codes compared on ``the same field'' must see the same field.
-In the synthetic-field cases (A, B0, B2, D2), every converted field is sampled from the LIONS field evaluation itself,
-so a conversion cannot add a second field model, and before each run the field of every code is compared with LIONS at
-random points.
+In the synthetic-field cases (A, B0, B2, D2), the OPAL maps are sampled from the LIONS field evaluation itself, so a
+conversion cannot add a second field model; RF-Track uses the closed-form field.
+Before each run the field of every code is compared with LIONS (at random points, or at the map nodes in $\theta$ for
+B2, where the bound is known there).
 On the external maps (G1, G2) this is not possible: OPAL reads the PSI file natively and recomputes the derivatives,
 and RF-Track runs on splines; there the field models differ by design and the comparison measures that.
 In case B0, $B_z$ agrees within \BzeroParityBz~T and $B_x$, $B_y$ within \BzeroParityBxy~T, below the derived bound of
@@ -92,8 +93,9 @@ B2: spread reduction vs.\ $1/(2\sin\pi\Qr)$: OPAL near it, LIONS mostly below & 
 G1 step 3, tunes: same Boris, same nodes, splines remove the excess & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 G1 step 3, $\det$: same comparison & $-$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 G2 2b: numpy Boris on the bilinear field equals LIONS & $\cdot$ & $\cdot$ & $-$ & $\cdot$ & $\cdot$\\
-G2 2b: $\det$ changes at most \GTwoBJacVar\,\% from $h=10^{-7}$ to $10^{-5}$ m & $\cdot$ & $\cdot$ & $\cdot$ & $-$ & $\cdot$\\
+G2 2b: $\det$ changes at most \GTwoBJacVar\,\% from $h=10^{-7}$ to $10^{-5}$ m (weak test, see text) & $\cdot$ & $\cdot$ & $\cdot$ & $-$? & $\cdot$\\
 G2 2c: adaptive RF-Track on the bilinear field, $|\det-1|$ \GTwoCRatioMin{} to \GTwoCRatioMax{} times smaller than Boris & $-$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G2 2c, tunes: adaptive RF-Track on the bilinear field within \GTwoCQrRfMax{} of the spline tracker in $\Qr$ & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 H: fixed-step RK4 on F0 keeps $|\det-1|$ at \HFzeroRkDetMin{} to \HFzeroRkDetMax{} (1440 steps) & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 H: F1 (C$^1$) lowers $|\det-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 \bottomrule
@@ -102,12 +104,20 @@ H: F1 (C$^1$) lowers $|\det-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1
 
 The current best explanation has two parts.
 The $\det$ excess comes from fixed-step integration across the gradient jumps (H1b): it appears with Boris and with RK4,
-it shrinks with the step count, and it nearly disappears with an adaptive integrator or a $C^1$ field.
-The tune excess has both contributions: the field model (H1) and the discretisation (H1b); they were not separated.
+it decreases slowly with the step count in cases G1 and H (case B shows no trend over 360 to 1440 steps), and it is
+much smaller with an adaptive integrator or a $C^1$ field.
+This explanation is consistent with the evidence; it is not proven.
+The tune excess has both contributions.
+On the PSI map at three energies (G2 2c), adaptive integration on the same bilinear field brings $\Qr$ within
+\GTwoCQrRfMax{} of the spline tracker, against \GTwoCQrLionsMin{} to \GTwoCQrLionsMax{} for LIONS: there the
+discretisation (H1b) dominates and the field model (H1) leaves a residual of order $10^{-3}$.
 H1 as first stated, an $O(h^2)$ interpolation error setting the scatter, failed its own prediction in case B: halving the
 azimuthal step left the scatter unchanged (ratio \BHalfDegQrRatioMin{} to \BHalfDegQrRatioMax), where $O(h^2)$
 predicts 0.25.
 The registered reading threshold of G2 2c ($|\det-1|<10^{-3}$ with RF-Track) was met at one energy of three, so the
 adaptive run supports H1b without closing the case.
-A direct test, the convergence order of $\det M_r - 1$ with the step count on a bilinear field and a Jacobian step scan
-with the closed orbit moved across a cell edge, has not been run.
+The step-insensitivity of $\det$ in G2 2b is a weak argument against H3: on a piecewise-smooth discrete map a central
+difference can mix two slopes at any $h$ (\cref{ch:orbits}).
+Three direct tests have not been run: the Jacobian from automatic differentiation of the existing PyTorch bilinear
+port (no finite differences at all), the convergence order of $\det M_r - 1$ with the step count, and a Jacobian step
+scan with the closed orbit moved across a cell edge.

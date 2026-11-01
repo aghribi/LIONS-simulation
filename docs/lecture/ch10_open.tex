@@ -30,12 +30,17 @@ Whether the Hermite field closes the gap between autograd and finite differences
 \end{itemize}
 
 \section{Physics questions for the LIONS authors}
-Two behaviours were found while porting and left unchanged pending a decision:
+These behaviours were left unchanged pending a decision:
 \begin{itemize}
 \item A difference between the codes: the Python port adds a vertical bunch spread for \texttt{espace='6d'}, while the
 Fortran does so only for \texttt{'3d'} (\texttt{lions\_2.0\_ep.f90}, line 498).
 \item Shared by both codes: the correlation code indexes the mass array by family number.
 This is wrong for families after the first.
+\item Shared by both codes, found during the verification of these notes: in the second field harmonic, the $k=0$ term
+of $\partial B_z/\partial y$ is added as $-c_0\,\partial s/\partial y$ (\texttt{lions.fields.add\_harmonics}; Fortran
+line 2351), while the derivative of the added polynomial gives $+c_0\,\partial s/\partial y$.
+The first harmonic and the $k\ge1$ terms have the consistent sign.
+It changes results only when second-harmonic coefficients are set; not tested.
 \end{itemize}
 
 \section{Lessons}
@@ -45,8 +50,9 @@ On the bilinear maps of case H, neither Boris nor RK4 meets the $10^{-4}$ target
 (\cref{tab:Hdecision}).
 A $C^1$ interpolation at \HCostHerm{} times the cost lowers $|\det M-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times.
 \item Count nodes per harmonic period, not degrees.
-\item Fixed-step integration across gradient jumps breaks area preservation of the one-turn map by orders of magnitude
-more than on a smooth field, with Boris and with RK4.
+\item On bilinear fields, the one-turn maps of fixed-step integrators (Boris and RK4) are far from area-preserving,
+orders of magnitude more than on smooth fields; integration across the gradient jumps is the explanation consistent with
+the evidence, not yet tested directly.
 \item Every convention (units, signs, direction, reference azimuth) should be settled by a two-reading run.
 \item A criterion built by the analysis that it judges can be tautological.
 Write the triangle inequality down before using one.

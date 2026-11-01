@@ -102,7 +102,8 @@ On the C$^1$ Hermite field the same azimuth change worked, which fits this hypot
 \item For tune or Jacobian work on measured maps: \texttt{interpolation=hermite}.
 Its effect on autograd gradients has not been measured: the PyTorch port is bilinear only.
 It lowers $|\det M-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps, for \HCostHerm{} times the cost of
-the default; on the PSI map it still leaves \HFoneDetPsi{} at 1440 steps, which needs 2880 steps to meet the target.
+the default; on the PSI map it still leaves \HFoneDetPsi{} at 1440 steps and \HFoneDetPsiTwoEightEighty{} at 2880 steps, while the
+tunes do not meet the target against the F3 reference at any step count.
 \item Check the node density per harmonic period of the map (\cref{ch:interpolation}) before trusting any interpolation.
 \item The default stays for reproducing Fortran results.
 \end{itemize}

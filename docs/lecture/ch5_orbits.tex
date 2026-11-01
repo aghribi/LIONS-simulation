@@ -14,7 +14,7 @@ One turn of tracking defines the one-turn map $T: X\mapsto X'$.
 \draw[->,gray] (0,-2.3) -- (0,2.4) node[above] {$y$};
 \draw[very thick,red!70!black] (0,0) -- (2.5,0) node[pos=0.92,below] {$\theta=0$};
 \foreach \k in {0,...,3} {
-  \fill[blue!8,rotate=90*\k] (0,0) -- (12:2.2) arc (12:58:2.2) -- cycle;
+  \fill[blue!8,rotate=90*\k] (0,0) -- (-23:2.2) arc (-23:23:2.2) -- cycle;
 }
 \draw[thick,blue!60!black,domain=0:360,samples=200,smooth,variable=\t]
   plot ({(1.6+0.12*cos(4*\t))*cos(\t)},{(1.6+0.12*cos(4*\t))*sin(\t)});
@@ -23,10 +23,11 @@ One turn of tracking defines the one-turn map $T: X\mapsto X'$.
 \fill (1.72,0) circle (1.5pt) node[above right] {$X^*$};
 \node[blue!60!black] at (-2.0,1.0) {closed orbit};
 \node[green!40!black] at (1.3,-2.0) {perturbed orbit};
-\node[blue!50!black] at (0.75,1.05) {hill};
+\node[blue!50!black] at (0.15,1.25) {hill};
 \end{tikzpicture}
 \caption{Section $\theta = 0$ in a 4-sector field.
-The closed orbit is scalloped with the field period and crosses the section at the fixed point $X^*$.
+The closed orbit is scalloped with the field period, farthest out in the hills, and crosses the section at the fixed
+point $X^*$.
 A perturbed orbit oscillates around it; the number of oscillations per turn is the tune.}
 \label{fig:section}
 \end{figure}

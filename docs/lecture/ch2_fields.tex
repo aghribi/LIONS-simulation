@@ -35,8 +35,8 @@ It is not divergence-free:
 The missing $-(z^2/2)\nabla_\perp^2B$ term in $B_z$ is what cancels it.
 For the linear tunes this does not matter, because the term is second order in $z$.
 For long-term invariants at finite $z$ it does.
-A divergent field has no vector potential, so the motion off the plane is not Hamiltonian and the canonical angular
-momentum is no longer an invariant ($|\vect p|$ still is, as for any magnetic field).
+A divergent field has no vector potential, so the motion off the plane is not Hamiltonian, and the canonical angular
+momentum, an invariant of the axisymmetric planar case, is no longer conserved off the plane ($|\vect p|$ still is, as for any magnetic field).
 The Lorentz flow even keeps preserving phase-space volume, since $\partial_{\vect p}\cdot(\vect v\times\vect B) = 0$ for any
 $\vect B$: a determinant test cannot detect the divergence.
 Case D2 (\cref{sec:caseD}) therefore uses planar motion only.
@@ -51,14 +51,13 @@ What the CIME map files contain in that column has not been checked here.
 
 \section{Map formats and conventions}
 Three formats appear in the benchmarks.
-Each conversion goes through one function (\nolinkurl{benchmarks/convert.py} or a case driver), validated on a
-reference case.
+Each conversion goes through one function, in the conversion module or a case driver, validated on a reference case.
 The conventions below were settled from the files and the OPAL source, then confirmed by a run (\texttt{DESIGN.md},
 sections 3, 7 and 21).
 
 \begin{description}
 \item[LIONS.] An $(r,\theta)$ grid over \SI{360}{\degree}, endpoint included, with $B_z$, $D$, $\partial B/\partial x$ and
-$\partial B/\partial y$ in \si{T} and \si{T/m}.
+$\partial B/\partial y$ in \si{T}, \si{T/m^2} ($D$) and \si{T/m}.
 The Python port accepts 250 radii and 1081 azimuths (the Fortran: 721 azimuths); 1081 columns at \thirddeg{} is the
 native PSI resolution.
 $B_z<0$ for counter-clockwise positive ions.
@@ -90,7 +89,8 @@ Short runs like these take minutes and settle what reading the source cannot.
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.85\textwidth]{field_maps}
-\caption{Median-plane $B_z$ of the two FROM\_ORBIT manufactured maps used in case G1, drawn as annuli (the inner radius is not to scale): the ideal 3-sector map
+\caption{Median-plane $B_z$ of the two FROM\_ORBIT manufactured maps used in case G1, drawn as annuli (the inner radius is not to scale), in the FROM\_ORBIT sign convention ($B>0$ in the
+hills; LIONS uses $-B$): the ideal 3-sector map
 (H$_2^+$, $r$ from 0.4 to \SI{2}{m}) and the 10-sector map with a second harmonic in the orbit shape (protons, $r$ from
 22.4 to \SI{26.6}{m}).
 The field changes sign in the valleys of the 10-sector map.}

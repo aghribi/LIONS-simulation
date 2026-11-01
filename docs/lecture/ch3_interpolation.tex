@@ -2,8 +2,8 @@
 
 A tracking code needs $B$ and its first derivatives at arbitrary points, from values on a grid.
 The choice of interpolation sets the smoothness of the field the integrator sees.
-In the benchmarks this mattered more than the choice of integrator: on bilinear maps, RK4 instead of Boris lowers
-$|\det M-1|$ by \HBorisOverRkMin{} to \HBorisOverRkMax{} times; a $C^1$ field instead of a bilinear one lowers it by
+In the benchmarks this mattered more than the choice of integrator: on bilinear maps at 1440 steps per turn, RK4 instead of
+Boris lowers $|\det M-1|$ by \HBorisOverRkMin{} to \HBorisOverRkMax{} times; a $C^1$ field instead of a bilinear one lowers it by
 \HDetRatioMin{} to \HDetRatioMax{} times (\cref{sec:caseH}).
 
 \section{Bilinear interpolation (LIONS default, field model F0)}

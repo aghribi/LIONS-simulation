@@ -23,7 +23,6 @@ from provenance import CODE  # noqa: E402
 RUNS = ROOT / 'benchmarks' / 'runs'
 GEN = Path(__file__).resolve().parent / 'gen'
 NUMBERS, SOURCES = {}, {}
-PSI_BAND = (386, 430)
 COLORS = {'lions': '#1f5f99', 'opal_LF2': '#c8553d', 'opal_RK4': '#8a3ffc', 'rf_track': '#2e8b57',
           'spline': '#e6a100', 'opal': '#c8553d', 'rftrack': '#2e8b57'}
 
@@ -34,6 +33,13 @@ def log_ticks(ax, ticks):
 
 plt.rcParams.update({'font.size': 9, 'axes.grid': True, 'grid.alpha': 0.3, 'figure.dpi': 150,
                      'legend.fontsize': 7.5, 'savefig.bbox': 'tight', 'lines.markersize': 4})
+
+
+def psi_band():
+    """Energy range [MeV] flagged as the Qr half-integer band in the G2 step 3 table."""
+    d = table('case_g2/step3/case_g2_step3.parquet')
+    e = d[d.qr_half_integer_band].energy_mev
+    return float(e.min()), float(e.max())
 
 
 def table(path):
@@ -375,7 +381,7 @@ def case_e():
     ax.axhline(1e-6, color='k', ls='--', lw=0.7, label='registered criterion')
     ax.set_xlabel('finite-difference step $h$ (relative for $s$; m for $r_0$; $\\beta\\gamma$ for $p_{r0}$)')
     ax.set_ylabel('max |autograd/FD - 1|')
-    ax.legend(fontsize=6.5)
+    ax.legend(fontsize=6.5, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=2)
     save(fig, 'case_e_fd')
     reg = g[g.registered]
     rows = [[case, sci(reg[(reg.case == case) & (reg.steps == 360)].rel_diff.max()),
@@ -392,7 +398,8 @@ def case_e():
     num('EAFailCount', len(fail), 1)
     cost1 = table('case_e/case_e_cost.parquet').query('particles == 1 and not checkpoint').set_index('steps').peak_rss_mb
     num('EKBPerStep', (cost1[10000] - cost1[1000]) * 2**20 / 1e3 / 9000, 2)   # peak RSS in MiB
-    num('EAFailOtherMax', fail[~((fail.output == 'phase') & fail.param.isin(['r0', 'pr0']))].rel_diff.max(), 1)
+    large = (fail.output == 'phase') & ((fail.param == 'pr0') | ((fail.param == 'r0') & (fail.steps == 3600)))
+    num('EAFailOtherMax', fail[~large].rel_diff.max(), 1)
     val = d[d.param == 'validation']
     num('EPortMax', val.rel_diff.max(), 1)
     c = table('case_e/case_e_cost.parquet')
@@ -438,6 +445,11 @@ def case_e2():
         if len(best64):
             num(f'EtwoBest{key}', best64[100000], 3)
             num(f'EtwoRatio{key}', best64[100000] / base[100000], 3)
+    a100 = table(E2_SITES['A100 (Jean-Zay)'])
+    w = a100[(a100['mode'] == 'forward') & (a100.code == 'torch') & (a100.dtype == 'float64')
+             & (a100.compiled == True)].set_index('particles').wall_s  # noqa: E712
+    num('EtwoAWallOne', w[1], 2)
+    num('EtwoAWallMax', w[100000], 2)
     gpu = pd.concat([table(E2_SITES[k]) for k in ('A100 (Jean-Zay)', 'H100 NVL (CC-IN2P3)')])
     num('EtwoGpuFloatThirtyTwoR', gpu[gpu.metric == 'cuda_float32_r_max_rel'].value.max())
     num('EtwoGpuFloatSixtyFourR', gpu[gpu.metric.isin(['cuda_float64_r_max_rel', 'cuda_float64_compiled_r_max_rel'])]
@@ -489,6 +501,14 @@ def g1():
                                   & d3.interpolation.isin(['bicubic', 'quintic'])])):
             for metric, key in (('qr_error', 'Qr'), ('det_error', 'Det'), ('r_eo_rel_error', 'Reo')):
                 num(f'G{name}{tag}{key}Max', d[d.metric == metric].value.abs().max())
+        spl = d3[(d3['map'] == '1/3 deg') & d3.interpolation.isin(['bicubic', 'quintic'])]
+        r = spl[spl.metric == 'r_eo_rel_error'].assign(v=lambda x: x.value.abs()).pivot_table(
+            index=['interpolation', 'a'], columns='steps_per_turn', values='v')
+        ratios = pd.concat([r[360] / r[720], r[720] / r[1440]])
+        num(f'G{name}SplOrbitRatioMin', ratios.min(), 3)
+        num(f'G{name}SplOrbitRatioMax', ratios.max(), 3)
+        tt = spl[(spl.metric == 'turn_time_rel_error') & (spl.steps_per_turn == 1440)].value.abs()
+        num(f'G{name}SplTurnTimeMax', tt.max())
         q360 = d2[(d2['map'] == '1/3 deg') & (d2.steps_per_turn == 360) & (d2.metric == 'qr_error')].value.abs().max()
         num(f'G{name}BilQrMaxThreeSixty', q360)
         f4 = d2[d2['map'] == '4 deg']
@@ -517,7 +537,7 @@ def g2():
                      'opal': 'OPAL closed-orbit finder'}[code]
             ax.semilogy(s.energy_mev, s.value.abs(), style, color=COLORS[code], lw=0.8, ms=3, label=label)
     for ax in axes:
-        ax.axvspan(*PSI_BAND, color='0.85', zorder=0)
+        ax.axvspan(*psi_band(), color='0.85', zorder=0)
     axes[0].set_ylabel(r'$|Q_r - Q_r^{\rm FIXPO}|$')
     axes[1].set_ylabel(r'$|Q_z - Q_z^{\rm FIXPO}|$')
     axes[1].set_xlabel('kinetic energy [MeV]')
@@ -570,6 +590,11 @@ def g2():
     num('GTwoCRfMax', det(c, 'rftrack_bilinear').value.abs().max(), 1)
     num('GTwoCRatioMin', ratio.min())
     num('GTwoCRatioMax', ratio.max(), 1)
+    q2 = pd.concat([b[b.jacobian_step_m == 1e-6], c]).query("metric == 'qr'").pivot_table(
+        index='energy_mev', columns='code', values='value')
+    num('GTwoCQrRfMax', (q2.rftrack_bilinear - q2.spline).abs().max())
+    num('GTwoCQrLionsMin', (q2.lions - q2.spline).abs().min())
+    num('GTwoCQrLionsMax', (q2.lions - q2.spline).abs().max())
     write_table('g2_det', ['$E$ [MeV]', 'LIONS', 'numpy Boris, bilinear', 'RF-Track, bilinear',
                            'Boris, quintic spline'], rows)
 
@@ -583,7 +608,7 @@ H_FIELDS = {'F0_bilinear': 'F0 bilinear', 'F1_hermite': 'F1 Hermite', 'F2_cubic'
 def h_worst(d):
     """max over cases of max(|Qr|, |Qz|, |det - 1|) per (spacing, field, integrator, steps); PSI band excluded."""
     energy = d.case.str.extract(r'E=([\d.]+)')[0].astype(float)
-    d = d[~energy.between(*PSI_BAND)]
+    d = d[~energy.between(*psi_band())]
     d = d[d.metric.isin(['qr_error', 'qz_error', 'det_error'])].assign(v=lambda x: x.value.abs())
     return d.groupby(['spacing', 'field', 'integrator', 'steps_per_turn']).v.max()
 
@@ -614,7 +639,7 @@ def case_h():
     s3 = table('case_g2/step3/case_g2_step3.parquet')
     rft = s3[s3.code == 'rftrack'].set_index(['energy_mev', 'metric']).value
     opal_e = s3[(s3.code == 'opal') & (s3.energy_mev.round() != 512)].energy_mev.unique()
-    keep = psi.energy.isin(opal_e) & (psi.energy > 80) & (psi.energy < 520) & ~psi.energy.between(*PSI_BAND)
+    keep = psi.energy.isin(opal_e) & (psi.energy > 80) & (psi.energy < 520) & ~psi.energy.between(*psi_band())
     for field, key in (('F0_bilinear', 'Bil'), ('F1_hermite', 'Herm'), ('F2_cubic', 'Cub'), ('F3_quintic', 'Quin')):
         for metric, mk in (('qr_error', 'Qr'), ('qz_error', 'Qz')):
             x = psi[keep & (psi.field == field) & (psi.integrator == 'boris') & (psi.steps_per_turn == 1440)
@@ -622,7 +647,7 @@ def case_h():
             err = (x.value + [rft[e, metric] for e in x.energy]).abs()
             num(f'HFixpo{key}{mk}Med', err.median())
     # det(M) - 1 alone, worst case per option, 1440 steps
-    det = {m: table(p).pipe(lambda d: d[~d.case.str.extract(r'E=([\d.]+)')[0].astype(float).between(*PSI_BAND)])
+    det = {m: table(p).pipe(lambda d: d[~d.case.str.extract(r'E=([\d.]+)')[0].astype(float).between(*psi_band())])
            .pipe(lambda d: d[(d.metric == 'det_error') & (d.steps_per_turn == 1440)])
            .assign(v=lambda d: d.value.abs()).groupby(['spacing', 'field', 'integrator']).v.max()
            for m, p in H_MAPS.items()}
@@ -638,6 +663,10 @@ def case_h():
     num('HFzeroRkDetMin', min(rk))
     num('HFzeroRkDetMax', max(rk))
     num('HFoneDetPsi', det['psi']['1/3 deg', 'F1_hermite', 'boris'])
+    psi_det = table(H_MAPS['psi']).pipe(lambda d: d[(d.field == 'F1_hermite') & (d.integrator == 'boris')
+                                                   & (d.steps_per_turn == 2880) & (d.metric == 'det_error')])
+    psi_det = psi_det[~psi_det.case.str.extract(r'E=([\d.]+)')[0].astype(float).between(*psi_band())]
+    num('HFoneDetPsiTwoEightEighty', psi_det.value.abs().max())
     cost = table('case_h/case_h_cost.parquet')
     c = cost[(cost.metric == 's_per_particle_step') & (cost.particles == 1e5)].set_index('code').value
     base = c['F0_bilinear_boris']
