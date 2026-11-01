@@ -719,7 +719,7 @@ def g3():
     com = table('case_g3/step2c/case_g3_2c.parquet')
     s2 = table('case_g2/step2/case_g2_step2.parquet')
     s3 = table('case_g2/step3/case_g2_step3.parquet')
-    interior = lambda e: (e > 80) & (e < 520) & ~((e >= 386) & (e <= 430))  # noqa: E731   the G2 table energies
+    interior = lambda e: (e > 80) & (e < 500) & ~((e >= 386) & (e <= 430))  # noqa: E731   the energies of tab_g2, without 512 MeV
     pivot = lambda d: d.pivot_table(index='energy_mev', columns='metric', values='value')  # noqa: E731
     fold = lambda q: np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi)  # noqa: E731
     opal = pivot(s3[s3.code == 'opal'])
