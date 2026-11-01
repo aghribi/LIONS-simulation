@@ -42,10 +42,14 @@ def psi_band():
     return float(e.min()), float(e.max())
 
 
-def table(path):
-    path = RUNS / path
+def source(path):
+    """Record the sha256 of an input file for the provenance appendix; returns the path."""
     SOURCES[str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return pd.read_parquet(path)
+    return path
+
+
+def table(path):
+    return pd.read_parquet(source(RUNS / path))
 
 
 def num(name, value, digits=2):
@@ -754,9 +758,8 @@ def g3():
             d = bd[(bd.integrator == name) & (bd.steps_per_turn == n) & (bd.fdstep == 1e-6)].sort_values('energy_mev')
             rows.append([label, str(n), *(rf'\num{{{v:+.1e}}}' for v in d.value)])
     write_table('g3_det', ['Integrator', 'Steps', r'\SI{152}{MeV}', r'\SI{292}{MeV}', r'\SI{452}{MeV}'], rows)
-    sp = pd.read_csv(RUNS / 'case_g3/step1s/tunes-tunes.csv')
-    SOURCES['benchmarks/runs/case_g3/step1s/tunes-tunes.csv'] = hashlib.sha256((RUNS / 'case_g3/step1s/tunes-tunes.csv').read_bytes()).hexdigest()
-    ref = np.loadtxt(ROOT / 'benchmarks/external/psi_ring_github_io_7ed8895/refsol.dat')
+    sp = pd.read_csv(source(RUNS / 'case_g3/step1s/tunes-tunes.csv'))
+    ref = np.loadtxt(source(ROOT / 'benchmarks/external/psi_ring_github_io_7ed8895/refsol.dat'))
     at = [int(np.argmin(abs(ref[:, 0] - e))) for e in sp.energy_MeV]
     scale = (1440 * 100 / 50 - 1) * 50 / 1440 / 100    # sampled span over 100 nominal turns
     dr, dz = sp.nu_r / scale - ref[at, 1], sp.nu_y / scale - ref[at, 2]
@@ -830,7 +833,8 @@ def g3():
     ax.axvspan(*psi_band(), color='0.85', zorder=0)
     ax.set_xlabel('kinetic energy [MeV]')
     ax.set_ylabel(r'$|Q_r - Q_r^{\rm FIXPO}|$')
-    ax.legend(fontsize=5.5)
+    ax.set_ylim(1e-6, 3)
+    ax.legend(fontsize=5.5, loc='upper center', ncol=2)
     ax = axes[1]
     for src, am, style, label in ((g, 1e-7, 'o-', r'nominal step, $a=10^{-7}$ m'), (g, 1e-6, 's-', r'nominal step, $a=10^{-6}$ m'),
                                   (c, 1e-7, 'o--', r'commensurate, $a=10^{-7}$ m'), (c, 1e-6, 's--', r'commensurate, $a=10^{-6}$ m')):
@@ -840,7 +844,7 @@ def g3():
     ax.semilogy(d.index, d.growth_predicted, 'k:', lw=1, label=r'$\|M^n u_0\|/a$')
     ax.set_xlabel('turn $n$')
     ax.set_ylabel(r'$\|u_n\|/a$')
-    ax.legend(fontsize=5.5)
+    ax.legend(fontsize=5.5, loc='lower right')
     save(fig, 'g3_phase')
 
 
