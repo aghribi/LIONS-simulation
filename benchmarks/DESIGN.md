@@ -1214,3 +1214,21 @@ observations; not tested on LIONS itself, and the amplitude dependence is not me
 tunes far from FIXPO at 5 mm, or a spectral Qr that keeps its accuracy down to amplitudes well below the 2 cm cell.
 Not separated: the end-point Qz differences; the excess of DOP853 over RK4 (large stage coefficients across kinks is a guess).
 G3c remains unregistered.
+
+### G3 step 2: LIONS tunes in multi-turn tracking (registered before running, approved 2026-11-01)
+Question: on the bilinear PSI map, does LIONS itself give the right betatron tune at finite amplitude while its one-turn
+Jacobian does not, and does a small oscillation grow or damp as det(M_r) implies?
+- Codes: LIONS default; LIONS `interpolation=hermite`; the spline tracker of G2 step 2 (smooth control). 1440 steps per turn,
+  no RF, TC1 off.
+- Energies: the 24 of G2 step 3. Launch from each code's own closed orbit (`orbits.closed_orbit`) with r and z both offset
+  by a = 0.01, 0.1, 1, 5 mm, pr = pz = 0 offset. 0.01 mm is added to the 0.1 to 5 mm first proposed: it is far below the 2 cm cell.
+- 100 turns. Tunes by `orbits.tune` (Hann-windowed DFT peak, refined) on r and z at theta = 0, folded by construction.
+  Band 386 to 430 MeV flagged: Qr within 0.02 of 0.5 is inside the Hann main lobe of its alias.
+- Metrics: Qr, Qz minus FIXPO (folded); minus the spline tracker at the same a, which removes amplitude detuning and FIXPO;
+  amplitude ratio: rms of r - r_co over the last 10 turns divided by that over the first 10, same for z.
+- Predictions: (P1) LIONS default within 5e-3 of the spline in Qr at a = 5 mm outside the band, at every energy. (P2) At
+  a = 0.01 mm, LIONS Qr is close to its Jacobian Qr of G2 step 2 (within 1e-3) and its radial amplitude ratio departs from 1 as
+  |lambda|^90, with |lambda|^2 = det(M_r). (P3) LIONS `hermite` within 1e-3 of the spline in Qr at every a outside the band.
+- Reading: P1 failing at more than half the energies refutes the reading of G3 step 1. P2 failing means the local Jacobian does
+  not describe even small oscillations: then the Jacobian itself is suspect again (H3). Growth at 0.01 mm saturating below
+  5 mm would mean the artificial growth has an amplitude limit, which is what a surrogate or an RL model would inherit.

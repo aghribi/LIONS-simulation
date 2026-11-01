@@ -2,12 +2,14 @@
 
 usage: uv run --group bench [--with pandas] python benchmarks/case_g3.py --step a|b|s|report [--outroot DIR]
 a: closed orbits and tunes at the 24 G2 step 3 energies; b: det(M_r) against steps and FDSTEP at 3 energies;
-s: SpectralTunes at the 24 energies; report: the DESIGN.md section 25 numbers from the tables (needs pandas).
+s: SpectralTunes at the 24 energies; 2: LIONS and spline multi-turn tunes against amplitude (step 2); report: the DESIGN.md section 25 numbers from the tables (needs pandas).
 OPALX is run as is from its image. The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignored).
 """
 import argparse
+import contextlib
 import json
 import math
+import multiprocessing
 import os
 import platform
 import shutil
@@ -22,6 +24,7 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
+import case_g1  # noqa: E402
 import case_g2  # noqa: E402
 import orbits  # noqa: E402
 from case_g2 import F_RF, HARMONIC, PSI, STEPS, SYMMETRY  # noqa: E402
@@ -37,6 +40,9 @@ G3B_ROWS = (40, 110, 190)    # ic.dat rows of G2 step 2b: 152, 292, 452 MeV
 G3B_STEPS = (720, 1440, 2880)
 FDSTEPS = (1e-7, 1e-6, 1e-5)
 TURNS, TUNESAMPLE = 100, 50
+WORKERS = 6
+AMPLITUDES = (1e-5, 1e-4, 1e-3, 5e-3)    # m
+ENVELOPE_TURNS = 10
 
 
 def lattice():
@@ -158,6 +164,55 @@ ENDTRACK;''')
     print(f'exit {code}; see {outdir}/tunes-tunes.csv', file=sys.stderr)
 
 
+def amplitude_run(args):
+    """All codes at one energy: tunes and amplitude ratios against the launch amplitude."""
+    row, outdir, grids, attrs, species, mass_kg, spline = args
+    energy, r_ic, pr_ic, qr_ref, qz_ref = row
+    p, t, q_ref = case_g2.reference(energy, r_ic, pr_ic, qr_ref, qz_ref)
+    work = outdir / f'lions_{energy:.3f}'
+    work.mkdir(exist_ok=True)
+    with contextlib.chdir(work):
+        case_g1.write_lions_map(grids, attrs, 1)
+    f_rev = F_RF / HARMONIC
+    trackers = {'lions': orbits.LionsTracker(work, energy, f_rev, STEPS, species).track,
+                'lions_hermite': orbits.LionsTracker(work, energy, f_rev, STEPS, species, {'interpolation': 'hermite'}).track,
+                'spline': orbits.BorisTracker(spline, mass_kg, case_g1.lc.E_CHARGE, p, f_rev, STEPS).track}
+    records, tol = [], (r_ic / 1000, pr_ic / 1000)
+    for code, track in trackers.items():
+        base = {'code': code, 'energy_mev': float(energy), 'qr_half_integer_band': bool(386 <= energy <= 430)}
+        try:
+            co, res = orbits.closed_orbit(track, tol)
+            if res > RESIDUAL_MAX:
+                raise RuntimeError(f'closed orbit residual {res:.1e} m')
+            states = np.array([[co[0] + a, co[1], a, 0.0] for a in AMPLITUDES])
+            series = orbits.section_series(*track(states, TURNS + 1.2))
+        except Exception as exc:
+            records.append({**base, 'amplitude_m': None, 'metric': 'failed', 'value': None,
+                            'unit': f'{type(exc).__name__}: {exc}'[:200]})
+            print(f'{code} {energy} MeV failed: {exc}', file=sys.stderr)
+            continue
+        for a, tbt in zip(AMPLITUDES, series):
+            r, z = tbt[:TURNS, 1] - co[0], tbt[:TURNS, 3]
+            rms = lambda x: np.sqrt(np.mean((x - np.mean(x))**2))
+            qr, qz = orbits.tune(r), orbits.tune(z)
+            values = {'qr': qr, 'qz': qz, 'qr_error': qr - q_ref[0], 'qz_error': qz - q_ref[1], 'turns': float(len(tbt)),
+                      'amp_ratio_r': rms(r[-ENVELOPE_TURNS:]) / rms(r[:ENVELOPE_TURNS]),
+                      'amp_ratio_z': rms(z[-ENVELOPE_TURNS:]) / rms(z[:ENVELOPE_TURNS])}
+            records += [{**base, 'amplitude_m': a, 'metric': k, 'value': float(v), 'unit': '1'} for k, v in values.items()]
+    print(f'{energy} MeV done', file=sys.stderr)
+    return records
+
+
+def step_2(outdir):
+    grids, attrs, _, mass_kg, spline, _ = case_g2.setup()
+    species = case_g1.lions_species(case_g2.MP_MEV * 1e6, 1)
+    rows = fixpo()
+    runs = [(row.tolist(), outdir, grids, attrs, species, mass_kg, spline) for row in [*rows[::10], rows[-1]]]
+    with multiprocessing.get_context('fork').Pool(WORKERS) as pool:
+        records = [r for part in pool.imap_unordered(amplitude_run, runs) for r in part]
+    write(records, outdir, 'case_g3_2.parquet', 'G3 step 2: LIONS and spline multi-turn tunes against launch amplitude')
+
+
 def report(outroot):
     import pandas as pd
     fold, g2 = case_g2.fold, outroot.parent / 'case_g2'
@@ -195,11 +250,11 @@ def report(outroot):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', choices=('a', 'b', 's', 'report'), required=True)
+    parser.add_argument('--step', choices=('a', 'b', 's', '2', 'report'), required=True)
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_g3')
     args = parser.parse_args()
     if args.step == 'report':
         sys.exit(report(args.outroot.resolve()))
-    outdir = args.outroot.resolve() / f'step1{args.step}'
+    outdir = args.outroot.resolve() / ('step2' if args.step == '2' else f'step1{args.step}')
     outdir.mkdir(parents=True, exist_ok=True)
-    {'a': step_a, 'b': step_b, 's': step_s}[args.step](outdir)
+    {'a': step_a, 'b': step_b, 's': step_s, '2': step_2}[args.step](outdir)
