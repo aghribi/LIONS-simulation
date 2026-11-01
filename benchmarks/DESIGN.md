@@ -992,3 +992,23 @@ Validation:
 - The case H decision cases for F1 with Boris at 1440 and 2880 steps, through LIONS: every metric equal to the
   harness value within 1e-9 absolute (Newton and the finite-difference Jacobian amplify rounding).
 - Cost: LIONS with the option against LIONS default, per particle-step, 1e3 and 1e5 particles, PSI map.
+
+Case H phase 2 results.
+- First run (`benchmarks/runs/case_h/case_h_phase2.parquet`, code aec1eb0 and the cost-row fix): one turn within
+  3.4e-15 to 1.7e-14 (passed); closed orbit, turn time and Qz within 1e-11; Qr and det(M) - 1 off the harness by up
+  to 7e-6 and 1e-4 on the 10-sector and PSI maps (failed). Step scan on the 10-sector map at 1 deg (a = 0.8863,
+  2880 steps): the radial Jacobian difference grows as 1/h (3.5e-6 at h = 1e-4 m to 1.35e-3 at 1e-7 m), so it is
+  non-smooth noise in the LIONS one-turn map, not a field difference (LIONS and harness Hermite fields agree to
+  6.6e-14 in Bz). Source: the azimuth arccos(x / r), whose rounding grows as 1 / sin(theta) at the theta = 0
+  section. The Hermite path now takes its azimuth from atan2 and cos, sin from x / r, y / r (commit f8de82b; results
+  change for the option only): the difference at h = 1e-6 m falls from 8.2e-5 to 3.9e-7.
+- The default bilinear path carries the same arccos noise, smaller: radial Jacobian 1.5e-6 off the numpy bilinear
+  tracker at h = 1e-6 m on the 10-sector map (25 m radius). Fortran behaviour, left unchanged; too small to touch the
+  G2 readings (det(M) - 1 of 0.2), a limit for derivative measurements at large radius.
+- Rerun (`benchmarks/runs/case_h_rerun/case_h_phase2.parquet`, code f8de82b): one turn 9.4e-16 to 7.0e-15; closed
+  orbit, pr, turn time, Qz within 5.7e-14; Qr within 3.3e-8 and det(M) - 1 within 3.3e-7 (10-sector), 1.4e-8 and
+  2.0e-8 (PSI), 1.2e-9 and 9.5e-9 (3-sector). 101 of 456 values exceed the registered 1e-9: the criterion is not
+  met as written. The residual is the finite-difference Jacobian on the remaining rounding noise, 300 to 3000 times
+  below the decision target (1e-4); the case H decision table holds for LIONS with the option.
+- Cost, LIONS on the PSI map: 2.41e-7 and 4.37e-7 s per particle-step at 1e3 particles (default, Hermite),
+  1.35e-7 and 2.44e-7 at 1e5: the option costs 1.8 times the default, as in the harness.
