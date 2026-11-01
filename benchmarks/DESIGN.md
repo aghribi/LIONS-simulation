@@ -1121,3 +1121,29 @@ OPALX models 3D space charge in cyclotrons (regression tests `Cyclotron-SC-Midpo
 LIONS omits. Its size at CIME currents is a sim-to-real item for the training game (`docs/training/SPEC.md`, §6). It
 needs the CIME map in the PSI Ring layout (the only reader found) and a current and bunch from CIME. Registered after
 G3 step 1 and once the CIME map is available.
+
+### G3 step 0 results and amendments to step 1 (registered before step 1)
+Results of step 0 (`benchmarks/runs/case_g3/step0`, image digest in `benchmarks/case_g3.py`):
+- `Cyclotron-Coasting` matches its reference within the `.rt` tolerances: reference orbit within 2.7e-15 m and 1.8e-15 in
+  momentum, energy within 2.9e-12 MeV. Image built from git rev d48acdd, the tag. Its `bfield.dat` is byte-identical to the G2 map.
+- Input settled from the manual and source at the tag. `COF` is experimental, runs one static RING, takes a fixed `DT`,
+  writes `matrix` (M in (x, px, y, py), p in m0c) to the JSON named by `OUTPUT`. x is radial, outward; launch r = x + ring
+  X. There is no steps-per-turn input: `DT` = harmonic / (RF frequency x steps), the G2 definition.
+- `TIMEINTEGRATOR`: `LF2` is an alias of `BORIS`. `DOP853` is a fixed-step eighth-order formula. Neither `RK4` nor `DOP853`
+  is adaptive. Steps are subdivided at element support boundaries (sector edges), not at map cell edges.
+- The OPALX manual (`physics/linear-transfer-maps.qmd`) reports on this map a radial modulus off unity by 1e-4 to 1e-3
+  at 46080 steps per turn, alternating between growth and damping with the step, and names the piecewise interpolation as
+  a candidate, unconfirmed. Independent of this work. Its trim coil is on; ours is off.
+- Observed once while testing the input, 72 MeV, Boris, DT 8.226e-11 s, no trim coil: radial modulus 1.0482, vertical
+  1 + 7e-12, r = 2.131504 m.
+
+Amendments:
+- Integrators in G3a and G3b: Boris, RK4, DOP853 (replaces Boris, LF2, RK4).
+- M from the `COF` JSON, `FDSTEP` 1e-6 in all coordinates. G3b adds, Boris at 1440 steps, `FDSTEP` 1e-7, 1e-6, 1e-5 (x and
+  y in m, px and py in m0c): a third instrument on H3, read as in G2 step 2b.
+- Tunes by `orbits.linear_tunes` on the diagonal blocks of M, as in G2, not from the `COF` mode list (no plane label).
+- Failure: exit without JSON, residual above 1e-9 m, or r off `ic.dat` by more than 1e-3 relative.
+- `SpectralTunes`: 24 energies in one run, RK4, 1440 steps, 100 turns, launched from `ic.dat`. Frequency bin 2.5e-3 and a
+  legacy frequency axis (manual: about 0.25% scale at 72 MeV), so it checks the tune branch only, not differences below 5e-3.
+- Added prediction, G3b: if gradient jumps limit the order, DOP853 gives no large gain over RK4 at equal steps, and
+  neither shows its nominal order in det(M_r) - 1. A nominal order 8 refutes that reading.
