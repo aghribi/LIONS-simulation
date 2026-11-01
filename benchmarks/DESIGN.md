@@ -777,3 +777,29 @@ G2 step 1 results (`benchmarks/runs/case_g2/run2/step1/case_g2_step1.parquet`, c
 - OPAL minus FIXPO (`refsol.dat`), no TC1: Qr +5.3e-3 and Qz -6.7e-3 at 72 MeV, +4.8e-3 and -7.6e-3 at 530 MeV.
 - OPAL 2024.1 needs two changes to the published example input: FMLOWE, FMHIGHE in GeV (the example gives MeV; all
   energies then fail), and an element name other than `Ring` (protected keyword).
+
+### G2 step 2: LIONS and the spline tracker on the PSI Ring map (registered before running, approved 2026-11-01)
+Amendments to section 21, decided before any G2 tracking:
+- TC1 off in every code. FIXPO's trim-coil content is unknown, the FIXPO orbits end 5 cm inside TC1, and its only
+  measured effect (step 1c) is the sensitivity quoted with the results: +0.66 mm in r and +8e-4 in Qz at 530 MeV.
+- Criterion: |LIONS - FIXPO| <= |OPAL - FIXPO| + |LIONS - spline| per metric and energy, where the last term is
+  the interpolation floor measured on this map in this step (same nodes, same Boris step), not the G1 floors (which
+  differ by a factor 6 between the two G1 maps). Evaluated in step 3, once OPAL runs.
+
+Step 2:
+- LIONS map: the 45 deg sector replicated 8 times at the native 1/3 deg (1081 columns, endpoint included), r 1.90 to
+  4.70 m by 2 cm (141). Bz in T with the LIONS sign (-0.1 x file, travel with increasing map azimuth, step 1b);
+  dBz/dtheta from the file (per rad, step 1a); dBz/dr by 5-point differences in r (OPAL's scheme, stencils clamped
+  at the map edges); dBz/dx, dBz/dy from these; d2Bz = 0.
+- Spline tracker: the numpy Boris step (G1 step 3) with quintic splines, periodic per sector, of the same Bz,
+  dBz/dr and dBz/dtheta node values.
+- Energies: the 230 `ic.dat` rows (72 to 530 MeV). 1440 steps per turn; RF 50.65 MHz, harmonic 6; protons.
+- Metrics: closed orbit r and pr at theta = 0 against `ic.dat` (r in mm, pr in 1e-3 m0c); Qr, Qz (one-turn
+  Jacobian, folded into [0, 0.5]) against `refsol.dat` folded the same way; det(M) - 1; LIONS minus spline for each.
+  Tunes between 386 and 430 MeV (Qr crosses 1.5, folded Qr near 0.5) are reported but flagged: the trace formula is
+  ill-conditioned there.
+- Failure rule as G1 step 2 (residual above 1e-9 m, or an exception, recorded as failed).
+- Prediction: spline tracker within 0.1 mm of `ic.dat` (step 1b gave 0.065 mm at 1440 steps without vertical field);
+  LIONS minus spline of order 1e-5 to 1e-4 relative in r and 1e-4 to 1e-3 in the tunes (bilinear at 1/3 deg on a
+  field with 8-fold spiral sectors, between the two G1 maps); OPAL minus FIXPO tunes about 5e-3 (step 1c), so the
+  step 3 criterion is expected to hold unless LIONS has a defect beyond interpolation.
