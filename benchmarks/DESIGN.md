@@ -1076,6 +1076,9 @@ The tables are unchanged; these entries correct readings and summaries above. Nu
    "fixed-step integration across gradient jumps"; consistent with the evidence, not tested directly. The h-insensitivity
    of the G2 2b determinant is a weak argument against H3, since a central difference on a piecewise-smooth map can mix
    two slopes at any h. Discriminating test, not run: the autograd Jacobian of the PyTorch bilinear port.
+5. Sections 22 and 23, and every reading of "the LIONS radial tune is off by 1e-2 to 5e-2" on the PSI map. That number is the Jacobian tune
+   of one step phase. Multi-turn tunes of LIONS on the same field are within 1.9e-3 of FIXPO at 5 mm, and the amplitude behaviour is the
+   problem instead (section 25, G3 steps 2 to 2c). The tables stand; the reading changes.
 
 ## 25. Case G3: OPALX 1.0.0 on the PSI Ring map (registered before running, approved 2026-11-01)
 
@@ -1256,3 +1259,62 @@ its own fixed point and Jacobian. Rival R: an instability or a tracker defect th
   final step.
 - Prediction under S: deviation below 1e-2 through n = 10 while ||u_n|| stays below about 1e-5 m, with the growth M predicts,
   det(M_r) != 1. Under R: deviation near 1 at n = 2 as in 2b.
+
+### G3 steps 2, 2b, 2c results
+Tables `benchmarks/runs/case_g3/step2{,b,c}` (codes b1afe04, 38fe5b2, 273285c), numbers of step 2 from `case_g3.py --step report`. No
+failure. One instrument, deterministic. 22 energies outside the band.
+
+Step 2, |Qr - FIXPO| median / max, multi-turn tunes, 100 turns:
+
+| a [mm] | LIONS default | LIONS hermite | spline |
+|---|---|---|---|
+| 0.01 | 2.1e-3 / 0.40 | 3.1e-5 / 2.7e-4 | 9.0e-5 / 2.6e-3 |
+| 0.1 | 1.1e-3 / 4.6e-3 | 3.1e-5 / 2.7e-4 | 9.0e-5 / 2.6e-3 |
+| 1 | 1.1e-3 / 2.6e-3 | 3.8e-5 / 2.8e-4 | 9.5e-5 / 2.6e-3 |
+| 5 | 7.2e-4 / 1.9e-3 | 9.0e-5 / 5.6e-4 | 1.1e-4 / 2.8e-3 |
+
+The LIONS Jacobian tune of G2 is 1.4e-2 / 5.1e-2. Radial amplitude ratio over 100 turns: LIONS 0.60 to 11 at 0.01 mm, 0.61 to 10 at 0.1 mm,
+0.24 to 1.7 at 1 mm, 0.89 to 1.6 at 5 mm; hermite 0.85 to 1.5 and spline 0.86 to 1.6 at every a (ratio of 10-turn rms values: beating
+at low tune, the baseline).
+
+- P1 met: LIONS within 1.8e-3 of the spline in Qr at 5 mm at every energy; within 2.5e-3 at 1 mm; 4.8e-3 at 0.1 mm.
+- P2 failed, both parts. At 0.01 mm Qr is off the spline by more than 0.1 at 9 of 22 energies, not close to the Jacobian tune, and the
+  amplitude ratio is at most 11 where |lambda|^90 gives up to 5.6e6.
+- P3 met at 21 of 22; at 72 MeV hermite minus spline is 2.5e-3, where the spline is the one off FIXPO (2.6e-3; hermite 2.7e-4).
+- Hermite is the closest to FIXPO in Qr and Qz (Qz median 1.1e-4 at 0.01 mm; spline 4.7e-4; LIONS default 9.6e-4).
+
+Step 2b, reading not covered as registered. At n = 1 the deviation from M is 1.4e-7 to 1.1e-6 for a = 1e-7 m. At n = 2 it is near 1 and
+the prediction fails. a = 1e-4 m: 8e-4 to 3e-3 at n = 1 and 4.5e-2 to 0.55 at n = 2, smaller than predicted at two energies of three.
+
+Step 2c, a = 1e-7 and 1e-6 m, last turn-time correction at most 1e-9. Deviation at n = 2 is 2.3e-2, 6.7e-3, 2.5e-2 (2b: near 1) and at
+n = 10 is 0.16, 0.13, 0.51: the registered threshold (1e-2 through n = 10) is **not met**. Rival R (near 1 at n = 2) is refuted. Growth no
+longer depends on a and tracks M: at n = 2, 1.58, 3.04, 1.29 against 1.55, 3.02, 1.31; at n = 20 at 152 and 292 MeV, 12 and 70 against 9.2
+and 39. det(M_r) - 1 = +0.22, +0.41, -0.09. M is not exact over many turns (accumulated error of one finite-difference matrix, or
+the 2b effect from rounding in the crossing, not separated).
+
+Evidence matrix:
+
+| Observation | S: each step phase is another map | R: independent of the step phase |
+|---|---|---|
+| M exact at n = 1, off at n = 2 at nominal step | + | 0 |
+| Distance from n = 2 independent of a | + | 0 |
+| Commensurate turn: deviation at n = 2 falls 40 to 150 times | + | - |
+| Commensurate turn: growth scale-free in a, tracks M | + | - |
+| LIONS and OPALX differ in sign at equal field | + | 0 |
+| det(M_r) changes sign with step count | + | 0 |
+| Commensurate turn: threshold missed, up to 0.5 at n = 10 | - | 0 |
+
+Proposed reading, for review. On a bilinear field, the one-turn map depends on the step phase at the section. Each phase has its own
+fixed point and Jacobian. The Newton solution and M of G2, H and G3 sample one phase. They are correct there. Turn after turn the
+phase changes (the nominal step is 0.01 to 0.08 of a step off a commensurate turn at these energies, from the three `fhf` values of
+step 2c), and the orbit moves among the maps. In that case:
+1. Multi-turn Qr from LIONS on the bilinear map is right: 1e-3 median against FIXPO from 0.1 to 5 mm.
+2. Below about 0.1 mm the betatron signal drowns in a jitter of tens of um (5.8e-5 m at 152 MeV, n = 5).
+3. **Amplitudes are not right below a few mm.** The radial amplitude changes by 0.24 to 10 times in 100 turns at 0.1 and 1 mm, against a
+   baseline of 0.86 to 1.6, on a coasting orbit. Beam size and emittance from the bilinear field at these scales need a check. Not measured
+   beyond 100 turns, nor on a bunch, nor with acceleration.
+4. A deliberately commensurate step makes it worse: a growth of 70 in 20 turns at 292 MeV.
+5. The Hermite field removes the anomaly in all of these (a = 0.01 mm included).
+
+Consistent with the runs; "each phase has its own fixed point" is inferred, not measured. Direct test: fixed point and det(M_r) against
+the launch step phase on the same orbit.

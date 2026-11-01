@@ -286,6 +286,17 @@ def report(outroot):
     b = pd.read_parquet(outroot / 'step1b' / 'case_g3_b.parquet')
     print(b[b.metric == 'det_r_error'].pivot_table(index=['integrator', 'steps_per_turn', 'fdstep'], columns='energy_mev',
                                                    values='value').to_string(float_format='{:+.3e}'.format))
+    w = pd.read_parquet(outroot / 'step2' / 'case_g3_2.parquet')
+    w = w[(w.metric != 'failed') & ~w.qr_half_integer_band].pivot_table(
+        index=['code', 'amplitude_m', 'energy_mev'], columns='metric', values='value')
+    spline_qr = w.loc['spline'].qr
+    for (code, a), d in w.groupby(level=['code', 'amplitude_m']):
+        d = d.droplevel(['code', 'amplitude_m'])
+        dq = d.qr - spline_qr.xs(a, level='amplitude_m')
+        print(f'{code} a={a:g}: Qr-FIXPO median {d.qr_error.abs().median():.1e} max {d.qr_error.abs().max():.1e}; Qz-FIXPO median '
+              f'{d.qz_error.abs().median():.1e} max {d.qz_error.abs().max():.1e}; Qr-spline median {dq.abs().median():.1e} max {dq.abs().max():.1e}, '
+              f'above 1e-3 at {d.index[dq.abs() > 1e-3].tolist() if code == "lions_hermite" else int((dq.abs() > 1e-3).sum())}, '
+              f'above 0.1 at {int((dq.abs() > 0.1).sum())}; amp ratio r {d.amp_ratio_r.min():.2f} to {d.amp_ratio_r.max():.2f} (n={len(d)})')
     s = pd.read_csv(outroot / 'step1s' / 'tunes-tunes.csv')
     ref = np.loadtxt(PSI / 'refsol.dat')
     row = [int(np.argmin(abs(ref[:, 0] - e))) for e in s.energy_MeV]

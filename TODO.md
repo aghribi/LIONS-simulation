@@ -11,6 +11,9 @@
 ## Untested hypotheses
 - [ ] Autograd Jacobian of the PyTorch bilinear port against the finite-difference one (DESIGN.md section 24, erratum 4).
 - [ ] Convergence order of det(M) with the step count, beyond 2880 steps per turn.
+- [ ] Fixed point and det(M_r) against the launch step phase, on one orbit (DESIGN.md section 25).
+- [ ] Beam size and emittance on the bilinear field against Hermite: over 1000 turns or more, on a bunch, with acceleration. Amplitudes at
+  0.1 to 1 mm change by 0.24 to 10 times in 100 turns (G3 step 2). Before any surrogate is trained on LIONS bilinear data.
 
 ## Differentiable backend
 - [ ] Sim-to-real: needs CIME parameters and probe data from A. Ghribi.
