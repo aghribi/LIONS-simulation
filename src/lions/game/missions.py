@@ -37,7 +37,6 @@ class Mission(Stage):
         self.machine = mc.Machine(**checked(entry['machine'], MACHINE_UNITS, f'{self.key}.machine'))
         self.ion = mc.Ion(**entry['ion'])
         self.client, self.mission_id = entry['client'], entry['id']
-        self.tutorial = False     # no shift clock, no score: the arcade pairs it with the coach
         self.specs = entry['knobs']
         for spec in self.specs:
             if spec['unit'] != KNOB_UNITS[spec['key']]:

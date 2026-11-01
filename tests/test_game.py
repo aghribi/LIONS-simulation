@@ -402,3 +402,52 @@ def test_every_mission_draws(name, tutorial):
     w.grab()                # beam
     assert (w.coach is not None) == tutorial
     app.processEvents()
+
+
+@pytest.mark.parametrize('key', sorted(STAGES))
+def test_following_the_helper_finishes_each_stage(key):
+    from lions.game.coach import coach_for
+    stage = STAGES[key]
+    stage.tutorial = True
+    stage.reset(5)
+    coach = coach_for(stage)
+    while not stage.done and stage.time < 300:
+        a = coach.advise()
+        stage.step(Action(a.x, a.y, a.fire), DT)
+    stage.tutorial = False
+    assert stage.success, f'{key}: {stage.message} {stage.metrics()}'
+
+
+def test_every_knob_has_help():
+    from lions.game.coach import KNOB_HELP
+    assert {s['key'] for m in MISSIONS.values() for s in m.specs} <= set(KNOB_HELP)
+
+
+def test_tutorial_from_the_menu_on_every_entry(tmp_path):
+    """T on the menu starts the helper on every channel, level 0 stages included, and a failed tutorial costs no life."""
+    import os
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    from PyQt5.QtWidgets import QApplication
+    from lions.game.arcade import Arcade
+    from lions.game.runlog import Store
+    app = QApplication.instance() or QApplication([])
+    w = Arcade(Store(tmp_path))
+    w.timer.stop()
+    w.show()
+    w.new_game()
+    for choice in range(len(w.menu_items())):
+        w.state, w.choice = 'menu', choice
+        QTest.keyClick(w, Qt.Key_T)
+        assert w.state == 'play' and w.coach is not None
+        lives = w.lives
+        for i in range(len(w.stages)):      # every stage of the entry draws with its helper
+            w.index = i
+            w.start_stage(tutorial=True)
+            w.frame()
+            w.grab()
+        w.stage.finish(False, 'TEST')
+        w.frame()
+        assert w.state == 'clear' and w.lives == lives and w.total == 0
+    app.processEvents()

@@ -36,6 +36,7 @@ class Stage:
         self.scenario, self.key, self.p = scenario, entry['stage'], params
         self.title, self.brief, self.lesson = entry['title'], entry['brief'], entry['lesson']
         self.mandatory = entry.get('mandatory', True)    # False: failing costs no life
+        self.tutorial = False     # no clock and no shot limit: the arcade pairs it with a coach
         self.switches = entry.get('switches', {})
 
     def reset(self, seed):
@@ -135,7 +136,7 @@ class Larmor(Stage):
     def after_shot(self):
         if self.hits >= self.p['targets']:
             self.finish(True, 'ALL RINGS LOCKED')
-        elif self.shots >= self.p['shots']:
+        elif self.shots >= self.p['shots'] and not self.tutorial:
             self.finish(False, 'OUT OF SHOTS')
 
     def observation(self):
@@ -183,7 +184,7 @@ class GapStage(Stage):
             self.cross()
         if not self.done and self.w >= self.p['w_target']:
             self.finish(True, 'TARGET ENERGY')
-        elif not self.done and self.time >= self.p['time_limit']:
+        elif not self.done and self.time >= self.p['time_limit'] and not self.tutorial:
             self.finish(False, 'TIME UP')
 
     def observation(self):

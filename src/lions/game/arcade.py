@@ -8,7 +8,7 @@ from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from lions.game import physics
-from lions.game.coach import Coach
+from lions.game.coach import KNOB_HELP, coach_for
 from lions.game.runlog import Store
 from lions.game.missions import Mission
 from lions.game.stages import Action, load_scenario
@@ -91,7 +91,7 @@ class Arcade(QWidget):
         self.stage.tutorial = tutorial
         self.stage.reset(self.seed_source.randrange(2**31))
         self.rows = []
-        self.coach = Coach(self.stage) if tutorial else None
+        self.coach = coach_for(self.stage) if tutorial else None
         self.state = 'play'
 
     def play_step(self):
@@ -151,7 +151,10 @@ class Arcade(QWidget):
             self.new_game()
         elif self.state == 'initials':
             self.edit_initials(key)
-        elif self.state == 'brief' and key == Qt.Key_T and isinstance(self.stages[self.index], Mission):
+        elif self.state == 'brief' and key == Qt.Key_T:
+            self.start_stage(tutorial=True)
+        elif self.state == 'menu' and key == Qt.Key_T:
+            self.choose()
             self.start_stage(tutorial=True)
         elif self.state == 'menu' and key in (Qt.Key_Up, Qt.Key_Down):
             self.choice = (self.choice + (1 if key == Qt.Key_Down else -1)) % len(self.menu_items())
@@ -255,11 +258,19 @@ class Arcade(QWidget):
             self.text(W / 2, H - 42, s.message, 16, YELLOW)
 
     def helper(self):
-        advice = self.advice
-        self.p.fillRect(QRectF(345, H - 62, W - 355, 58), QColor(255, 225, 77, 34))
-        self.text(355, H - 58, advice.text, 16, YELLOW, 'left')
-        for i, line in enumerate(wrapped(advice.why, 76)[:2]):
-            self.text(355, H - 36 + 14 * i, line, 10, WHITE, 'left')
+        mission = isinstance(self.stage, Mission)
+        if not mission:
+            self.advice = self.coach.advise()
+        advice, left = self.advice, 345 if mission else 16
+        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(20, 18, 5, 215))
+        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(255, 225, 77, 34))
+        self.text(left + 10, H - 72, advice.text, 15, YELLOW, 'left')
+        width = 76 if mission else 118
+        lines = wrapped(advice.why, width)[:2]
+        if mission:
+            lines = [*lines[:1], *wrapped(KNOB_HELP[self.stage.specs[self.stage.selected]['key']], width)[:1]]
+        for i, line in enumerate(lines):
+            self.text(left + 10, H - 46 + 18 * i, line, 10, WHITE if i == 0 or not mission else CYAN, 'left')
 
     # ---------- screens
 
@@ -310,7 +321,8 @@ class Arcade(QWidget):
         request = self.menu_items()[self.choice][2][0]
         client = getattr(request, 'client', request.brief if self.choice else 'Five stages, from the Lorentz force to Thomas focusing.')
         self.block(H - 170, client, 66, 14, CYAN)
-        self.text(W / 2, H - 52, 'UP DOWN: CHOOSE   START: ACCEPT   ESC: END THE SHIFT', 13, DIM)
+        self.text(W / 2, H - 76, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO', 16, GREEN)
+        self.text(W / 2, H - 44, 'UP DOWN: CHOOSE   START: ACCEPT   ESC: END THE SHIFT', 13, DIM)
 
     def draw_brief(self):
         s = self.stages[self.index]
@@ -320,8 +332,7 @@ class Arcade(QWidget):
         y = self.block(230, s.client, 56, 17, YELLOW) + 18 if mission else 250
         y = self.block(y, s.brief, 56, 16)
         self.text(W / 2, y + 40, MISSION_CONTROLS if mission else CONTROLS[s.key], 13, GREEN)
-        if mission:
-            self.text(W / 2, y + 80, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE', 14, YELLOW)
+        self.text(W / 2, y + 80, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE', 14, YELLOW)
         if int(self.clock * 2) % 2:
             self.text(W / 2, H - 80, 'PRESS START', 22, GREEN)
 

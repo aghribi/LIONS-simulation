@@ -8,6 +8,23 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from lions.game import physics
+
+KNOB_HELP = {
+    'rf_mhz': 'RF: the kick rhythm. It must be a whole multiple of the revolution frequency, or the phase slips.',
+    'b0': 'FIELD: sets the energy at the extraction radius, and the revolution frequency. Move it and the RF must follow.',
+    'trim': 'TRIM: how fast the field grows with gamma. At the right value the turn time is the same at every radius.',
+    'dee_kv': 'DEE VOLTAGE: energy gain per turn. More gain separates the last turns, so less beam hits the septum.',
+    'phase_deg': 'PHASE: when the bunch arrives. On the crest it gains most.',
+    'buncher': 'BUNCHER: packs the source beam into the RF acceptance. Too strong and it overbunches.',
+    'source_ua': 'SOURCE: current in. Current out, losses and power all scale with it.',
+    'deflector_kv': 'DEFLECTOR: pulls the last turn out of the machine. It must match the beam rigidity.',
+    'steer_x': 'STEER X: moves the beam sideways on the target.',
+    'steer_y': 'STEER Y: moves the beam up and down on the target.',
+    'quad': 'QUADRUPOLE: focuses. Around the best value the spot is smallest; either side it opens.',
+    'slit': 'ENERGY SLIT: cuts the energy tails. Less spread, less current.',
+    'degrader_cm': 'DEGRADER: slows the beam. More material, lower energy, more scattering, fewer protons.',
+}
 
 @dataclass
 class Advice:
@@ -17,6 +34,9 @@ class Advice:
     direction: int = 0
     fine: bool = False
     beam: bool = False      # hold the beam on
+    x: float = 0.0          # the keys to press, for the stages of level 0
+    y: float = 0.0
+    fire: bool = False
 
 
 class Coach:
@@ -196,3 +216,71 @@ class Coach:
         if flux < 1.5 * p['flux_min']:
             return self.turn('source_ua', 1, 'RAISE THE SOURCE', 'The flux is below the window.', fine=flux > 0.5 * p['flux_min'])
         return Advice('HOLD SPACE: IRRADIATE', 'Energy, flux and uniformity in spec.', beam=True)
+
+
+class StageCoach:
+    """The helper of the level 0 stages: what the screen shows, and the key to press."""
+
+    def __init__(self, stage):
+        self.s = stage
+
+    def advise(self):
+        return getattr(self, self.s.key)()
+
+    def larmor(self):
+        s = self.s
+        if s.flight is not None:
+            return Advice('WATCH THE ORBIT', f'rho = p / (q B): this shot flies at {s.shot_radius:.2f} m, the ring is {s.target:.2f} m.')
+        wanted = -s.target_rotation * s.p['b_max']     # rotation +1 needs Bz < 0
+        needed = physics.momentum(s.w) * physics.PROTON_KG * physics.C / (physics.E_CHARGE * s.target)
+        if needed > s.p['b_max']:
+            return Advice('HOLD LEFT: LESS ENERGY', 'This ring needs more field than the magnet has: lower the momentum.', x=-1)
+        b = math.copysign(needed, wanted)
+        if abs(b - s.b) > 1.5 * s.p['b_rate'] / 60:
+            up = b > s.b
+            return Advice(f"HOLD {'UP' if up else 'DOWN'}: FIELD TO {b:+.2f} T", f'At {s.w:.1f} MeV this ring needs |B| = {needed:.2f} T. The arrow on the ring sets the sign.', y=1 if up else -1)
+        return Advice('PRESS SPACE: FIRE', 'Field and energy match the ring.', fire=not s.last_action.fire)
+
+    def dee_beat(self):
+        s = self.s
+        f_rev = physics.revolution_frequency(s.w, s.p['b'])
+        wanted = f_rev * (1 - s.phi / math.pi / 4)
+        step = s.p['f_rate'] * s.f_nominal / 60
+        if abs(wanted - s.f) < step:
+            return Advice('HOLD NOTHING: ON THE BEAT', 'The needle stands still on the crest: every crossing gains.')
+        up = wanted > s.f
+        way = 'the needle must come back to the green arc' if abs(s.phi) > 0.3 else 'the needle must stop moving'
+        return Advice(f"HOLD {'RIGHT: MORE' if up else 'LEFT: LESS'} RF", f'{way.capitalize()}. A needle that moves means f is not q B / (2 pi m).', x=1 if up else -1)
+
+    def trim_coils(self):
+        s = self.s
+        wanted = s.needed_delta() + s.phi / 40
+        step = s.p['delta_rate'] / 60
+        if abs(wanted - s.delta) < step:
+            return Advice('HOLD NOTHING: IN STEP', 'The trim follows gamma: B = gamma B0.')
+        up = wanted > s.delta
+        return Advice(f"HOLD {'UP: MORE' if up else 'DOWN: LESS'} FIELD", f'Gamma is {physics.gamma(s.w):.3f}: the field should be {100 * s.needed_delta():+.2f}%. The grey needle is what no trim would do.', y=1 if up else -1)
+
+    def fallout(self):
+        s = self.s
+        rate = math.sqrt(physics.isochronous_index(s.w))
+        growing = s.z + s.dz / rate       # the growing mode of z'' = k z
+        if abs(growing) <= 1.0 or s.last_action.y:
+            return Advice('WAIT', f'Qz^2 = {-rate * rate:+.3f}: the ion drifts away from the median plane, faster and faster.')
+        up = growing < 0
+        return Advice(f"TAP {'UP' if up else 'DOWN'}: KICK BACK", 'Kick early: a small kick now saves a big one later. Charges run out.', y=1 if up else -1)
+
+    def thomas(self):
+        s = self.s
+        low, high = s.p['band_low'], s.p['band_high']
+        if s.qz2 < low**2 and s.flutter < s.p['f_max']:
+            return Advice('HOLD UP: MORE FLUTTER', 'Energy raises k, so Qz falls: Qz^2 = -k + N^2/(N^2-1) F (1 + 2 tan^2 xi).', y=1)
+        if s.qz2 < low**2:
+            return Advice('HOLD RIGHT: MORE SPIRAL', 'Flutter is at its limit: the spiral multiplies it.', x=1)
+        if s.qz2 > high**2:
+            return Advice('HOLD DOWN: LESS FLUTTER', 'Stay below Qz = 1, where field errors drive the beam.', y=-1)
+        return Advice('STEADY: IN THE GREEN', 'Qz between the two red lines. Watch it as the energy climbs.')
+
+
+def coach_for(stage):
+    return Coach(stage) if hasattr(stage, 'specs') else StageCoach(stage)
