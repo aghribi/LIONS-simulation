@@ -181,11 +181,11 @@ def test_python_matches_fortran(tmp_path, fortran, name, rewrite):
 
 
 def test_fortran_ignores_deck_options(tmp_path, fortran):
-    """A deck with interpolation=hermite gives the Fortran the same run as the plain deck."""
+    """A deck with interpolation=hermite and azimuth=atan2 gives the Fortran the same run as the plain deck."""
     def with_option(bunch_file):
         out = case_outer(bunch_file)
         deck = read_deck('deck.dat')
-        deck.field_interpolation = 'hermite'
+        deck.field_interpolation, deck.field_azimuth = 'hermite', 'atan2'
         write_deck(deck, 'deck.dat')
         return out
 

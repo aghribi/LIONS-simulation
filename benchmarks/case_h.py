@@ -218,7 +218,7 @@ def lions_option(outdir):
 
             def lions(t, p, n):
                 w = (np.sqrt(1 + p**2) - 1) * rest_mev / species[1]
-                return orbits.LionsTracker(work, w, t['f_rev_hz'], n, species, interpolation='hermite').track
+                return orbits.LionsTracker(work, w, t['f_rev_hz'], n, species, {'interpolation': 'hermite'}).track
 
             def harness(t, p, n):
                 return orbits.BorisTracker(f1, mass_kg, charge_c, p, t['f_rev_hz'], n).track
@@ -252,7 +252,8 @@ def lions_option(outdir):
         pos = np.column_stack([r * np.cos(th), r * np.sin(th), rng.uniform(-5e-3, 5e-3, n_part)])
         mom = p * np.column_stack([-np.sin(th), np.cos(th), np.zeros(n_part)])
         for interpolation in ('bilinear', 'hermite'):
-            samples = [lions_cost(grids, attrs, pos, mom, outdir, interpolation=interpolation) for _ in range(3)]
+            options = {} if interpolation == 'bilinear' else {'interpolation': interpolation}
+            samples = [lions_cost(grids, attrs, pos, mom, outdir, options=options) for _ in range(3)]
             records.append({'map': 'psi', 'spacing': '1/3 deg', 'case': f'lions_{interpolation}_{n_part}', 'steps_per_turn': 20,
                             'metric': 's_per_particle_step', 'value': float(np.median(samples)), 'harness': None,
                             'unit': f's, {n_part} particles'})
@@ -260,11 +261,61 @@ def lions_option(outdir):
     write(records, outdir, 'phase2', 'Case H phase 2: LIONS interpolation=hermite against the harness')
 
 
-def lions_cost(grids, attrs, pos, mom, outdir, steps=20, interpolation='bilinear'):
+AZIMUTH_CASES = {'10-sector': (3, 2, 2880), 'psi': (1, 11, 1440)}   # spacing, case index, steps
+
+
+def azimuth(outdir):
+    """Phase 2b: LIONS bilinear with azimuth arccos and atan2 against the numpy bilinear tracker (atan2)."""
+    records = []
+    for name, (every, k, n) in AZIMUTH_CASES.items():
+        grids, attrs, cases, mass_kg, charge_c = load_map(name)
+        species = (case_g1.lions_species(case_g2.MP_MEV * 1e6, 1) if name == 'psi' else
+                   case_g1.lions_species(float(attrs['mass_ev']), float(attrs['charge_e'])))
+        rest_mev = mass_kg * syn.C**2 / case_g1.lc.E_CHARGE / 1e6
+        work = outdir / f'azimuth_{name}'
+        work.mkdir(parents=True, exist_ok=True)
+        with contextlib.chdir(work):
+            case_g1.write_lions_map(grids, attrs, every)
+        label, t, p, _ = cases[k]
+        w = (np.sqrt(1 + p**2) - 1) * rest_mev / species[1]
+        numpy_track = orbits.BorisTracker(case_g1.bilinear_field(grids, attrs, every), mass_kg, charge_c, p,
+                                          t['f_rev_hz'], n).track
+        s, _ = orbits.closed_orbit(numpy_track, (t['r_theta0_m'], p * t['pr_over_p_theta0']))
+        turns = {}
+        for az in ('arccos', 'atan2'):
+            track = orbits.LionsTracker(work, w, t['f_rev_hz'], n, species, {} if az == 'arccos' else {'azimuth': az}).track
+            turns[az] = orbits.one_turn(track, s[None, :])[0]
+            for h in (1e-4, 1e-6, 1e-7):
+                dm = np.abs(orbits.jacobian(track, s, h, h * p / s[0])[:2, :2]
+                            - orbits.jacobian(numpy_track, s, h, h * p / s[0])[:2, :2]).max()
+                records.append({'map': name, 'case': label, 'azimuth': az, 'jacobian_step_m': h,
+                                'metric': 'max_abs_dM_rr_vs_numpy', 'value': float(dm)})
+                print(f'{name} {label} {az} h={h:.0e}: max|dM_rr| {dm:.2e}', file=sys.stderr)
+        diff = float(np.max(np.abs(turns['atan2'] - turns['arccos'])[:2] / np.array([s[0], p])))
+        records.append({'map': name, 'case': label, 'azimuth': 'atan2_vs_arccos', 'jacobian_step_m': None,
+                        'metric': 'one_turn_rel_diff', 'value': diff})
+        print(f'{name} {label}: one turn atan2 vs arccos {diff:.2e}', file=sys.stderr)
+    grids, attrs, cases, *_ = psi_map()
+    p = cases[11][2]
+    rng = np.random.default_rng(1)
+    r = rng.uniform(2.2, 4.2, 100000)
+    th = rng.uniform(0, 2 * np.pi, 100000)
+    pos = np.column_stack([r * np.cos(th), r * np.sin(th), rng.uniform(-5e-3, 5e-3, 100000)])
+    mom = p * np.column_stack([-np.sin(th), np.cos(th), np.zeros(100000)])
+    for az in ('arccos', 'atan2'):
+        options = {} if az == 'arccos' else {'azimuth': az}
+        cost = float(np.median([lions_cost(grids, attrs, pos, mom, outdir, options=options) for _ in range(3)]))
+        records.append({'map': 'psi', 'case': 'cost_1e5', 'azimuth': az, 'jacobian_step_m': None,
+                        'metric': 's_per_particle_step', 'value': cost})
+        print(f'LIONS azimuth={az} 1e5 particles: {cost:.2e} s/particle-step', file=sys.stderr)
+    write(records, outdir, 'azimuth', 'Case H phase 2b: LIONS azimuth arccos and atan2')
+
+
+def lions_cost(grids, attrs, pos, mom, outdir, steps=20, options=None):
     """LIONS itself: plain tracking loop over `steps` steps, per particle-step."""
     work = outdir / 'lions_cost'
     work.mkdir(parents=True, exist_ok=True)
-    tail = () if interpolation == 'bilinear' else ('no no', f'interpolation={interpolation}')
+    tail = orbits.deck_tail(options)
     with contextlib.chdir(work):
         case_g1.write_lions_map(grids, attrs, 1)
         syn.write_deck('deck.dat', fhf=case_g2.F_RF / case_g2.HARMONIC, r0=3.0, w0=300.0, turns=1, npaspt=steps,
@@ -301,7 +352,7 @@ def memory(grids, attrs):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('task', choices=('validate', 'matrix', 'cost', 'lions'))
+    parser.add_argument('task', choices=('validate', 'matrix', 'cost', 'lions', 'azimuth'))
     parser.add_argument('--outroot', type=Path, default=RUNS / 'case_h')
     args = parser.parse_args()
-    {'validate': validate, 'matrix': matrix, 'cost': cost, 'lions': lions_option}[args.task](args.outroot.resolve())
+    {'validate': validate, 'matrix': matrix, 'cost': cost, 'lions': lions_option, 'azimuth': azimuth}[args.task](args.outroot.resolve())

@@ -328,6 +328,7 @@ def load(d, deck):
         print(f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.field.b_factor:.6f} T')
 
     d.field.interpolation = deck.field_interpolation
+    d.field.azimuth = deck.field_azimuth
     if d.field.interpolation == 'hermite':
         prepare_hermite(d.field, ntheta_all)
 

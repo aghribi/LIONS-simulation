@@ -149,3 +149,24 @@ def test_hermite_nodes_and_accuracy(workdir):
            for name, tail in (('bilinear', []), ('hermite', HERMITE))}
     for k in range(3):
         assert err['hermite'][k] < err['bilinear'][k] / 10, (k, err)
+
+
+def test_atan2_azimuth_near_the_x_axis(workdir):
+    """At theta = 1e-9 rad atan2 gives the azimuth to rounding; arccos(x / r) loses it (error ~ eps / sin theta)."""
+    theta = 1e-9 * np.arange(1, 6)
+    r = np.full(5, 0.25)
+    err = {}
+    for name, tail in (('atan2', ['no no', 'azimuth=atan2']), ('arccos', [])):
+        syn.write_bmap('bmap.dat', -1.0)
+        syn.write_deck('deck.dat', fhf=syn.revolution_frequency(W0, -1.0), r0=0.25, w0=W0, turns=1, nbrion=5,
+                       tail=tail)
+        d = lions.State()
+        d.run.swap_bytes = 'n'
+        with contextlib.redirect_stdout(io.StringIO()):
+            lions.load(d, 'deck.dat')
+        b = d.bunch
+        b.x[:], b.y[:], b.z[:] = r * np.cos(theta), r * np.sin(theta), 0.0
+        check_box(b, d.field, d.box)
+        compute_fields(d)
+        err[name] = np.max(np.abs(b.theta - theta))
+    assert err['atan2'] < 1e-24 and err['arccos'] > 1e-10, err

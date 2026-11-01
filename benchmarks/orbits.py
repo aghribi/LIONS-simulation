@@ -70,18 +70,22 @@ def initial_vectors(states, p):
             np.column_stack([pr, pt, pz]))
 
 
+def deck_tail(options):
+    """Deck tail lines carrying LIONS options after an explicit 'no no' (ficloa ficsto)."""
+    return ('no no', *(f'{k}={v}' for k, v in options.items())) if options else ()
+
+
 class LionsTracker:
     """LIONS in a working directory holding bmap.dat, pot1.bin, pot2.dat. Many particles per run.
 
     w_mev: kinetic energy per nucleon; fhf_hz: RF frequency at harmonic 1 (one turn = steps_per_turn steps);
     species: (atomic mass in u, mass number, charge state), protons by default.
-    interpolation: the LIONS deck option ('bilinear', the default, or 'hermite').
+    options: LIONS deck options, e.g. {'interpolation': 'hermite', 'azimuth': 'atan2'}; none = the Fortran model.
     """
 
-    def __init__(self, workdir, w_mev, fhf_hz, steps_per_turn, species=(syn.HYDROGEN, 1, 1),
-                 interpolation='bilinear'):
+    def __init__(self, workdir, w_mev, fhf_hz, steps_per_turn, species=(syn.HYDROGEN, 1, 1), options=None):
         self.workdir, self.w, self.fhf, self.n, self.species = Path(workdir), w_mev, fhf_hz, steps_per_turn, species
-        self.tail = () if interpolation == 'bilinear' else ('no no', f'interpolation={interpolation}')
+        self.tail = deck_tail(options)
 
     def track(self, states, turns):
         """Full-step trajectories (t, pos, mom) of shape (steps, n, 3), momenta at full steps."""

@@ -1017,3 +1017,16 @@ Case H phase 2 results.
   below the decision target (1e-4); the case H decision table holds for LIONS with the option.
 - Cost, LIONS on the PSI map: 2.41e-7 and 4.37e-7 s per particle-step at 1e3 particles (default, Hermite),
   1.35e-7 and 2.44e-7 at 1e5: the option costs 1.8 times the default, as in the harness.
+
+### Case H phase 2b: azimuth option for the default path (registered before running, approved 2026-11-01)
+Implementation: deck token `azimuth=atan2` (default `arccos`, the Fortran formula), API field `Deck.field_azimuth`;
+the field lookup in `compute_fields` and `compute_bfield` takes theta from atan2(y, x). Diagnostics of the reference
+particle (turn counter, correlations) keep their own arccos. The Hermite option always uses atan2. Fortran tests pass;
+the Fortran ignores the token (test).
+Validation, LIONS bilinear against the numpy bilinear tracker (atan2), on the 10-sector map at 1 deg (a = 0.8863,
+2880 steps) and the PSI map (292 MeV, 1440 steps), at the harness closed orbit:
+- Radial Jacobian difference max |dM_rr| at h = 1e-4, 1e-6, 1e-7 m, with azimuth arccos and atan2.
+- Criterion: with atan2, max |dM_rr| at h = 1e-6 m at least 10 times below its arccos value on both maps; closed
+  orbit after one turn equal between the two azimuths within 1e-12 relative (same smooth map).
+- Prediction: the 1/h noise falls to the harness rounding level (1e-8 or below at h = 1e-6 m).
+- Cost: LIONS with azimuth=atan2 against the default, 1e5 particles, PSI map.

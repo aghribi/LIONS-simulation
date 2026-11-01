@@ -9,8 +9,12 @@ from typing import Optional
 
 from .fortran_text import FortranFile, fortran_float
 
-# Magnetic map interpolation: 'bilinear' is the Fortran model; 'hermite' is the bicubic Hermite option (C1).
-INTERPOLATIONS = ('bilinear', 'hermite')
+# Python-only deck options, written key=value at the end of the deck: key -> (Deck field, values, the first
+# being the Fortran behaviour and the default).
+# interpolation: magnetic map model, bilinear (Fortran) or bicubic Hermite (C1).
+# azimuth: particle azimuth for the field lookup, arccos(x / r) (Fortran) or atan2(y, x).
+OPTIONS = {'interpolation': ('field_interpolation', ('bilinear', 'hermite')),
+           'azimuth': ('field_azimuth', ('arccos', 'atan2'))}
 
 
 @dataclass
@@ -114,10 +118,12 @@ class Deck:
     bunch_load_file: str = 'no'
     bunch_save_file: str = 'no'
     field_interpolation: str = 'bilinear'
+    field_azimuth: str = 'arccos'
 
     def __post_init__(self):
-        if self.field_interpolation not in INTERPOLATIONS:
-            raise ValueError(f'field_interpolation {self.field_interpolation!r}: one of {INTERPOLATIONS}')
+        for name, values in OPTIONS.values():
+            if getattr(self, name) not in values:
+                raise ValueError(f'{name} {getattr(self, name)!r}: one of {values}')
 
     @property
     def total_particles(self):
@@ -199,7 +205,7 @@ def read_deck(path):
                 options[key] = value
             else:
                 tail += tok
-        unknown = set(options) - {'interpolation'}
+        unknown = set(options) - set(OPTIONS)
         if unknown:
             raise ValueError(f'{path}: unknown deck options {sorted(unknown)}')
         b_factor = None
@@ -230,7 +236,7 @@ def read_deck(path):
         phase_space=phase_space, correlation_file=correlation_file,
         matrix_file=matrix_file, dc_matrix_file=dc_matrix_file,
         b_factor=b_factor, bunch_load_file=bunch_load_file, bunch_save_file=bunch_save_file,
-        field_interpolation=options.get('interpolation', 'bilinear'))
+        **{OPTIONS[k][0]: v for k, v in options.items()})
 
 
 def _num(v):
@@ -296,7 +302,7 @@ def write_deck(deck, path):
                                                deck.outer_potential_file)))
     if deck.b_factor is not None:
         lines.append(_line(deck.b_factor))
-    options = {'interpolation': deck.field_interpolation} if deck.field_interpolation != 'bilinear' else {}
+    options = {k: getattr(deck, name) for k, (name, values) in OPTIONS.items() if getattr(deck, name) != values[0]}
     # Options need ficloa ficsto written before them, so that the Fortran never reads an option as a file name
     if (deck.bunch_load_file, deck.bunch_save_file) != ('no', 'no') or options:
         lines.append(' '.join(_quoted(n) for n in (deck.bunch_load_file, deck.bunch_save_file)))

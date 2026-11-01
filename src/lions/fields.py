@@ -103,15 +103,21 @@ def prepare_hermite(field, ntheta_all):
                                                        edge_order=2)
 
 
+def atan2_azimuth(x, y):
+    """Azimuth in [0, 2 pi) from atan2: uniform precision. arccos(x / r), the Fortran formula, loses precision near
+    theta = 0 and pi (rounding over sin theta), which puts non-smooth noise of order 1e-12 m per kick into the
+    one-turn map at r of a few metres."""
+    theta = np.arctan2(y, x) % (2.0 * np.pi)
+    theta[theta >= 2.0 * np.pi] = 0.0
+    return theta
+
+
 def hermite_bz(field, ivec, veca, x, y, r):
     """Bicubic Hermite Bz in the radial cell ivec at offset veca, and its Cartesian gradient.
 
-    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells. The azimuth comes from atan2: the
-    arccos(x / r) of the bilinear path loses precision near theta = 0 and pi (rounding over sin theta), which
-    puts non-smooth noise of order 1e-12 m per kick into the one-turn map at r of a few metres.
+    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells. The azimuth is always atan2_azimuth.
     """
-    theta = np.arctan2(y, x) % (2.0 * np.pi)
-    theta[theta >= 2.0 * np.pi] = 0.0
+    theta = atan2_azimuth(x, y)
     jvec = (theta / field.dtheta).astype(np.int32)
     u, v = veca / field.dr, (theta - jvec * field.dtheta) / field.dtheta
 
@@ -192,17 +198,20 @@ def compute_fields(d):
             if ratio > 1.0 or ratio < -1.0:
                 print(f'{i} {d.bunch.x[i]} {d.bunch.y[i]} {d.bunch.r[i]} {ratio}')
 
-    veca = d.bunch.x / d.bunch.r
-    mask_normal = (veca > -1.0) & (veca < 1.0)
-    mask_ge1 = veca >= 1.0
-    mask_lem1 = veca <= -1.0
-    d.bunch.theta[mask_normal] = np.arccos(veca[mask_normal])
-    d.bunch.theta[mask_ge1] = np.arccos(1.0)
-    d.bunch.theta[mask_lem1] = np.arccos(-1.0)
-    mask_yneg = d.bunch.y < 0.0
-    d.bunch.theta[mask_yneg] = 2.0 * np.pi - d.bunch.theta[mask_yneg]
-    # y < 0 with x / r rounding to 1 gives exactly 2 pi, one column past the map
-    d.bunch.theta[d.bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
+    if d.field.azimuth == 'atan2':
+        d.bunch.theta[:] = atan2_azimuth(d.bunch.x, d.bunch.y)
+    else:
+        veca = d.bunch.x / d.bunch.r
+        mask_normal = (veca > -1.0) & (veca < 1.0)
+        mask_ge1 = veca >= 1.0
+        mask_lem1 = veca <= -1.0
+        d.bunch.theta[mask_normal] = np.arccos(veca[mask_normal])
+        d.bunch.theta[mask_ge1] = np.arccos(1.0)
+        d.bunch.theta[mask_lem1] = np.arccos(-1.0)
+        mask_yneg = d.bunch.y < 0.0
+        d.bunch.theta[mask_yneg] = 2.0 * np.pi - d.bunch.theta[mask_yneg]
+        # y < 0 with x / r rounding to 1 gives exactly 2 pi, one column past the map
+        d.bunch.theta[d.bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
 
     ivec[:] = 0
     jvec[:] = 0
@@ -469,9 +478,12 @@ def compute_bfield(bunch, field):
     vecy3 = np.zeros(bunch.n_particles)
     vecy4 = np.zeros(bunch.n_particles)
     vecz = np.zeros(bunch.n_particles)
-    bunch.theta = np.arccos(np.clip(bunch.x / bunch.r, -1.0, 1.0))
-    bunch.theta[bunch.y < 0.0] = 2.0 * np.pi - bunch.theta[bunch.y < 0.0]
-    bunch.theta[bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
+    if field.azimuth == 'atan2':
+        bunch.theta = atan2_azimuth(bunch.x, bunch.y)
+    else:
+        bunch.theta = np.arccos(np.clip(bunch.x / bunch.r, -1.0, 1.0))
+        bunch.theta[bunch.y < 0.0] = 2.0 * np.pi - bunch.theta[bunch.y < 0.0]
+        bunch.theta[bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
 
     mask = bunch.in_box
     ivec[mask] = ((bunch.r[mask] - field.rmin) / field.dr).astype(np.int32)
