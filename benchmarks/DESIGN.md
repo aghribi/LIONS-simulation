@@ -815,3 +815,14 @@ Step 2:
   the half-integer band (386 to 430 MeV) counted separately.
 - Reading of RF-Track: a second smooth-field instrument; RF-Track minus spline tracker measures the Boris step error
   at 1440 steps on this map.
+
+### G2 step 2b: LIONS one-turn determinant, discriminating run (registered before running)
+Observation from step 2, before its write-up: LIONS det(M) - 1 = 0.19 (median over energies, up to 0.42) and Qr
+error 1.2e-2 (median), against 2.6e-5 and 9e-5 for the spline tracker on the same node values.
+Hypotheses: H1, the bilinear field model on the steep spiral edges; H2, a LIONS-specific defect (map conversion or
+LIONS itself); H3, an artefact of the finite-difference Jacobian on a piecewise-bilinear field.
+- Runs at 152, 292 and 452 MeV (`ic.dat` rows 40, 110, 190): LIONS, the numpy Boris on the LIONS bilinear field
+  (G1 step 3a: reproduces LIONS to 1e-14), the spline tracker. Metrics: det of the r block, of the z block, of M;
+  Qr, Qz. LIONS also with Jacobian steps 1e-7, 1e-6, 1e-5 m.
+- Reading: numpy bilinear equal to LIONS supports H1 and refutes H2; a determinant that moves with the Jacobian
+  step by more than 10% supports H3.
