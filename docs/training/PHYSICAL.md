@@ -40,6 +40,16 @@ The rerun on CRIANN reproduces the laptop's map and dee gate numbers as printed 
 
 **Test set.** The tunes in spec from `benchmarks/runs/case_t_drift`, F18: 20 conditions for PPO seed 0, and those Nelder-Mead reached. The tunes must be regenerated from the pinned code, since the Parquet files hold outcomes only.
 
+**What a verdict counts, fixed before any run (`benchmarks/case_v.py`).** Cyclotron only, 120 macroparticles, Hermite, 360 steps per turn. The tunes are compared with the tables of `case_t_drift`, condition by condition, and any difference stops the run.
+- Machine setting: `rf_mhz`, `dee_kv`, harmonic from T0's rule, field scale = `b0 (1 + field error)` / T0's nominal `b0`, the field error being its value at the in-spec pass. The scale multiplies LIONS' per-particle magnetic coefficient, since `b_factor` in a deck is only printed. A check compares it with a rewritten map.
+- Start: T0's phases (`machine.start_phases`, buncher and phase error included) and heights (`machine.start_heights`, same draws), `pz` 0, 0.091 MeV. T0 starts at 0.03 MeV.
+- Phase: `lions_phi0` is the one conversion, T0 phase + crest, the crest being the median fitted crest at 0.091 MeV and above in `case_p_gain.parquet`. LIONS has one RF clock per bunch, so a phase is an arrival time: each particle starts before theta = 0 on the closed orbit, under half a turn away, with its electric kick off until it arrives. The closed orbit radius is scaled by 1 / field scale, exact for a uniform field. A check compares the sign and size of the phase motion with T0's update.
+- Extraction: first theta = 0 crossing at radius >= the closed-orbit radius at that section whose mean radius equals the machine radius. T0's `rho >= radius` is a mean radius, so this is its counterpart, and a stronger field extracts at higher energy in both.
+- Losses in LIONS: |z| above the 15 mm of `z_aperture`, leaving the map, and the turn limit of T0 (`machine.turn_limit`), still circulating counts as lost.
+- `cos(phi) < 0.2` has no LIONS counterpart: the primary verdict applies no such rule, and particles behind the RF follow the dynamics. A second verdict adds T0's rule on top, lost at the first theta = 0 crossing below it. Both are reported.
+- Space charge: none in LIONS. T0's term stays in the T0 column only.
+- Septum, slit, deflector, steerers, quadrupole, spec terms: T0's closed forms (`machine.extract`, `Mission.spec_terms`) on both beams. The tunes keep T0's deflector and steerer settings.
+
 **Metric.** In-spec agreement fraction; transmission, extraction energy and phase against radius for T0 and LIONS. Disagreement is reported as the result. There is no success threshold for this stage.
 
 Every LIONS run writes one row to the dataset below.

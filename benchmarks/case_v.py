@@ -1,0 +1,370 @@
+"""Case V: LIONS judges the F18 tunes of case T, stage A of docs/training/PHYSICAL.md. Synthetic map: says nothing about a real machine.
+
+usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N]
+tunes: the in-spec tunes of case T, regenerated and compared with its tables. check: time one pass, sign of the phase conversion, field scaling.
+verdict: every tune through LIONS, one pass per tune; finished tunes are kept in parts/ and skipped on a rerun.
+"""
+import argparse
+import contextlib
+import io
+import json
+import multiprocessing
+import os
+import pickle
+import platform
+import shutil
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'benchmarks'))
+
+import case_p as P  # noqa: E402
+import lions  # noqa: E402
+import lions.cli  # noqa: E402
+import orbits  # noqa: E402
+import synthetic as syn  # noqa: E402
+from lions.game import machine as mc  # noqa: E402
+from lions.game import tuners as t  # noqa: E402
+from lions.game.env import mission_by_id  # noqa: E402
+from provenance import provenance  # noqa: E402
+
+MISSION = 'F18'
+N = mc.MACROPARTICLES
+PPO_SEED = 0
+MAP_FILES = ('bmap.dat', 'pot1.bin', 'pot2.dat')
+REST_MEV = P.MASS_KG * syn.C**2 / syn.MEV
+EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT = 'extracted', 'z_aperture', 'out_of_map', 'turn_limit'
+BEAM_FIELDS = ('transmission', 'extracted_ua', 'w_mean', 'w_spread', 'lost_kw', 'turns', 'x', 'y')
+
+
+def wrap(phi):
+    return np.remainder(phi + np.pi, 2 * np.pi) - np.pi
+
+
+def lions_phi0(phi, crest_deg):
+    """T0 phase [rad, 0 at the crest] to the RF phase omega t [deg] of a LIONS particle crossing theta = 0. Later is larger in both."""
+    return crest_deg + np.degrees(phi)
+
+
+def t0_phase(omega_t, crest_deg):
+    """Inverse of lions_phi0, in [-pi, pi). omega_t [rad]."""
+    return wrap(omega_t - np.radians(crest_deg))
+
+
+class Map:
+    """What the verdict takes from case P: start orbit, crest, extraction radius."""
+
+    def __init__(self, mapdir):
+        self.dir = Path(mapdir).resolve()
+        rec = [r for r in pq.read_table(self.dir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic']
+        gains = pq.read_table(self.dir / 'case_p_gain.parquet').to_pylist()
+        self.w0, self.r0 = min(((r['w_mev'], r['r_co_m']) for r in rec), key=lambda a: abs(a[0] - P.START_MEV))
+        self.crest_deg = float(np.median([g['crest_phi0_deg'] for g in gains if g['w_mev'] >= self.w0]))
+        self.r_ext = float(np.interp(P.MACHINE.radius, [r['rbar_m'] for r in rec], [r['r_co_m'] for r in rec]))
+        self.inputs = [self.dir / name for name in ('bmap.dat', 'pot2.dat', 'case_p_gain.parquet', 'case_p_orbits.parquet')]
+
+    def workdir(self, path):
+        path.mkdir(parents=True, exist_ok=True)
+        for name in MAP_FILES:
+            if not (path / name).exists():
+                os.symlink(self.dir / name, path / name)
+        return path
+
+
+def load(deck_args):
+    syn.write_deck('deck.dat', npaspt=P.STEPS, teta1=P.MACHINE.dee_angle_deg / 2, tail=orbits.deck_tail(P.OPTIONS), **deck_args)
+    d = lions.State()
+    d.run.swap_bytes = 'n'
+    lions.load(d, 'deck.dat')
+    return d
+
+
+def reference_orbit(workdir, mp):
+    """Closed orbit at the start energy, no RF: x, y, z, px, py, pz at each step over one turn, in LIONS' staggered convention."""
+    rows = []
+
+    def record(d):
+        b = d.bunch
+        rows.append([b.x[0], b.y[0], b.z[0], b.px[0], b.py[0], b.pz[0]])
+
+    with contextlib.chdir(workdir), contextlib.redirect_stdout(io.StringIO()):
+        d = load(dict(fhf=P.HARMONIC * P.F0, r0=mp.r0, w0=mp.w0, turns=1, v_dee=0.0, harm=float(P.HARMONIC)))
+        lions.cli.check_box(d.bunch, d.field, d.box)
+        lions.cli.compute_fields(d)
+        orbits.half_kick(d, -0.5)     # the deck momentum is p(-1/2)
+        lions.cli.track(d, on_step=record)
+    return np.array(rows)
+
+
+class Pass:
+    """One pass of 120 macroparticles through LIONS. The RF is one clock for the whole bunch, so a particle's RF phase is its arrival time at theta = 0.
+
+    Each one starts before theta = 0 on the closed orbit, with its electric kick off until it arrives there: it arrives at the start energy, at its own phase.
+    """
+
+    def __init__(self, workdir, mp, ref, knobs, errors, draws, max_turns=None, scale_in_map=False):
+        machine, ion = P.MACHINE, P.ION
+        self.mp, self.knobs, self.errors = mp, knobs, errors
+        self.b0 = knobs['b0'] * (1 + errors.field)
+        self.s = self.b0 / mc.nominal(machine, ion, P.W_EXT)[0]
+        w_inj = machine.w_injection * ion.mass_number
+        self.g0 = ion.gamma(w_inj)
+        f_rf = knobs['rf_mhz'] * 1e6
+        self.h = max(round(f_rf / ion.f_rev(w_inj, self.b0)), 1)
+        if self.h != P.HARMONIC:
+            raise ValueError(f'harmonic {self.h}: the map is built for {P.HARMONIC}')
+        self.limit = int(np.ceil(mc.turn_limit(machine, ion, knobs, self.b0, self.h))) if max_turns is None else max_turns
+        self.phi = mc.start_phases(knobs, errors)
+        self.z0 = mc.start_heights(machine, draws) * 1e-3
+        hold = (self.phi + np.pi) / (2 * np.pi) * P.STEPS / self.h       # steps to theta = 0, under half a turn at harmonic 2
+        at = P.STEPS - hold
+        start = np.array([np.interp(at, np.arange(P.STEPS + 1), ref[:, c]) for c in range(6)])
+        self.release = np.ceil(hold).astype(int)
+        self.fate = np.full(N, TURN_LIMIT, dtype=object)
+        self.w_end, self.w_last, self.w_prev = np.full(N, mp.w0), np.full(N, mp.w0), np.full(N, mp.w0)
+        self.turns = np.zeros(N, dtype=int)
+        self.phi_first = np.full(N, np.nan)
+        self.flagged, self.w_flag = np.zeros(N, dtype=bool), np.full(N, np.nan)
+        self.phase_sum, self.counts = np.zeros((N, mc.PROBE_BINS)), np.zeros((N, mc.PROBE_BINS))
+        phi0 = lions_phi0(-np.pi, mp.crest_deg)           # the clock starts when hold = 0 has phase -pi
+        with contextlib.chdir(workdir), contextlib.redirect_stdout(io.StringIO()):
+            d = load(dict(fhf=f_rf, r0=mp.r0, w0=mp.w0, turns=self.limit + 1, v_dee=knobs['dee_kv'] * 1e3, harm=float(self.h), nbrion=N, phi0=phi0))
+            b = d.bunch
+            d.traps.follow = 0                            # dead particles stop costing steps
+            b.x[:], b.y[:], b.z[:] = start[0] / self.s, start[1] / self.s, self.z0
+            b.px[:], b.py[:], b.pz[:] = start[3], start[4], 0.0
+            b.gamma[:] = np.sqrt(1 + b.px**2 + b.py**2 + b.pz**2)
+            if not scale_in_map:
+                b.boris_b_coef *= self.s                  # scales Bx, By, Bz together; b_factor in the deck is only printed
+            self.e_coef = b.boris_e_coef.copy()
+            b.boris_e_coef[self.release > 0] = 0.0
+            self.prev = b.x.copy(), b.y.copy(), b.gamma.copy(), d.run.t
+            self.rmin, self.rmax = d.field.rmin, d.field.rmax - 0.02
+            lions.cli.track(d, on_step=self.step)
+        self.turn_max = int(self.turns.max())
+
+    def step(self, d):
+        k, b = d.run.step, d.bunch
+        if k == 0:
+            return True
+        released = self.release == k
+        b.boris_e_coef[released] = self.e_coef[released]
+        xp, yp, gp, tp = self.prev
+        live = b.alive.copy()
+        c = np.flatnonzero(live & (yp < 0) & (b.y >= 0) & (b.x > 0))
+        if len(c):
+            self.crossing(c, d, xp, yp, gp, tp)
+        w = (b.gamma - 1) * REST_MEV
+        self.w_end[live] = w[live]
+        r = np.hypot(b.x, b.y)
+        over_z = live & (np.abs(b.z) > P.MACHINE.z_aperture * 1e-3)
+        out = live & ~over_z & ((r < self.rmin) | (r >= self.rmax))
+        self.fate[over_z], self.fate[out] = Z_APERTURE, OUT_OF_MAP
+        b.alive[over_z | out] = False
+        self.prev = b.x.copy(), b.y.copy(), b.gamma.copy(), d.run.t
+        return bool(b.alive.any()) and k < self.limit * P.STEPS
+
+    def crossing(self, c, d, xp, yp, gp, tp):
+        b, ion = d.bunch, P.ION
+        f = -yp[c] / (b.y[c] - yp[c])
+        when = tp + f * (d.run.t - tp)
+        w = (gp[c] + f * (b.gamma[c] - gp[c]) - 1) * REST_MEV
+        r = xp[c] + f * (b.x[c] - xp[c])
+        phi = t0_phase(d.rf.omega * when, self.mp.crest_deg)
+        first = self.turns[c] == 0
+        self.phi_first[c[first]] = phi[first]
+        self.turns[c] += 1
+        self.w_prev[c] = self.w_last[c]
+        self.w_last[c] = w
+        g = ion.gamma(w)
+        rho = ion.rigidity(w) / (self.b0 * (1 + self.knobs['trim'] * (g / self.g0 - 1)))        # as machine.run: the radial probe of both models
+        i = np.minimum((rho / P.MACHINE.radius * mc.PROBE_BINS).astype(int), mc.PROBE_BINS - 1)
+        self.phase_sum[c, i] += np.degrees(phi)
+        self.counts[c, i] += 1
+        behind = (np.cos(phi) < mc.BEHIND_RF) & ~self.flagged[c]
+        self.flagged[c[behind]] = True
+        self.w_flag[c[behind]] = w[behind]
+        done = c[r >= self.mp.r_ext]
+        self.fate[done] = EXTRACTED
+        b.alive[done] = False
+
+    def beam(self, behind_rule=False):
+        """Beam through the closed forms of machine.extract. behind_rule: T0's loss rule applied on top of the dynamics."""
+        out = self.fate == EXTRACTED
+        if behind_rule:
+            ok = out & ~self.flagged
+            power = self.w_flag[self.flagged].sum() + self.w_end[~out & ~self.flagged].sum()
+        else:
+            ok, power = out, self.w_end[~out].sum()
+        return mc.extract(P.MACHINE, P.ION, self.knobs, self.errors, self.w_last, self.w_prev, ok, power, self.turn_max, self.h,
+                          self.counts.sum(0) / N, self.phase_sum.sum(0), self.counts.sum(0))
+
+
+def judged(condition, knobs, field, beam=None):
+    """A mission in the state of the tune: spec terms and verdict for a beam, T0's own if none."""
+    m = mission_by_id(MISSION)
+    m.reset(condition)
+    m.knobs, m.errors.field = dict(knobs), field
+    if beam is None:
+        m.refresh()
+    else:
+        m.beam = beam
+        m.after_beam()
+    return m
+
+
+def row_of(prefix, m):
+    b = m.beam
+    return {**{f'{prefix}_{k}': float(getattr(b, k)) for k in BEAM_FIELDS}, f'{prefix}_terms': json.dumps(m.spec_terms()), f'{prefix}_in_spec': bool(m.ready())}
+
+
+def write(records, path, what, mp, units):
+    meta = {'case': f'synthetic F18, {what}', 'registration': 'docs/training/PHYSICAL.md', 'label': 'SYNTHETIC', **provenance(*mp.inputs),
+            'machine': platform.platform(), 'python': platform.python_version(), 'steps_per_turn': str(P.STEPS), 'interpolation': 'hermite',
+            'start_mev': str(mp.w0), 'crest_deg': str(mp.crest_deg), 'r_ext_m': str(mp.r_ext), 'units': units}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), path)
+
+
+def tunes(outdir, reference, mp):
+    """In-spec tunes with their field error at that pass. Every condition must end as in the tables of case T."""
+    runs = pq.read_table(reference / 'case_t_rl.parquet').to_pylist() + pq.read_table(reference / 'case_t_classical.parquet').to_pylist()
+    model = t.load_policy(reference / f'{MISSION}_ppo_{PPO_SEED}.zip')
+    methods = {'ppo': (PPO_SEED, t.policy, {'model': model}), 'nelder_mead': (-1, t.nelder_mead, {})}
+    rows, wrong = [], 0
+    for name, (seed, method, options) in methods.items():
+        for condition in t.HELD_OUT:
+            m = mission_by_id(MISSION)
+            m.reset(condition)
+            run = t.tune(m, method, condition, **options)
+            was = next(r for r in runs if (r['mission'], r['method'], r['training_seed'], r['condition']) == (MISSION, name, seed, condition))
+            same = (run.reached is not None) == was['in_spec'] and (run.reached is None or float(run.reached) == was['evals_to_spec'])
+            wrong += not same
+            print(name, condition, run.reached, was['evals_to_spec'], '' if same else 'DIFFERENT', flush=True)
+            if run.reached:
+                rows.append({'tune': len(rows), 'method': name, 'training_seed': seed, 'condition': condition, 'evals': run.reached,
+                             'field_error': float(m.errors.field), 'knobs': json.dumps(m.knobs)})
+    write(rows, outdir / 'case_v_tunes.parquet', 'tunes', mp, 'field_error 1, knobs as the scenario')
+    print(f'{len(rows)} tunes; {wrong} conditions differ from case T')
+    return wrong
+
+
+def of_tune(row):
+    return judged(row['condition'], json.loads(row['knobs']), row['field_error'])
+
+
+def check(outdir, mp):
+    work = mp.workdir(outdir / 'check' / 'base')
+    ref = reference_orbit(work, mp)
+    print('map: start', mp.w0, 'MeV, r0', mp.r0, 'm; crest', mp.crest_deg, 'deg; r_ext', mp.r_ext, 'm')
+    print('closed orbit closes: |dr| after one turn', float(np.hypot(*(ref[-1, :2] - ref[0, :2]))), 'm')
+    row = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()[0]
+    m = of_tune(row)
+    began = time.perf_counter()
+    p = Pass(work, mp, ref, m.knobs, m.errors, m.draws)
+    print(f'pass: {time.perf_counter() - began:.1f} s wall, limit {p.limit} turns, longest {p.turn_max}, fates', dict(zip(*np.unique(p.fate.astype(str), return_counts=True))))
+    print('first crossing against the set phase: max |diff|', float(np.nanmax(np.abs(np.degrees(wrap(p.phi_first - p.phi))))), 'deg; never crossed', int(np.isnan(p.phi_first).sum()))
+    # Sign and size of the phase conversion against T0's update: phi += 2 pi (f_rf / f_rev - h) per turn.
+    calm = {**m.knobs, 'phase_deg': -m.errors.phase_deg, 'buncher': 0.0}
+    turns, nominal_b0 = 60, mc.nominal(P.MACHINE, P.ION, P.W_EXT)[0]
+    calm['b0'] = nominal_b0 / (1 + m.errors.field)
+    calm['rf_mhz'] = P.HARMONIC * P.F0 / 1e6
+    for name, change in (('rf +1e-4', {'rf_mhz': calm['rf_mhz'] * (1 + 1e-4)}), ('b0 +1e-4', {'b0': calm['b0'] * (1 + 1e-4)})):
+        slip = []
+        for knobs in (calm, {**calm, **change}):
+            q = Pass(work, mp, ref, knobs, m.errors, m.draws, max_turns=turns)
+            on = (np.abs(q.phi) < np.radians(20)) & (q.turns > 0)
+            last = (q.phase_sum.sum(1)[on] / q.counts.sum(1)[on]).mean()     # mean over the turns of each particle near the crest
+            slip.append(last)
+        predicted = 360 * P.HARMONIC * (1e-4 if 'rf' in name else -1e-4) * turns / 2
+        print(f'{name}: mean phase over {turns} turns moves {slip[1] - slip[0]:+.3f} deg, T0 update predicts {predicted:+.3f} deg')
+    # boris_b_coef against a map rewritten with the same scale.
+    s = 1.002
+    knobs = {**calm, 'b0': nominal_b0 * s / (1 + m.errors.field)}
+    field = P.load_field(mp.dir)
+    scaled = mp.workdir(outdir / 'check' / 'scaled')
+    (scaled / 'bmap.dat').unlink()
+    nodes = lambda i: lambda r, th: s * field.nodes(r, th)[i]  # noqa: E731
+    with contextlib.chdir(scaled):
+        syn.write_bmap('bmap.dat', nodes(0), nodes(1), nodes(2), nodes(3), rmin=0.005, rmax=P.MACHINE.radius * 1.15, nr=P.MAP_NR, ntet=361)
+    a = Pass(work, mp, ref, knobs, m.errors, m.draws, max_turns=20)
+    c = Pass(scaled, mp, ref, knobs, m.errors, m.draws, max_turns=20, scale_in_map=True)
+    print('scale 1.002 by coefficient against rewritten map, 20 turns: max |dw|', float(np.max(np.abs(a.w_end - c.w_end))), 'MeV; of', float(a.w_end.max()), 'MeV')
+    shutil.rmtree(outdir / 'check')
+
+
+def one(job):
+    row, mapdir, parts = job
+    path = parts / f"{row['tune']:03d}.pkl"
+    if path.exists():
+        return row['tune']
+    mp = Map(mapdir)
+    work = mp.workdir(parts / f"work_{row['tune']:03d}")
+    ref = reference_orbit(work, mp)
+    m = of_tune(row)
+    t0 = row_of('t0', m)
+    t0_beam = m.beam
+    began = time.perf_counter()
+    p = Pass(work, mp, ref, m.knobs, m.errors, m.draws)
+    wall = time.perf_counter() - began
+    base = {k: row[k] for k in ('tune', 'method', 'training_seed', 'condition')}
+    inputs = {'rf_mhz': float(m.knobs['rf_mhz']), 'b0_t': float(p.b0), 'dee_kv': float(m.knobs['dee_kv']), 'phase_deg': float(m.knobs['phase_deg'] + m.errors.phase_deg),
+              'buncher': float(m.knobs['buncher'])}
+    lions_m = judged(row['condition'], m.knobs, row['field_error'], p.beam())
+    rule_m = judged(row['condition'], m.knobs, row['field_error'], p.beam(behind_rule=True))
+    verdict = {**base, **inputs, 'field_scale': float(p.s), 'wall_s': wall, 'limit_turns': p.limit, **t0, **row_of('lions', lions_m), **row_of('rule', rule_m)}
+    with np.errstate(invalid='ignore', divide='ignore'):
+        by_bin = p.phase_sum / p.counts
+    particles = [{**base, **inputs, 'particle': i, 'phi_start_deg': float(np.degrees(p.phi[i])), 'z0_m': float(p.z0[i]), 'survives': p.fate[i] == EXTRACTED, 'fate': str(p.fate[i]),
+                  'turns': int(p.turns[i]), 'w_final_mev': float(p.w_end[i]), 'w_extraction_mev': float(p.w_last[i]) if p.fate[i] == EXTRACTED else float('nan'),
+                  'behind_rf': bool(p.flagged[i]), 'phase_by_bin_deg': [float(v) for v in by_bin[i]]} for i in range(N)]
+    bl = lions_m.beam
+    curves = [{**base, 'bin': j, 'r_m': float(t0_beam.probe_r[j]), 't0_probe': float(t0_beam.probe[j]), 't0_phase_deg': float(t0_beam.phase[j]),
+               'lions_probe': float(bl.probe[j]), 'lions_phase_deg': float(bl.phase[j])} for j in range(mc.PROBE_BINS)]
+    with open(path, 'wb') as f:
+        pickle.dump((verdict, particles, curves), f)
+    shutil.rmtree(work)
+    print(row['tune'], row['method'], row['condition'], f'{wall:.0f} s', 'lions in spec', verdict['lions_in_spec'], 'transmission', verdict['t0_transmission'], verdict['lions_transmission'], flush=True)
+    return row['tune']
+
+
+def verdict(outdir, mp, workers):
+    rows = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()
+    parts = outdir / 'parts'
+    parts.mkdir(parents=True, exist_ok=True)
+    with multiprocessing.get_context('spawn').Pool(workers) as pool:
+        list(pool.imap_unordered(one, [(r, mp.dir, parts) for r in rows]))
+    done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
+    write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s')
+    write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
+    write([c for d in done for c in d[2]], outdir / 'case_v_curves.parquet', 'probe and phase against radius', mp, 'r_m m, probe particle-turns per macroparticle, phase deg')
+    shutil.rmtree(parts)
+    v = [d[0] for d in done]
+    for method in ('ppo', 'nelder_mead'):
+        s = [r for r in v if r['method'] == method]
+        print(method, len(s), 'tunes; T0 in spec', sum(r['t0_in_spec'] for r in s), 'LIONS', sum(r['lions_in_spec'] for r in s), 'LIONS with the behind-RF rule', sum(r['rule_in_spec'] for r in s))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('step', choices=('tunes', 'check', 'verdict'))
+    parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_v')
+    parser.add_argument('--mapdir', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
+    parser.add_argument('--reference', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
+    parser.add_argument('--workers', type=int, default=int(os.environ.get('SLURM_CPUS_PER_TASK', 1)))
+    args = parser.parse_args()
+    outdir = args.outroot.resolve()
+    outdir.mkdir(parents=True, exist_ok=True)
+    mp_ = Map(args.mapdir)
+    if args.step == 'tunes':
+        sys.exit(1 if tunes(outdir, args.reference.resolve(), mp_) else 0)
+    elif args.step == 'check':
+        check(outdir, mp_)
+    else:
+        verdict(outdir, mp_, args.workers)

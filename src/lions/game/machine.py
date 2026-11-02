@@ -14,6 +14,7 @@ from lions.game import physics
 U_MEV = 931.494    # MeV per atomic mass unit
 MACROPARTICLES = 120
 PROBE_BINS = 40
+BEHIND_RF = 0.2     # cos(phi) under this: lost on the dee structure
 
 
 @dataclass
@@ -119,17 +120,33 @@ def deflector_nominal(machine, ion, w_mev):
     return machine.deflector_scale * (g - 1 / g) * ion.rest_mev / ion.charge
 
 
+def start_phases(knobs, errors):
+    """RF phase [rad] of each macroparticle at injection, in [-pi, pi). 0 is the crest."""
+    phi_u = np.linspace(-np.pi, np.pi, MACROPARTICLES, endpoint=False)
+    phi = phi_u - knobs['buncher'] * np.sin(phi_u) + np.radians(knobs['phase_deg'] + errors.phase_deg)     # buncher: phi - X sin(phi)
+    return np.remainder(phi + np.pi, 2 * np.pi) - np.pi
+
+
+def start_heights(machine, draws):
+    """Vertical amplitude [mm] of each macroparticle at injection."""
+    return np.full(MACROPARTICLES, machine.z_injection) * np.abs(1 + 0.3 * draws[:, 0])
+
+
+def turn_limit(machine, ion, knobs, b0, h):
+    """Turns after which a macroparticle still circulating counts as lost."""
+    full_gain = abs(energy_gain(machine, ion, knobs['dee_kv'], h, 0.0))
+    return 3 * machine_energy(machine, ion, b0) / max(full_gain, 1e-6) + 50
+
+
 def run(machine, ion, knobs, errors, draws):
     """One pass. The harmonic is not a knob: it is the integer nearest f_rf / f_rev at injection. knobs: rf_mhz, dee_kv, phase_deg, buncher, source_ua, b0, trim, deflector_kv, steer_x, steer_y, quad, slit.
 
     draws: fixed standard normals (MACROPARTICLES, 3) for this seed.
     """
-    phi_u = np.linspace(-np.pi, np.pi, MACROPARTICLES, endpoint=False)
-    phi = phi_u - knobs['buncher'] * np.sin(phi_u) + np.radians(knobs['phase_deg'] + errors.phase_deg)     # buncher: phi - X sin(phi)
-    phi = np.remainder(phi + np.pi, 2 * np.pi) - np.pi
+    phi = start_phases(knobs, errors)
     w0 = machine.w_injection * ion.mass_number
     w = np.full(MACROPARTICLES, w0, dtype=float)
-    z = np.full(MACROPARTICLES, machine.z_injection) * np.abs(1 + 0.3 * draws[:, 0])
+    z = start_heights(machine, draws)
     alive = np.ones(MACROPARTICLES, dtype=bool)
     arrived = np.zeros(MACROPARTICLES, dtype=bool)
     b0 = knobs['b0'] * (1 + errors.field)
@@ -139,13 +156,11 @@ def run(machine, ion, knobs, errors, draws):
     spiral = np.radians(machine.spiral_deg)
     focusing = machine.sectors**2 / (machine.sectors**2 - 1) * machine.flutter * (1 + 2 * np.tan(spiral)**2)
 
-    edges = np.linspace(0, machine.radius, PROBE_BINS + 1)
     probe, phase_sum, counts = np.zeros(PROBE_BINS), np.zeros(PROBE_BINS), np.zeros(PROBE_BINS)
     lost_power = 0.0     # MeV per macroparticle, summed
     turn = 0
     w_prev = w.copy()
-    full_gain = abs(energy_gain(machine, ion, knobs['dee_kv'], h, 0.0))
-    max_turns = 3 * machine_energy(machine, ion, b0) / max(full_gain, 1e-6) + 50
+    max_turns = turn_limit(machine, ion, knobs, b0, h)
     while alive.any() and turn < max_turns:
         turn += 1
         a = alive
@@ -163,7 +178,7 @@ def run(machine, ion, knobs, errors, draws):
         qz2 = focusing - k - machine.space_charge * knobs['source_ua'] * 0.1 / beta
         z[a] *= np.where(qz2 > 0, 1.0, np.exp(np.minimum(2 * np.pi * np.sqrt(np.abs(qz2)), 2.0)))     # defocused: grows per turn
         over_z = z[a] > machine.z_aperture
-        wrong = np.cos(phi[a]) < 0.2        # behind the RF: it stops gaining and is lost on the dee structure
+        wrong = np.cos(phi[a]) < BEHIND_RF        # behind the RF: it stops gaining and is lost on the dee structure
         i = np.minimum((rho / machine.radius * PROBE_BINS).astype(int), PROBE_BINS - 1)
         np.add.at(probe, i, 1.0)
         np.add.at(phase_sum, i, np.degrees(np.remainder(phi[a] + np.pi, 2 * np.pi) - np.pi))
@@ -175,7 +190,12 @@ def run(machine, ion, knobs, errors, draws):
         alive[index[lost | done]] = False
         arrived[index[done & ~lost]] = True
     lost_power += w[alive].sum()     # still circulating at the turn limit: counted as lost
-    ok = arrived
+    return extract(machine, ion, knobs, errors, w, w_prev, arrived, lost_power, turn, h, probe, phase_sum, counts)
+
+
+def extract(machine, ion, knobs, errors, w, w_prev, ok, lost_power, turn, h, probe, phase_sum, counts):
+    """From the last turn to the target, closed forms: septum, slit, deflector, steerers, quadrupole. w, w_prev [MeV]: the last two turns. ok: arrived."""
+    edges = np.linspace(0, machine.radius, PROBE_BINS + 1)
     energies = w[ok]
     n_in = MACROPARTICLES
     if ok.any():
