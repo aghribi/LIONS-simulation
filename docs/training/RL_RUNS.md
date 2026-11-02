@@ -112,9 +112,9 @@ PPO does not beat the coach on EYE, DEEP, NEON or QUAL. Why it reaches all or no
 
 ## Post-hoc checks with drift, not registered
 
-`benchmarks/case_t_check.py` at eea287d, output `check.parquet`, written unlabelled. In-spec runs, knobs held 50 passes with drift, then a noise-free read:
+`benchmarks/case_t_check.py` at eea287d, output `check.parquet`, written unlabelled. In-spec runs, knobs held 50 passes with drift, then one more pass:
 
-| Method, mission | In spec | Stayed in spec at all 50 passes | Noise-free read in spec |
+| Method, mission | In spec | Stayed in spec at all 50 passes | In spec at the extra pass |
 |---|---|---|---|
 | PPO F18, held-out | 100/100 | 81 | 91 |
 | PPO F18, fresh | 100/100 | 85 | 94 |
@@ -126,8 +126,15 @@ PPO does not beat the coach on EYE, DEEP, NEON or QUAL. Why it reaches all or no
 | Coach ISOL | 20/20 | 17 | 17 |
 | Coach EYE | 20/20 | 17 | 19 |
 
-- A first read in spec overstates the result: a run stops at its first such read, and noise and drift can then take it out. The first runs, without drift, gave 100% on the same hold.
+- A first read in spec overstates the result: a run stops at its first such read, and drift can then take it out. The first runs, without drift, gave 100% on the same hold.
 - Memorised sequence: replaying one sequence blind reaches spec on 5/100 for F18 and 7/100 for ISOL on held-out conditions. The policy uses its readings.
 - Fresh conditions 20000 to 20019: PPO F18 100/100, median 5 evaluations, maximum 8; PPO ISOL 100/100, median 4, maximum 6.
 - Reproducibility: Bayesian optimisation on F18 gives 11/20 in the registered run and 10/20 here with the same seeds. Unexplained.
 
+## Deviation found after the runs: the score and the spec test read no noise
+
+`Mission.tune_score` and `Mission.ready` use the true beam, not `Mission.readings`. Checked at 5% noise on F18: 30 passes give 30 different transmission readings and one score.
+
+- The noise of the registration reaches only `readings`. Optimisers and the stop rule saw an exact objective in every run above, an advantage not stated in the registration.
+- PPO observes `readings`, with noise.
+- The "noise-free read" of `case_t_check.py` changes nothing, so it measures one more pass of drift. Its agreement in the first post-hoc check, and the rejection of transient reads there, say nothing about noise.

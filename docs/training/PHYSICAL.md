@@ -54,6 +54,34 @@ The rerun on CRIANN reproduces the laptop's map and dee gate numbers as printed 
 
 Every LIONS run writes one row to the dataset below.
 
+**Results, 2026-11-02.** `benchmarks/runs/case_v/`, `benchmarks/case_v.py` at a39faa0 on CRIANN, one deterministic pass per tune, synthetic map. Tunes regenerated on the laptop at a653200: all 40 conditions end as in `case_t_drift`. On CRIANN, Nelder-Mead reaches the same 18 conditions but 13 of them at another evaluation, and the file with the map differs by platform, so tunes come from the laptop and maps from the site.
+
+Tunes T0 calls in spec, and what LIONS says:
+
+| Method | Tunes | LIONS in spec | LIONS with T0's `cos(phi) < 0.2` rule |
+|---|---|---|---|
+| PPO, seed 0 | 20 | 9 | 18 |
+| Nelder-Mead | 18 | 5 | 17 |
+| All | 38 | 14 | 35 |
+
+Median [min, max] over the 38 tunes:
+
+| Quantity | T0 | LIONS | LIONS with the rule |
+|---|---|---|---|
+| Transmission | 0.324 [0.212, 0.449] | 0.393 [0.263, 0.498] | 0.340 [0.216, 0.474] |
+| Current, uA | 32.9 [30.2, 44.5] | 41.5 [33.8, 55.4] | 34.4 [30.3, 47.0] |
+| Energy, MeV | 17.99 [17.93, 18.12] | 18.05 [17.90, 18.29] | 18.08 [17.95, 18.33] |
+| Relative spread | 0.0015 [0.0012, 0.0019] | 0.022 [0.009, 0.036] | 0.018 [0.008, 0.037] |
+| Lost power, kW (limit 0.6) | 0.548 [0.427, 0.600] | 0.620 [0.448, 0.944] | 0.516 [0.413, 0.624] |
+
+- Every LIONS failure is the `lost` term: 24 of 24, and 3 of 3 with the rule. Energy, current, power and axis stay in spec.
+- 19 of 38 tunes already sit above 0.9 of the lost-power limit in T0, as a tuner stops at its first read in spec.
+- Survival against start phase: T0's window is symmetric. In LIONS it runs from about -120 to +60 deg, with 88% at -120 to -60 deg and 32% at +60 to +90 deg. Particles starting at -120 to -90 deg reach about -54 deg. Not explained. Candidate, not tested: phase motion at low energy in the invented central region. A start at higher energy would separate it.
+- Spread is about 15 times T0's. Not explained. Candidate, not tested: a radial oscillation picked up in the first turns, as energy is read at a fixed radius.
+- Losses over the 4560 particles: 667 leave the map at a median 0.025 MeV, 631 hit the z aperture at a median 0.047 MeV, 105 reach the turn limit at a median 12.9 MeV and carry most of the lost power outside the septum.
+- Checks: closed orbit closes to 1.6 nm; scale by coefficient against a rewritten map, 2e-13 MeV after 20 turns; phase motion over 60 turns +2.14 and -2.13 deg against +2.16 and -2.16 deg from T0's update. Phase at first crossing against the set phase: median 0.43 deg, maximum 5.3 deg, growing with z0, as the off-plane field is large near the centre.
+- Cost: 0.97 core-h for 38 tunes, 95 s per pass (median, 59 to 135 s), at 499 to 734 turn limits on 8 cores. Stragglers set the length: survivors take a median 196 turns.
+
 ## Stage B: reduced model
 
 LIONS on the map tabulates revolution frequency, Qr and Qz against energy. The T0 turn loop reads the tables in place of its closed forms.
@@ -103,7 +131,7 @@ Candidate features: `sin phi0`, the mismatch group Delta = (2 pi / G) * that int
 - Gradients: trees and tables give poor gradients or none. If one wins for the game, a differentiable model is still needed for sim2real, and the best differentiable candidate is reported apart.
 - Stop: if no candidate beats the reduced model at 3000 settings, stop and report it. The PyTorch tracker becomes the route to speed.
 
-**Cost.** About 32 s per pass of 120 particles: 221 turns to 18 MeV (`benchmarks/case_p.py`) at 145 ms per turn, an exploratory timing on a loaded machine, to be redone idle. Particles that never reach extraction need a turn cap, which adds to this. At that rate: 300 settings 3 core-h, 1000 settings 9 core-h, 3000 settings 27 core-h, on CC through laptop-driven `sbatch`. No agent runs on CC.
+**Cost.** 95 s per pass of 120 particles, median over the stage A verdict on CRIANN, turn limit included. At that rate: 300 settings 8 core-h, 1000 settings 26 core-h, 3000 settings 79 core-h, on CC through laptop-driven `sbatch`. No agent runs on CC.
 
 **Limits.** The surrogate is tied to one map and one machine. A new map means new data: on CIME it has to be retrained, and the steps above are the recipe. LIONS bilinear data is excluded (`docs/training/SPEC.md`). The beam-size check against Hermite in `TODO.md` precedes training.
 
@@ -125,4 +153,4 @@ Each perturbed map must stay physical. In the median plane, derivatives and `d2b
 3. Inverse: amortised or Bayesian inference of the perturbation with uncertainty, checked on hidden maps.
 4. Real map: a PSI map as a local test only, never in training, so no trained model carries PSI data. CIME when available.
 
-**Cost.** Unknown: settings per map times number of maps, likely above the 27 core-h of one map. To size after the one-map surrogate shows how many settings a map needs. Start only after the one-map gates, and on a user decision.
+**Cost.** Unknown: settings per map times number of maps, likely above the 79 core-h of one map. To size after the one-map surrogate shows how many settings a map needs. Start only after the one-map gates, and on a user decision.
