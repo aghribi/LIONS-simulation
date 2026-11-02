@@ -219,7 +219,7 @@ class Pass:
         else:
             ok, power = out, self.w_end[~out].sum()
         return mc.extract(P.MACHINE, P.ION, self.knobs, self.errors, self.w_last, self.w_prev, ok, power, self.turn_max, self.h,
-                          self.counts.sum(0) / N, self.phase_sum.sum(0), self.counts.sum(0))
+                          self.counts.sum(0), self.phase_sum.sum(0), self.counts.sum(0))
 
 
     def beam_at(self, s, count_circulating):
@@ -227,7 +227,7 @@ class Pass:
         out = s['fate'] == EXTRACTED
         lost = ~out if count_circulating else ~out & (s['fate'] != TURN_LIMIT)
         return mc.extract(P.MACHINE, P.ION, self.knobs, self.errors, s['w_last'], s['w_prev'], out, s['w_end'][lost].sum(), int(s['turns'].max()), self.h,
-                          s['counts'] / N, s['phase_sum'], s['counts'])
+                          s['counts'], s['phase_sum'], s['counts'])
 
 
 def judged(condition, knobs, field, beam=None):
