@@ -17,6 +17,7 @@ from lions.game.missions import BUDGET, STEP_S
 BOX_ERRORS = 3
 BO_INITIAL, BO_CANDIDATES = 20, 2000
 NSGA_POPULATION = 40
+CMA_SIGMA = 0.3    # of the search box
 RL_STEPS = {'ppo': 100_000, 'sac': 30_000}
 TRAIN_SEEDS = list(range(1000))
 HELD_OUT = list(range(10000, 10020))
@@ -138,6 +139,18 @@ def nsga2(run, rng):
         algorithm.next()
 
 
+def cma_es(run, rng):
+    """Covariance matrix adaptation on the score, default population. Restarts from a random point when it stops."""
+    import cma
+    start = run.start
+    while True:
+        es = cma.CMAEvolutionStrategy(start, CMA_SIGMA, {'bounds': [0, 1], 'seed': int(rng.integers(1, 2**31)), 'verbose': -9, 'verb_log': 0, 'verb_disp': 0})
+        while not es.stop():
+            solutions = es.ask()
+            es.tell(solutions, [run(np.asarray(x)) for x in solutions])
+        start = rng.uniform(0, 1, len(start))
+
+
 def policy(run, rng, model):
     """A trained policy, deterministic: one action per pass, every knob at once."""
     from lions.game.env import MissionEnv
@@ -209,6 +222,7 @@ METHODS = [
     Method('NELDER-MEAD', nelder_mead, ('scipy',), 'Simplex on the score, no model, no gradient. Restarts from a random point when it stalls.'),
     Method('BAYESIAN OPT.', bayesian, ('scipy', 'sklearn'), 'Gaussian process on the score, expected improvement. Random points first, then the most promising.'),
     Method('NSGA-II (MOGA)', nsga2, ('pymoo',), 'Genetic algorithm on each term of the spec, kept apart: no weights between them.'),
+    Method('CMA-ES', cma_es, ('cma',), 'Evolution strategy on the score: learns which knobs move together, no model of the machine.'),
     Method('PPO (RL)', policy, ('stable_baselines3',), 'A policy trained on other conditions, 100k passes. Reads the control room, moves every knob at once.'),
     Method('RANDOM', random_search, (), 'Random settings in the search box. What any method must beat.'),
 ]

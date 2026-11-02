@@ -78,3 +78,8 @@ Output in `benchmarks/runs/case_t_drift`, code pinned at one commit in a worktre
 - `score` is the best `tune_score` of the run for every method. The coach had reported its last value.
 - Comparison with the runs above mixes drift with a changed random stream: readings draw from the same generator as drift.
 - `benchmarks/case_t_check.py` reruns the post-hoc checks, with drift in the hold. Not a registered metric.
+
+### Second amendment, registered 2026-11-02 before running
+
+- New baseline: CMA-ES (`cma` 4.5.0 defaults, sigma 0.3 of the search box, starting at the start point, restart from a random point when it stops). Objective `tune_score`, stop when in spec. Same box, same 20 conditions, 200 evaluations. It sets knobs directly, as the other optimisers.
+- Run apart from the first amendment, into `case_t_classical_cma_es.parquet`, from a later commit. `machine.py`, `missions.py`, `env.py` and `physics.py` must be unchanged since eea287d.

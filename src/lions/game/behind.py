@@ -25,7 +25,7 @@ PASS = ['Knobs, set by you or by a method', 'machine.run: for each turn, energy 
         'Septum, energy slit, deflector and steerers: position and spot at the target, by closed forms',
         'Mission physics: Bragg peak, activity, flux, power density', 'Readings with noise: what the control room shows',
         'spec_terms: one normalised error per client requirement. ready: all at 1 or below. tune_score: the same terms as one number']
-PACKAGES = ('numpy', 'scipy', 'scikit-learn', 'pymoo', 'stable-baselines3', 'torch', 'PyQt5')
+PACKAGES = ('numpy', 'scipy', 'scikit-learn', 'pymoo', 'cma', 'stable-baselines3', 'torch', 'PyQt5')
 
 
 def version(package):

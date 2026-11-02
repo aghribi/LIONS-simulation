@@ -1,6 +1,6 @@
 """Mission tuning: coach, classical baselines and RL at equal budget (docs/training/RL_RUNS.md). The methods are lions.game.tuners.
 
-usage: uv run --extra game --extra rl --group bench python benchmarks/case_t.py --step classical|rl [--missions F18 EYE] [--algos ppo] [--outroot DIR]
+usage: uv run --extra game --extra rl --group bench python benchmarks/case_t.py --step classical|rl [--missions F18 EYE] [--algos ppo] [--methods cma_es] [--outroot DIR]
 """
 import argparse
 import multiprocessing
@@ -21,7 +21,7 @@ from provenance import provenance  # noqa: E402
 
 RL_SEEDS = range(5)
 ALL = ('EYE', 'DEEP', 'F18', 'NEON', 'ISOL', 'QUAL')
-CLASSICAL = {'coach': t.coach, 'nelder_mead': t.nelder_mead, 'random': t.random_search, 'bayesian': t.bayesian, 'nsga2': t.nsga2}
+CLASSICAL = {'coach': t.coach, 'nelder_mead': t.nelder_mead, 'random': t.random_search, 'bayesian': t.bayesian, 'nsga2': t.nsga2, 'cma_es': t.cma_es}
 WORKERS = 6
 
 
@@ -63,15 +63,17 @@ if __name__ == '__main__':
     parser.add_argument('--step', choices=('classical', 'rl'), required=True)
     parser.add_argument('--missions', nargs='+', default=ALL)
     parser.add_argument('--algos', nargs='+', default=('ppo',))
+    parser.add_argument('--methods', nargs='+', default=tuple(CLASSICAL))
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
     args = parser.parse_args()
     outdir = args.outroot.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
+    suffix = '' if set(args.methods) == set(CLASSICAL) else '_' + '_'.join(args.methods)
     with multiprocessing.get_context('spawn').Pool(WORKERS) as pool:
         if args.step == 'classical':
-            jobs = [(m, method, s) for m in args.missions for method in CLASSICAL for s in t.HELD_OUT]
+            jobs = [(m, method, s) for m in args.missions for method in args.methods for s in t.HELD_OUT]
             records = pool.map(classical, jobs, chunksize=1)
         else:
             jobs = [(m, a, s, outdir) for m in args.missions for a in args.algos for s in RL_SEEDS]
             records = [r for part in pool.imap_unordered(rl, jobs) for r in part]
-    write(records, outdir / f'case_t_{args.step}.parquet', args.step)
+    write(records, outdir / f'case_t_{args.step}{suffix}.parquet', args.step)

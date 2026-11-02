@@ -509,7 +509,7 @@ def test_the_environment_drifts_too():
     assert env.m.errors.field != before
 
 
-@pytest.mark.parametrize('name', ['COACH', 'NELDER-MEAD', 'NSGA-II (MOGA)', 'RANDOM', 'BAYESIAN OPT.'])
+@pytest.mark.parametrize('name', ['COACH', 'NELDER-MEAD', 'NSGA-II (MOGA)', 'CMA-ES', 'RANDOM', 'BAYESIAN OPT.'])
 def test_every_method_keeps_the_budget_and_repeats(name):
     from lions.game import tuners
     method = next(x for x in tuners.METHODS if x.name == name)
@@ -556,7 +556,7 @@ def arcade_window(tmp_path, monkeypatch):
     return app, w
 
 
-@pytest.mark.parametrize('name', ['COACH', 'NELDER-MEAD', 'NSGA-II (MOGA)', 'RANDOM'])
+@pytest.mark.parametrize('name', ['COACH', 'NELDER-MEAD', 'NSGA-II (MOGA)', 'CMA-ES', 'RANDOM'])
 def test_each_challenge_runs_a_method_with_real_keys(tmp_path, monkeypatch, name):
     """Down to the line, O, choose, ENTER: passes on the screen, in the end the real machine agrees. No points, no life, no log."""
     from PyQt5.QtCore import Qt
