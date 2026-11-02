@@ -708,3 +708,32 @@ def test_training_from_the_game_is_a_subprocess_that_esc_stops(tmp_path, monkeyp
     QTest.keyClick(w, Qt.Key_Escape)
     assert w.state == 'pick' and w.training is None and process.poll() is not None
     w.close()
+
+
+def test_reduced_model_returns_a_beam_from_the_tables_alone():
+    import dataclasses
+    from pathlib import Path
+
+    import numpy as np
+    import pytest
+
+    from lions.game import machine as mc
+    from lions.game.env import mission_by_id
+    from lions.game.reduced import Reduced
+
+    table = Path(mc.__file__).parent / 'scenarios' / 'f18_synthetic_orbits.parquet'
+    model = Reduced(table)
+    m = mission_by_id('F18')
+    m.reset(10000)
+    m.knobs = m.ideal()
+    t0 = mc.run(m.machine, m.ion, m.knobs, m.errors, m.draws)
+    beam = model.run(m.machine, m.ion, m.knobs, m.errors, m.draws)
+    assert isinstance(beam, mc.Beam) and {f.name for f in dataclasses.fields(beam)} == {f.name for f in dataclasses.fields(t0)}
+    assert 0 < len(beam.energies) <= mc.MACROPARTICLES
+    assert abs(beam.energies.mean() / m.p['w_target'] - 1) < 0.02
+    # Same knobs, same result, and T0 is untouched by it.
+    again = model.run(m.machine, m.ion, m.knobs, m.errors, m.draws)
+    assert np.array_equal(beam.energies, again.energies)
+    assert np.array_equal(t0.energies, mc.run(m.machine, m.ion, m.knobs, m.errors, m.draws).energies)
+    with pytest.raises(ValueError, match='harmonic'):
+        model.run(m.machine, m.ion, {**m.knobs, 'rf_mhz': m.knobs['rf_mhz'] * 1.5}, m.errors, m.draws)
