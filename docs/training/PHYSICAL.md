@@ -196,6 +196,46 @@ Not a rule of physics, reported as unverified: below 0.0909 MeV, G is held at it
 
 The model must pass every line and also be closer than T0 on each quantity. Failing a line is reported as such. Thresholds are not changed after the data. Reported besides: per-particle fate agreement, survival against start phase, turns on crest, largest errors, convergence with the turn limit.
 
+**Result: the reduced model fails four of the five lines, and is not closer to LIONS than T0.** `benchmarks/case_r.py`, CRIANN job 3317035 at c5241a0, tables from that job. One deterministic pass per tune, against `benchmarks/runs/case_v`. The laptop gives the same numbers. Synthetic map.
+
+| Quantity, median absolute error over 38 tunes [min, max] | Threshold | Reduced | T0 | Outcome |
+|---|---|---|---|---|
+| Transmission before the septum | 0.0083 | 0.108 [0.017, 0.192] | 0.117 [0.025, 0.183] | Fail |
+| Mean extraction energy, relative | 0.005 | 0.0056 [0.0002, 0.0094] | 0.0025 [0.0001, 0.0131] | Fail, and T0 closer |
+| Relative energy spread | 0.005 | 0.0204 [0.0074, 0.0349] | 0.0205 [0.0073, 0.0349] | Fail |
+| Phase against radius, rms, deg | 5.06 | 12.2 [5.3, 27.6] | 12.0 [3.5, 35.4] | Fail, and T0 closer |
+| Pass time | 0.15 s | 40 ms median, 52 ms max, CRIANN `2tcourt`, one core, shared node | 34 ms | Pass |
+
+Median value: transmission LIONS 0.696, reduced 0.579, T0 0.579; energy 18.054, 18.113, 17.993 MeV; spread 0.0221, 0.0015, 0.0015. Laptop pass time 19 ms median, 61 ms max at load 4.
+
+Rules against their checks:
+
+| Rule | Result |
+|---|---|
+| f_rev(p, s) = v(p) / L(p / s) | Verified: within 2e-7 of Boris closed orbits at s = 0.997 and 1.002, 1 and 10 MeV |
+| Gain linear in V | Verified: 40 to 60 kV ratio 1.4951 at 0.275 MeV, 1.5009 at 2.52 MeV, against 1.5 |
+| Path-length interpolation | At most 8.5e-6 with every other energy held out, on the coarser grid; about 0.1 deg over 220 turns |
+| Betatron action | Partly: 3.25 mm against 3.35 mm tracked at z0 = 3 mm, 6.51 against 6.92 at z0 = 6 mm, 12 to 18 MeV. The error grows with amplitude |
+| Decelerating particle, held rules below 0.0909 MeV | **Fails against LIONS.** Of 3157 particles LIONS extracts, the model loses 537: 381 removed at the map edge after a median of 5 turns, where LIONS takes 276, and 156 still circulating |
+| Numerical turn limit | Not converged: extracted 2686, 2776, 2786 at 1x, 2x, 4x; 7 tunes change from 2x to 4x. LIONS is steadier (3157, 3160, 3166) |
+
+Per particle, of 4560: extracted in both 2620, LIONS only 537, reduced only 66, neither 1337. LIONS' 631 |z| removals become map-edge removals here: the model has no low-energy z loss.
+
+Extracted fraction by start phase:
+
+| Start phase, deg | -180 to -150 | -150 to -120 | -120 to -90 | -90 to -60 | -60 to 0 | 0 to 60 | 60 to 90 | 90 to 120 | 120 to 150 | 150 to 180 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| LIONS | 0.13 | 0.16 | 0.87 | 0.89 | 1.00 | 0.96 | 0.32 | 0.07 | 0.08 | 0.08 |
+| Reduced | 0.00 | 0.00 | 0.02 | 0.49 | 0.99 | 0.96 | 0.48 | 0.00 | 0.00 | 0.00 |
+
+Agreement holds within 60 deg of the crest, where turns to extraction agree too (median +1, 5th to 95th percentile -2 to +4, |phi start| < 30 deg). Outside that, the two update rules alone do not describe the particle.
+
+What the model cannot represent, found after the data:
+- Radial motion. Spread among particles within 30 deg of the crest is already 0.0068 in LIONS against 0.0015; a spread of 0.022 corresponds to about 5 mm at the extraction radius. Off-crest bands add more: 0.060 at +60 to +90 deg, mean energy 16.8 MeV. Extraction here is a radius test, and a particle oscillating radially crosses it early or late. Radial oscillation as the cause is a candidate, not tested.
+- The phase lobes at -120 to -60 deg. Candidate: a large energy change at low energy moves the orbit centre, which shifts the gap-crossing phase; the map's central region is invented. Not tested.
+
+This table model does not make the game's physics closer to LIONS. It has no invented cut and runs at T0's speed, and it is not wired into the arcade.
+
 ## Surrogate of the LIONS pass (plan, thresholds fixed before any training)
 
 **Inputs.** F18 has 8 knobs. Three are downstream (`deflector_kv`, `steer_x`, `source_ua`). Hidden errors merge with knobs: the field error scales `b0`, the phase error shifts `phase_deg`, and drift enters through the field error. That leaves 5 inputs: `rf_mhz`, effective `b0`, `dee_kv`, effective `phase_deg`, `buncher`.
