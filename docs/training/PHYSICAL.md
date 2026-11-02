@@ -236,6 +236,25 @@ What the model cannot represent, found after the data:
 
 This table model does not make the game's physics closer to LIONS. It has no invented cut and runs at T0's speed, and it is not wired into the arcade.
 
+### Does radial motion explain the energy spread? (registered 2026-11-02, before running)
+
+**Question.** The LIONS energy spread is 0.0221 against T0's 0.0015, and already 0.0068 within 30 deg of the crest. Does a radial oscillation at the extraction radius explain it? `benchmarks/case_o.py`, same 38 tunes, start at 0.0909 MeV and at 1.04 MeV, T0's turn limit, CRIANN, one deterministic pass per tune. `reduced.py` is not changed here.
+
+**Recorded.** Per particle and crossing of theta = 0: time, section radius, energy, phase, z. `case_o_history.parquet`, units in its metadata.
+
+**Prediction, not a fit to the answer.** For an extracted particle at scale s, x = r - r_co(p / s) on the closed-orbit table of case P. The fit is x = c + a cos(2 pi q n) + b sin(2 pi q n), q free on a grid from 0.005 to 0.12 per turn, on the 60 crossings before the last one, never on the last. Fewer than 30 crossings: no fit, counted. The prediction is the energy of the closed orbit at r_ext - x(last), from the 0.4633 m radius of the verdict. Using the last crossing would be a tautology, since energy and radius there define x.
+
+**Metric.** Fraction of the within-tune variance of extraction energy explained, pooled over the 38 tunes, offset per tune free, slope 1. Reported within 30 deg of the crest and over all extracted particles, separately. Beside it, two rivals with the same metric: a constant offset c with no oscillation, and no radial term at all (r_ext plus half the last-window gain per turn). Also the predicted spread against the actual one per tune, and the fraction of extraction energies inside w(r_ext -+ A) with one turn gain (0.1 MeV) of margin.
+
+**Outcome, per subset.** Supported at 0.8 or above. Refuted below 0.5. Partial between. One turn of overshoot alone gives about the 0.0015 of T0, about 5% of the variance at 0.0068, so 0.8 leaves room for it.
+
+**Where A comes from.** Action proxy A^2 p (Qr close to 1), late window against a window of 60 crossings after the first 5, within 30 deg of the crest, particles with at least 125 crossings. Compared with the start at 1.04 MeV, which begins on a closed orbit above the invented centre:
+- A from the centre: late A within 30 deg at the 1.04 MeV start is below half of its value at the 0.0909 MeV start.
+- A from later: it is above that, or the action ratio late / early is outside 0.67 to 1.5.
+- A second-harmonic or Qr = 1 effect from the map or from the dees would show as the second case. This study does not separate them.
+
+**Also reported, no decision taken.** Amplitude against start phase. Turn separation r_last - r_prev per tune. Distribution of radii on the last two crossings against r_ext. No blade position or thickness is chosen.
+
 ## Surrogate of the LIONS pass (plan, thresholds fixed before any training)
 
 **Inputs.** F18 has 8 knobs. Three are downstream (`deflector_kv`, `steer_x`, `source_ua`). Hidden errors merge with knobs: the field error scales `b0`, the phase error shifts `phase_deg`, and drift enters through the field error. That leaves 5 inputs: `rf_mhz`, effective `b0`, `dee_kv`, effective `phase_deg`, `buncher`.
