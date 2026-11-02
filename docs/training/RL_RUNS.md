@@ -174,3 +174,75 @@ PPO: 100k steps, 5 seeds, SB3 defaults, all six missions, trained on the noisy s
 - Stayed in spec: knobs held 50 more passes with drift, fraction of passes truly in spec, and whether all 50 held.
 - Best spec terms, measured and true, for the blocking question.
 - PPO: median and range over seeds. An agent that does not beat the coach and the classical methods is reported as such.
+
+### Results of the third amendment
+
+Source: `benchmarks/runs/case_t3/`, all at e1481c1 on CRIANN, Python 3.13, CPU torch at the locked version. 2480 runs, 242 core-h, no failed job, no failed GP fit. Elapsed per run, median [max]: Nelder-Mead 6 s [18], TuRBO 70 s [263], Bayesian 81 s [130], constrained BO 329 s [3253], MOBO 739 s [7864]. Peak memory of the sizing runs 1.7 GB; `sacct` returned no memory for these jobs.
+
+**Box check.** In-spec counts of the coach and PPO match `case_t_drift` on all six missions. Per condition, PPO differs: 2 QUAL conditions change in or out of spec with the total unchanged, and 5 others reach spec at a different evaluation (EYE, DEEP, QUAL). Knobs the rule widens (tunes outside the original box):
+
+| Mission | Tunes | Widened knobs |
+|---|---|---|
+| EYE | 22 | `rf_mhz` (1), `steer_x` (2) |
+| DEEP | 21 | `steer_x` (4) |
+| F18 | 111 | `steer_x` (1) |
+| NEON | 12 | none |
+| ISOL | 120 | `dee_kv` (1), `quad` (4) |
+| QUAL | 9 | `quad` (9), `phase_deg` (5), `source_ua` (5), `steer_x` (5), `rf_mhz` (1) |
+
+All 9 QUAL tunes lie outside the original `quad` box.
+
+**Results.** Out of 20 held-out conditions: in spec at the first measured read (median evaluations) / truly in spec at that point / held all 50 passes. NEON's box does not change, so its widened rows repeat the original ones. The coach has no box.
+
+Original box:
+
+| Mission | Coach | Nelder-Mead | Random | Bayesian | CMA-ES | NSGA-II | TuRBO | Constrained BO | MOBO |
+|---|---|---|---|---|---|---|---|---|---|
+| EYE | 20 (50) / 19 / 19 | 5 (80) / 3 / 3 | 0 | 2 (104.5) / 2 / 1 | 0 | 0 | 15 (82) / 8 / 6 | 2 (85.5) / 2 / 2 | 7 (104) / 7 / 5 |
+| DEEP | 13 (81) / 12 / 11 | 11 (67) / 8 / 7 | 0 | 1 (83) / 1 / 0 | 0 | 0 | 13 (84) / 13 / 10 | 1 (79) / 0 / 0 | 5 (118) / 5 / 5 |
+| F18 | 11 (46) / 9 / 6 | 16 (63) / 16 / 12 | 2 (126) / 2 / 2 | 10 (108) / 10 / 7 | 6 (146.5) / 6 / 5 | 3 (130) / 3 / 3 | 20 (58) / 18 / 11 | 20 (43.5) / 20 / 17 | 20 (63) / 19 / 20 |
+| NEON | 12 (110) / 12 / 12 | 0 | 0 | 0 | 0 | 0 | 1 (42) / 0 / 0 | 4 (114) / 4 / 2 | 8 (121) / 5 / 4 |
+| ISOL | 20 (43) / 20 / 17 | 15 (72) / 12 / 2 | 0 | 14 (110.5) / 14 / 10 | 5 (164) / 5 / 4 | 1 (161) / 1 / 1 | 20 (65.5) / 20 / 10 | 18 (56.5) / 16 / 9 | 19 (91) / 19 / 12 |
+| QUAL | 4 (62) / 4 / 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Widened box:
+
+| Mission | Nelder-Mead | Random | Bayesian | CMA-ES | NSGA-II | TuRBO | Constrained BO | MOBO |
+|---|---|---|---|---|---|---|---|---|
+| EYE | 6 (73) / 4 / 3 | 0 | 1 (155) / 1 / 1 | 1 (73) / 1 / 1 | 0 | 9 (115) / 5 / 4 | 6 (150.5) / 4 / 2 | 9 (97) / 8 / 7 |
+| DEEP | 12 (78) / 11 / 8 | 0 | 0 | 0 | 0 | 14 (89.5) / 13 / 10 | 3 (73) / 2 / 2 | 6 (114) / 6 / 6 |
+| F18 | 16 (63) / 16 / 13 | 2 (126) / 2 / 2 | 9 (178) / 8 / 6 | 3 (111) / 3 / 2 | 3 (130) / 3 / 3 | 20 (52) / 19 / 13 | 20 (55.5) / 19 / 12 | 20 (51.5) / 19 / 17 |
+| ISOL | 16 (60.5) / 15 / 4 | 0 | 12 (122) / 12 / 8 | 9 (140) / 9 / 8 | 2 (98.5) / 1 / 0 | 19 (63) / 19 / 13 | 20 (51.5) / 19 / 9 | 18 (79) / 17 / 13 |
+| QUAL | 0 | 0 | 1 (150) / 0 / 0 | 0 | 0 | 13 (97) / 3 / 2 | 8 (119) / 6 / 3 | 12 (143.5) / 7 / 3 |
+
+PPO, 100k steps, 5 seeds, per seed, median and range:
+
+| Mission | Measured in spec | Truly in spec at that point | Held all 50 | Evaluations, median |
+|---|---|---|---|---|
+| F18 | 20, 20, 20, 20, 20: 20 (20 to 20) | 19, 19, 20, 20, 20: 20 (19 to 20) | 16, 14, 16, 17, 16: 16 (14 to 17) | 4 |
+| ISOL | 20, 20, 20, 20, 20: 20 (20 to 20) | 20, 18, 20, 20, 20: 20 (18 to 20) | 15, 14, 13, 17, 18: 15 (13 to 18) | 4 |
+| EYE | 3, 0, 0, 0, 0: 0 (0 to 3) | 2, 0, 0, 0, 0: 0 (0 to 2) | 2, 0, 0, 0, 0: 0 (0 to 2) | 19 |
+| DEEP | 1, 0, 0, 0, 1: 0 (0 to 1) | 1, 0, 0, 0, 1: 0 (0 to 1) | 1, 0, 0, 0, 0: 0 (0 to 1) | 10 |
+| NEON | 0 at every seed | 0 | 0 | none |
+| QUAL | 0, 0, 0, 0, 8: 0 (0 to 8) | 0, 0, 0, 0, 5: 0 (0 to 5) | 0, 0, 0, 0, 1: 0 (0 to 1) | 47.5 |
+
+PPO does not beat the coach on EYE, DEEP, NEON or QUAL.
+
+**Reading.**
+- A true-in-spec run can hold more often than it starts: the "held" count can exceed "truly in spec at that point" when drift brings a run back (F18, MOBO, original box).
+- Measured in spec overstates most on QUAL, as registered: TuRBO on the widened box reads 13 and is truly in spec on 3.
+- Results are single runs per condition and method. Differences of 1 or 2 out of 20 between methods or boxes are within what the box check shows for a platform change.
+
+**QUAL.** The zeros of the eight optimisers come from the box. On the original box the true uniformity term is out at the best point of all 20 runs, for every optimiser. On the widened box three methods reach spec at some read: TuRBO 13 measured / 3 true, constrained BO 8 / 6, MOBO 12 / 7, against the coach's 4 / 4. Nelder-Mead, random, CMA-ES and NSGA-II stay at 0, Bayesian at 1 / 0. Terms still out at the best point on the widened box, true beam, out of 20:
+
+| Method | Energy | Uniformity | Flux high | Flux low |
+|---|---|---|---|---|
+| TuRBO | 14 | 5 | 0 | 0 |
+| Constrained BO | 10 | 9 | 1 | 1 |
+| MOBO | 11 | 7 | 0 | 0 |
+| Nelder-Mead | 20 | 20 | 0 | 1 |
+| CMA-ES | 14 | 20 | 1 | 1 |
+
+Energy on the sample blocks most where uniformity is solved: 3 measured against 14 true for TuRBO, 2 against 11 for MOBO. The noise on the 230 MeV energy reading hides it. Lost power is never out.
+
+**Game.** `Mission.ready` is unchanged, so the coach's advice, the Experiment hold and delivery behave as before. The arcade draws no spec light from the noisy test, so no new flicker on screen. One change: a tuning method's IN SPEC screen now reports the measured read, so the beam a player takes after it can be out of spec on the true beam, without any warning. New methods are not in the arcade's list.
