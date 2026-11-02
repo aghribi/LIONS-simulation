@@ -521,14 +521,14 @@ def test_every_method_keeps_the_budget_and_repeats(name):
     assert first.reached is None or first.reached == first.evals
 
 
-def test_nsga_objectives_rank_no_beam_behind_any_beam():
+def test_nsga_objectives_rank_no_beam_behind_any_beam(monkeypatch):
     from lions.game import tuners
     m = fresh_mission()
     run = tuners.Run(m)
-    m.knobs['rf_mhz'] = m.specs[2]['min']
-    run.passed()
-    assert not m.has_beam()
-    assert min(run.terms(run.start * 0 + 0.0)) > 1e9 or m.has_beam()
+    m.knobs['rf_mhz'] = next(s for s in m.specs if s['key'] == 'rf_mhz')['min']
+    monkeypatch.setattr(run, 'set', lambda u: m.refresh())
+    terms = run.terms(run.start)
+    assert not m.has_beam() and min(terms) > 1e9 and len(terms) == len(m.spec_terms())
 
 
 def test_a_policy_runs_on_the_same_budget(tmp_path):
@@ -538,3 +538,173 @@ def test_a_policy_runs_on_the_same_budget(tmp_path):
     tuners.train_policy(TUNING_MISSION, 'ppo', 0, path, steps=64)
     run = tuners.tune(fresh_mission(), tuners.policy, 1, budget=5, model=tuners.load_policy(path))
     assert run.evals <= 5
+
+
+def arcade_window(tmp_path, monkeypatch):
+    import os
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    from PyQt5.QtWidgets import QApplication
+    from lions.game import tuners
+    from lions.game.arcade import Arcade
+    from lions.game.runlog import Store
+    monkeypatch.setattr(tuners, 'POLICIES', tmp_path / 'policies')
+    app = QApplication.instance() or QApplication([])
+    w = Arcade(Store(tmp_path))
+    w.timer.stop()
+    w.show()
+    w.new_game()
+    return app, w
+
+
+@pytest.mark.parametrize('name', ['COACH', 'NELDER-MEAD', 'NSGA-II (MOGA)', 'RANDOM'])
+def test_each_challenge_runs_a_method_with_real_keys(tmp_path, monkeypatch, name):
+    """Down to the line, O, choose, ENTER: passes on the screen, in the end the real machine agrees. No points, no life, no log."""
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    from lions.game.tuners import METHODS
+    app, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_Down)
+    QTest.keyClick(w, Qt.Key_O)
+    assert w.state == 'pick'
+    w.grab()
+    for _ in range([m.name for m in METHODS].index(name)):
+        QTest.keyClick(w, Qt.Key_Down)
+    assert METHODS[w.method_line].name == name
+    seed = w.machine_seed
+    QTest.keyClick(w, Qt.Key_Return)
+    assert w.state == 'tuning'
+    w.grab()
+    w.tuning.thread.join(timeout=120)
+    while not w.tuning_over:
+        w.frame()
+    w.grab()
+    run = w.tuning.run
+    assert w.tuning.error is None and w.replayed == run.evals
+    assert w.stage.ready() == (run.reached is not None)
+    assert w.stage.errors.steer_x == w.tuning.m.errors.steer_x      # the screen's machine is the method's machine
+    lives, total = w.lives, w.total
+    QTest.keyClick(w, Qt.Key_O)
+    assert w.state == 'pick' and w.machine_seed == seed and name in w.tuned
+    w.grab()
+    assert (w.lives, w.total) == (lives, total) and not list(tmp_path.rglob('*.parquet'))
+    QTest.keyClick(w, Qt.Key_Escape)
+    assert w.state == 'menu'
+    w.close()
+    app.processEvents()
+
+
+def test_take_the_beam_after_a_method(tmp_path, monkeypatch):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    app, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_Down)
+    QTest.keyClick(w, Qt.Key_O)
+    QTest.keyClick(w, Qt.Key_Return)
+    w.tuning.thread.join(timeout=60)
+    while not w.tuning_over:
+        w.frame()
+    QTest.keyClick(w, Qt.Key_Return)
+    assert w.state == 'play' and w.tutorial and w.coach and w.tuning is None
+    w.frame()
+    w.grab()
+    w.close()
+
+
+def test_level_0_has_no_tuning_method(tmp_path, monkeypatch):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    _, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_O)
+    assert w.state == 'menu'
+    w.close()
+
+
+def test_closing_during_a_method_ends_its_thread(tmp_path, monkeypatch):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    _, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_Down)
+    QTest.keyClick(w, Qt.Key_O)
+    w.method_line = 2      # Bayesian optimisation: long enough to be running
+    QTest.keyClick(w, Qt.Key_Return)
+    thread = w.tuning.thread
+    w.close()
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+
+
+def test_behind_window_opens_on_b_and_says_what_runs(tmp_path, monkeypatch):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    from lions.game.behind import CODES
+    _, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_B)
+    assert w.behind.isVisible()
+    assert 'does not run LIONS or OPAL' in w.behind.text.toPlainText()
+    QTest.keyClick(w, Qt.Key_Down)
+    QTest.keyClick(w, Qt.Key_Return)
+    w.behind.refresh()
+    assert w.stages[0].title in w.behind.text.toPlainText()
+    QTest.keyClick(w, Qt.Key_Return)
+    w.behind.refresh()
+    assert 'lions.game.machine' in w.behind.live.text()
+    assert {'LIONS (tracker)', 'OPAL, OPALX'} <= {c[0] for c in CODES if c[1] == 'NOT RUNNING'}
+    w.grab()
+    w.close()
+    assert not w.behind.isVisible()
+
+
+def test_the_game_imports_no_tracking_code():
+    """The Behind window says LIONS and OPAL do not run. If a level starts to call them, this fails: update the window."""
+    import ast
+    from pathlib import Path
+    import lions.game
+    allowed = ('lions.game', 'lions.constants')
+    for path in Path(lions.game.__file__).parent.glob('*.py'):
+        for node in ast.walk(ast.parse(path.read_text())):
+            names = [n.name for n in node.names] if isinstance(node, ast.Import) else [node.module] if isinstance(node, ast.ImportFrom) else []
+            for name in names:
+                assert not name.startswith('lions') or name.startswith(allowed), f'{path.name} imports {name}'
+                assert not any(code in name.lower() for code in ('opal', 'rf_track', 'rftrack')), f'{path.name} imports {name}'
+
+
+def test_train_saves_a_policy_with_its_held_out_result_and_ppo_runs_with_real_keys(tmp_path, monkeypatch):
+    pytest.importorskip('stable_baselines3')
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    from lions.game import train, tuners
+    app, w = arcade_window(tmp_path, monkeypatch)
+    train.main(['F18'], steps=2048)     # past the first progress write, on a machine with no policy folder yet
+    report = tuners.policy_report('F18')
+    assert report['conditions'] == len(tuners.HELD_OUT) and report['steps'] == 2048 and report['seed'] == 0
+    assert not tuners.policy_path('F18').with_suffix('.progress').exists()
+    w.choice = [key for key, _, _ in w.menu_items()].index('F18')
+    QTest.keyClick(w, Qt.Key_O)
+    w.method_line = [m.fn for m in tuners.METHODS].index(tuners.policy)
+    w.grab()
+    QTest.keyClick(w, Qt.Key_Return)
+    assert w.state == 'tuning'
+    w.tuning.thread.join(timeout=60)
+    assert w.tuning.error is None and w.tuning.run.evals >= 1
+    w.close()
+
+
+def test_training_from_the_game_is_a_subprocess_that_esc_stops(tmp_path, monkeypatch):
+    pytest.importorskip('stable_baselines3')
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    from lions.game import tuners
+    monkeypatch.setenv('HOME', str(tmp_path))
+    _, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_Down)
+    QTest.keyClick(w, Qt.Key_O)
+    w.method_line = [m.fn for m in tuners.METHODS].index(tuners.policy)
+    QTest.keyClick(w, Qt.Key_Return)
+    assert w.state == 'training'
+    process = w.training
+    w.frame()
+    w.grab()
+    assert process.poll() is None
+    QTest.keyClick(w, Qt.Key_Escape)
+    assert w.state == 'pick' and w.training is None and process.poll() is not None
+    w.close()

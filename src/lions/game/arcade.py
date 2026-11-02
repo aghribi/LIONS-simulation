@@ -1,17 +1,21 @@
 """ION RUSH: the arcade front end of the trainer. Draws the stages of lions.game.stages; the physics is all there."""
 import math
 import random
+import subprocess
 import sys
+import time
 
 from PyQt5.QtCore import QPointF, QRectF, Qt, QTimer
 from PyQt5.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from lions.game import physics
+from lions.game.behind import Behind
 from lions.game.coach import KNOB_HELP, coach_for
 from lions.game.runlog import Store
-from lions.game.missions import Mission
+from lions.game.missions import BUDGET, Mission
 from lions.game.stages import Action, load_scenario
+from lions.game.tuners import METHODS, RL_STEPS, Tuning, policy, policy_path, policy_report
 
 W, H = 960, 720    # virtual screen, scaled to the window
 DT = 1 / 60
@@ -23,6 +27,7 @@ FONT = 'Menlo'
 CONTROLS = {'larmor': 'UP DOWN: FIELD B   LEFT RIGHT: ENERGY   SPACE: FIRE', 'dee_beat': 'LEFT RIGHT: RF FREQUENCY',
             'trim_coils': 'UP DOWN: FIELD TRIM', 'fallout': 'TAP UP DOWN: CORRECTOR KICK',
             'thomas': 'UP DOWN: FLUTTER F   LEFT RIGHT: SPIRAL XI'}
+REPLAY_FRAMES = 5    # frames per pass replayed from a tuning method
 MISSION_CONTROLS = 'UP DOWN: PICK A KNOB   LEFT RIGHT: TURN IT   SHIFT: FINE   HOLD SPACE: BEAM ON'
 
 
@@ -48,6 +53,8 @@ class Arcade(QWidget):
         self.stages = self.level0
         self.keys, self.rows = set(), []
         self.tutorial, self.coach, self.advice = False, None, None
+        self.tuning, self.training, self.behind, self.method_line = None, None, None, 0
+        self.training_failed = False
         self.clock, self.state = 0.0, 'attract'
         self.seed_source = random.Random()
         self.scan = self.scanlines()
@@ -71,6 +78,10 @@ class Arcade(QWidget):
         self.clock += DT
         if self.state == 'play':
             self.play_step()
+        elif self.state == 'tuning':
+            self.replay()
+        elif self.state == 'training':
+            self.watch_training()
         self.update()
 
     def new_game(self):
@@ -84,6 +95,106 @@ class Arcade(QWidget):
     def choose(self):
         self.stages, self.index = self.menu_items()[self.choice][2], 0
         self.state = 'brief'
+
+    def current_stage(self):
+        return getattr(self, 'stage', None) if self.state in ('play', 'tuning', 'clear', 'lost') else self.stages[self.index] if self.state in ('brief', 'walkthrough', 'pick', 'training') else None
+
+    def show_behind(self):
+        if self.behind is None:
+            self.behind = Behind(self)
+        self.behind.show()
+        self.behind.raise_()
+
+    def closeEvent(self, event):
+        self.end_tuning()
+        self.end_training()
+        if self.behind:
+            self.behind.close()
+        self.timer.stop()
+        super().closeEvent(event)
+
+    # ---------- tuning methods: no clock, no score, nothing logged
+
+    def open_pick(self, new_machine):
+        """The list of methods. Same machine: the hidden errors stay, to compare methods on one condition."""
+        self.end_tuning()
+        if new_machine:
+            self.machine_seed, self.tuned = self.seed_source.randrange(2**31), {}
+        self.state = 'pick'
+
+    def end_tuning(self):
+        if self.tuning:
+            self.tuning.stop()
+        self.tuning = None
+
+    def end_training(self):
+        if self.training:
+            self.training.kill()
+            self.training.wait()
+        self.training = None
+
+    def start_method(self):
+        method = METHODS[self.method_line]
+        if method.missing():
+            return
+        if method.fn is policy and not policy_path(self.stages[self.index].mission_id).exists():
+            self.training_start = time.monotonic()
+            self.training_failed = False
+            self.training = subprocess.Popen([sys.executable, '-m', 'lions.game.train', self.stages[self.index].mission_id],
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.state = 'training'
+            return
+        self.stage = self.stages[self.index]
+        self.tutorial, self.stage.tutorial, self.coach = True, True, None
+        self.stage.reset(self.machine_seed)
+        self.tuning, self.replayed, self.replay_clock, self.tuning_over = Tuning(self.stage, method, self.machine_seed), 0, 0, False
+        self.state = 'tuning'
+
+    def watch_training(self):
+        code = self.training.poll()
+        if code is None:
+            return
+        self.training = None
+        if code == 0:
+            self.start_method()
+        else:
+            self.training_failed, self.state = True, 'pick'
+
+    def training_progress(self):
+        path = policy_path(self.stages[self.index].mission_id).with_suffix('.progress')
+        try:
+            return float(path.read_text())
+        except (OSError, ValueError):
+            return 0.0
+
+    def replay(self):
+        """Puts the next pass of the method on the screen's machine. The in-spec test does not depend on the noise of the readings."""
+        t = self.tuning
+        self.replay_clock += 1
+        if self.tuning_over or self.replay_clock % REPLAY_FRAMES:
+            return
+        if self.replayed < len(t.passes):
+            self.apply_pass(t.passes[self.replayed])
+            self.replayed += 1
+        elif t.finished():
+            self.tuning_over = True
+            if t.run and t.run.reached is None:     # out of budget: the best setting found stays on the machine
+                self.stage.knobs.update(t.run.best_knobs)
+                self.stage.refresh()
+            if t.run:
+                self.tuned[t.method.name] = (t.run.reached, t.run.best)
+
+    def apply_pass(self, record):
+        s = self.stage
+        s.knobs.update(record['knobs'])
+        s.errors.field = record['field']
+        s.refresh()
+
+    def take_the_beam(self):
+        """The method has finished: the player delivers from where it stopped, with the helper."""
+        self.end_tuning()
+        self.rows, self.coach = [], coach_for(self.stage)
+        self.state = 'play'
 
     def start_stage(self, tutorial=False):
         self.stage = self.stages[self.index]
@@ -132,6 +243,11 @@ class Arcade(QWidget):
                 self.state = 'won' if len(self.completed) == len(self.menu_items()) else 'menu'
         elif state == 'menu':
             self.choose()
+        elif state == 'pick':
+            self.start_method()
+        elif state == 'tuning':
+            if self.tuning_over:
+                self.take_the_beam()
         elif state == 'lost':
             self.state = 'brief'
         elif state in ('won', 'over'):
@@ -146,7 +262,9 @@ class Arcade(QWidget):
         if event.isAutoRepeat():
             return
         self.keys.add(key)
-        if self.state == 'consent' and key in (Qt.Key_Y, Qt.Key_N):
+        if key == Qt.Key_B and self.state != 'initials':
+            self.show_behind()
+        elif self.state == 'consent' and key in (Qt.Key_Y, Qt.Key_N):
             self.store.new_player(key == Qt.Key_Y)
             self.new_game()
         elif self.state == 'initials':
@@ -158,12 +276,29 @@ class Arcade(QWidget):
                 self.state = 'walkthrough'
             else:
                 self.start_stage(tutorial=True)
+        elif self.state in ('brief', 'menu') and key == Qt.Key_O:
+            if self.state == 'menu':
+                if not self.choice:
+                    return
+                self.choose()
+            if isinstance(self.stages[self.index], Mission):
+                self.open_pick(new_machine=True)
+        elif self.state == 'tuning' and key == Qt.Key_O:
+            self.open_pick(new_machine=False)
+        elif self.state == 'pick' and key in (Qt.Key_Up, Qt.Key_Down):
+            self.method_line = (self.method_line + (1 if key == Qt.Key_Down else -1)) % len(METHODS)
         elif self.state == 'walkthrough' and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_T):
             self.start_stage(tutorial=True)
         elif self.state == 'menu' and key in (Qt.Key_Up, Qt.Key_Down):
             self.choice = (self.choice + (1 if key == Qt.Key_Down else -1)) % len(self.menu_items())
         elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_A) or (key == Qt.Key_Space and self.state != 'play'):
             self.press_start()
+        elif key == Qt.Key_Escape and self.state in ('pick', 'tuning', 'training'):
+            self.end_training()
+            if self.state == 'tuning':
+                self.open_pick(new_machine=False)
+            else:
+                self.state = 'menu' if self.state == 'pick' else 'pick'
         elif key == Qt.Key_Escape:
             self.state = 'over' if self.state == 'menu' else 'menu' if self.state in ('brief', 'walkthrough', 'play', 'lost', 'clear') else 'attract'
 
@@ -253,7 +388,8 @@ class Arcade(QWidget):
 
     def hud(self):
         s = self.stage
-        self.text(16, 8, 'TUTORIAL' if self.tutorial else f'SCORE {self.total + s.points:07d}', 18, YELLOW if self.tutorial else CYAN, 'left')
+        label = 'TUNING METHOD' if self.tuning else 'TUTORIAL' if self.tutorial else f'SCORE {self.total + s.points:07d}'
+        self.text(16, 8, label, 18, YELLOW if self.tutorial else CYAN, 'left')
         self.text(W / 2, 8, f'{self.index + 1}/{len(self.stages)} {s.title}', 18, YELLOW)
         self.text(W - 16, 8, 'ION ' * self.lives, 18, MAGENTA, 'right')
         if self.coach:
@@ -291,7 +427,7 @@ class Arcade(QWidget):
     def draw_attract(self):
         self.spiral(W / 2, 300, 135)
         self.text(W / 2, 40, 'ION RUSH', 58, CYAN)
-        self.text(W / 2, 128, 'A CYCLOTRON ARCADE, ON THE LIONS PHYSICS', 14, MAGENTA)
+        self.text(W / 2, 128, 'A CYCLOTRON ARCADE. CLOSED-FORM MODELS. B: WHAT RUNS BEHIND', 14, MAGENTA)
         y = 450
         self.text(W / 2, y, 'HIGH SCORES', 18, YELLOW)
         for row in self.store.scores()[:5]:
@@ -321,7 +457,7 @@ class Arcade(QWidget):
     def draw_menu(self):
         self.text(W / 2, 50, 'THE SHIFT', 40, CYAN)
         self.text(W / 2, 110, f'SCORE {self.total:07d}   IONS {self.lives}', 16, MAGENTA)
-        y = 170
+        y = 150
         for i, (key, title, stages) in enumerate(self.menu_items()):
             selected = i == self.choice
             color = GREEN if key in self.completed else YELLOW if selected else WHITE
@@ -331,14 +467,80 @@ class Arcade(QWidget):
             self.text(260, y, title, 18, color, 'left')
             if key in self.completed:
                 self.text(W - 110, y, 'DONE', 16, GREEN, 'right')
-            y += 50
+            y += 46
         request = self.menu_items()[self.choice][2][0]
         client = getattr(request, 'client', request.brief if self.choice else 'Five stages, from the Lorentz force to Thomas focusing.')
-        self.block(H - 170, client, 66, 14, CYAN)
+        self.block(H - 216, client, 66, 13, CYAN)
         name = self.menu_items()[self.choice][1]
-        self.text(W / 2, H - 92, f'T: TUTORIAL ON {name}', 17, GREEN)
-        self.text(W / 2, H - 62, f'ENTER: PLAY {name}', 15, YELLOW)
-        self.text(W / 2, H - 32, 'UP DOWN: CHOOSE A LINE   ESC: END THE SHIFT', 13, DIM)
+        self.text(W / 2, H - 138, f'T: TUTORIAL ON {name}', 16, GREEN)
+        if self.choice:
+            self.text(W / 2, H - 108, f'O: LET A TUNING METHOD TRY {name}', 15, MAGENTA)
+        self.text(W / 2, H - 78, f'ENTER: PLAY {name}', 15, YELLOW)
+        self.text(W / 2, H - 36, 'UP DOWN: CHOOSE A LINE   B: WHAT RUNS BEHIND   ESC: END THE SHIFT', 12, DIM)
+
+    def draw_pick(self):
+        s = self.stages[self.index]
+        self.text(W / 2, 24, f'WHO TUNES {s.title}?', 30, CYAN)
+        self.text(W / 2, 76, f'EACH METHOD SAME MACHINE, {BUDGET} PASSES AT MOST. NO POINTS, NO LIVES', 13, MAGENTA)
+        y = 116
+        for i, method in enumerate(METHODS):
+            selected = i == self.method_line
+            if selected:
+                self.p.fillRect(QRectF(50, y - 4, W - 100, 38), QColor(255, 225, 77, 26))
+            self.text(66, y, method.name, 16, DIM if method.missing() else YELLOW if selected else WHITE, 'left')
+            self.text(W - 66, y + 2, self.method_state(method, s), 13, GREEN if self.tuned.get(method.name, (None,))[0] else WHITE, 'right')
+            y += 44
+        method = METHODS[self.method_line]
+        y = self.block(y + 16, method.what, 74, 14, CYAN) + 8
+        if method.missing():
+            self.text(W / 2, y, 'NEEDS THE RL EXTRA: uv run --extra game --extra rl lions-arcade', 13, RED)
+        elif self.training_failed and method.fn is policy:
+            self.text(W / 2, y, f'TRAINING FAILED. TRY: uv run --extra game --extra rl python -m lions.game.train {s.mission_id}', 11, RED)
+        elif method.fn is policy and not policy_path(s.mission_id).exists():
+            self.text(W / 2, y, 'NO POLICY FOR THIS CHALLENGE. ENTER TRAINS ONE, SEED 0', 13, YELLOW)
+        self.text(W / 2, H - 66, 'UP DOWN: CHOOSE   ENTER: RUN IT ON THIS MACHINE', 15, GREEN)
+        self.text(W / 2, H - 34, 'B: WHAT RUNS BEHIND   ESC: BACK', 12, DIM)
+
+    def method_state(self, method, s):
+        """The result on this machine, or for a policy its held-out test."""
+        if method.name in self.tuned:
+            reached, best = self.tuned[method.name]
+            return f'IN SPEC, {reached} PASSES' if reached else f'NOT IN SPEC, BEST {best:.2f}'
+        if method.missing():
+            return 'NOT INSTALLED'
+        if method.fn is policy:
+            report = policy_report(s.mission_id)
+            return f"HELD-OUT {report['in_spec']}/{report['conditions']}" if report else 'NOT TRAINED'
+        return ''
+
+    def draw_training(self):
+        s = self.stages[self.index]
+        self.text(W / 2, 170, f'TRAINING PPO ON {s.title}', 30, CYAN)
+        self.bar(150, 290, W - 300, 26, self.training_progress(), GREEN, f'{100 * self.training_progress():.0f}% OF {RL_STEPS["ppo"]} PASSES, {time.monotonic() - self.training_start:.0f} S')
+        self.block(360, f'A policy pays up front: {RL_STEPS["ppo"]} passes on other conditions here, against {BUDGET} per run for the other methods.', 60, 15)
+        self.text(W / 2, H - 50, 'ESC: STOP', 14, DIM)
+
+    def draw_tuning(self):
+        self.control_room()
+        self.hud()
+        t = self.tuning
+        record = t.passes[self.replayed - 1] if self.replayed else None
+        left = 345
+        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(20, 5, 20, 225))
+        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(255, 61, 242, 34))
+        status = f'PASS {self.replayed}/{BUDGET}' + (f"   SCORE {record['score']:.2f}   BEST {record['best']:.2f}" if record else '')
+        self.text(left + 10, H - 72, f'{t.method.name}   {status}', 14, MAGENTA, 'left')
+        if not self.tuning_over:
+            waiting = 'THE METHOD IS THINKING' if t.passes and self.replayed >= len(t.passes) else 'THE METHOD IS TURNING THE KNOBS'
+            self.text(left + 10, H - 46, waiting, 11, WHITE, 'left')
+            self.text(left + 10, H - 26, 'O: OTHER METHOD, SAME MACHINE   ESC: STOP', 11, CYAN, 'left')
+            return
+        if t.error:
+            self.text(left + 10, H - 46, wrapped(t.error, 80)[0], 11, RED, 'left')
+        else:
+            reached = t.run.reached
+            self.text(left + 10, H - 46, f'IN SPEC AFTER {reached} PASSES' if reached else f'NOT IN SPEC AFTER {t.run.evals} PASSES. BEST SETTING LEFT ON', 12, GREEN if reached else RED, 'left')
+        self.text(left + 10, H - 26, 'ENTER: YOU TAKE THE BEAM   O: OTHER METHOD, SAME MACHINE', 11, CYAN, 'left')
 
     def draw_walkthrough(self):
         s = self.stages[self.index]
@@ -363,6 +565,8 @@ class Arcade(QWidget):
         y = self.block(y, s.brief, 56, 16)
         self.text(W / 2, y + 40, MISSION_CONTROLS if mission else CONTROLS[s.key], 13, GREEN)
         self.text(W / 2, y + 80, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE', 14, YELLOW)
+        if mission:
+            self.text(W / 2, y + 110, 'O: LET A TUNING METHOD TRY IT   B: WHAT RUNS BEHIND', 14, MAGENTA)
         if int(self.clock * 2) % 2:
             self.text(W / 2, H - 80, 'PRESS ENTER', 22, GREEN)
 

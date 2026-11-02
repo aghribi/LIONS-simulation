@@ -12,6 +12,7 @@ from lions.game.tuners import HELD_OUT, RL_STEPS, policy, policy_path, train_pol
 def main(missions, steps=None):
     for mission_id in missions:
         path = policy_path(mission_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
         progress = path.with_suffix('.progress')
         total = steps or RL_STEPS['ppo']
         model = train_policy(mission_id, 'ppo', 0, path, steps, lambda n: progress.write_text(f'{n / total:.3f}'))

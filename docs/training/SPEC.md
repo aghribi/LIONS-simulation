@@ -87,6 +87,10 @@ baseline of the Lab track. They are not the CIME operator procedure (**D4**).
 
 **Gymnasium** (`lions.game.env`): one environment per mission; registered baseline runs in `docs/training/RL_RUNS.md`.
 
+**Tuning methods** (`lions.game.tuners`, key O on a challenge): coach, Nelder-Mead, Bayesian optimisation, NSGA-II, PPO, random search, the same code as `benchmarks/case_t.py`. A method works on a copy of the machine and the screen replays its passes. No points, no lives, no log. Methods can be compared on one machine: the hidden errors stay until the player leaves the list. When a method stops, the player can take the beam with the helper. A missing PPO policy is trained in a subprocess, seed 0, saved in `~/.lions_arcade/policies` with its held-out result (`python -m lions.game.train`).
+
+**What runs behind** (`lions.game.behind`, key B anywhere): a separate window stating what the game executes and what it does not, with live status. A test fails if a game module imports tracking code, so the window cannot go stale silently.
+
 ### Level 1: single-particle dynamics (Discovery, Machine)
 Closed orbit, betatron oscillations, tunes. Controls: field level, gradient, flutter, spiral angle, starting offset.
 Shown: Poincaré section at theta = 0, turn-by-turn signal, its spectrum. Success: read Qr and Qz within a tolerance from
