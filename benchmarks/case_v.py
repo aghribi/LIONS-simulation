@@ -1,8 +1,9 @@
 """Case V: LIONS judges the F18 tunes of case T, stage A of docs/training/PHYSICAL.md. Synthetic map: says nothing about a real machine.
 
-usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N] [--start-mev W]
+usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict,limit} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N] [--start-mev W]
 tunes: the in-spec tunes of case T, regenerated and compared with its tables. check: time one pass, sign of the phase conversion, field scaling.
 verdict: every tune through LIONS, one pass per tune; finished tunes are kept in parts/ and skipped on a rerun.
+limit: every tune to 4 times T0's turn limit, read at 1, 2 and 4 times it, with particles still circulating reported apart.
 --start-mev: start at the closed-orbit energy nearest above W, for the verdict without the central region; case_v_tunes.parquet is then copied into --outroot.
 """
 import argparse
@@ -41,6 +42,7 @@ PPO_SEED = 0
 MAP_FILES = ('bmap.dat', 'pot1.bin', 'pot2.dat')
 REST_MEV = P.MASS_KG * syn.C**2 / syn.MEV
 EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT = 'extracted', 'z_aperture', 'out_of_map', 'turn_limit'
+LIMIT_FACTORS = (1, 2, 4)
 BEAM_FIELDS = ('transmission', 'extracted_ua', 'w_mean', 'w_spread', 'lost_kw', 'turns', 'x', 'y')
 
 
@@ -110,7 +112,7 @@ class Pass:
     Each one starts before theta = 0 on the closed orbit, with its electric kick off until it arrives there: it arrives at the start energy, at its own phase.
     """
 
-    def __init__(self, workdir, mp, ref, knobs, errors, draws, max_turns=None, scale_in_map=False):
+    def __init__(self, workdir, mp, ref, knobs, errors, draws, max_turns=None, scale_in_map=False, factors=()):
         machine, ion = P.MACHINE, P.ION
         self.mp, self.knobs, self.errors = mp, knobs, errors
         self.b0 = knobs['b0'] * (1 + errors.field)
@@ -122,6 +124,10 @@ class Pass:
         if self.h != P.HARMONIC:
             raise ValueError(f'harmonic {self.h}: the map is built for {P.HARMONIC}')
         self.limit = int(np.ceil(mc.turn_limit(machine, ion, knobs, self.b0, self.h))) if max_turns is None else max_turns
+        self.base, self.snaps = self.limit, {}
+        self.read_at = {self.base * f * P.STEPS: f for f in factors}
+        if factors:
+            self.limit = self.base * max(factors)
         self.phi = mc.start_phases(knobs, errors)
         self.z0 = mc.start_heights(machine, draws) * 1e-3
         hold = (self.phi + np.pi) / (2 * np.pi) * P.STEPS / self.h       # steps to theta = 0, under half a turn at harmonic 2
@@ -150,6 +156,8 @@ class Pass:
             self.rmin, self.rmax = d.field.rmin, d.field.rmax - 0.02
             lions.cli.track(d, on_step=self.step)
         self.turn_max = int(self.turns.max())
+        for f in factors:
+            self.snaps.setdefault(f, self.state(np.hypot(b.x, b.y)))
 
     def step(self, d):
         k, b = d.run.step, d.bunch
@@ -170,7 +178,13 @@ class Pass:
         self.fate[over_z], self.fate[out] = Z_APERTURE, OUT_OF_MAP
         b.alive[over_z | out] = False
         self.prev = b.x.copy(), b.y.copy(), b.gamma.copy(), d.run.t
+        if k in self.read_at:
+            self.snaps[self.read_at[k]] = self.state(r)
         return bool(b.alive.any()) and k < self.limit * P.STEPS
+
+    def state(self, r):
+        return {'fate': self.fate.copy(), 'w_end': self.w_end.copy(), 'w_last': self.w_last.copy(), 'w_prev': self.w_prev.copy(), 'turns': self.turns.copy(), 'r': r.copy(),
+                'counts': self.counts.sum(0), 'phase_sum': self.phase_sum.sum(0)}
 
     def crossing(self, c, d, xp, yp, gp, tp):
         b, ion = d.bunch, P.ION
@@ -206,6 +220,14 @@ class Pass:
             ok, power = out, self.w_end[~out].sum()
         return mc.extract(P.MACHINE, P.ION, self.knobs, self.errors, self.w_last, self.w_prev, ok, power, self.turn_max, self.h,
                           self.counts.sum(0) / N, self.phase_sum.sum(0), self.counts.sum(0))
+
+
+    def beam_at(self, s, count_circulating):
+        """Beam read at a snapshot. A particle still circulating has no fate: count_circulating says whether its energy enters the lost power."""
+        out = s['fate'] == EXTRACTED
+        lost = ~out if count_circulating else ~out & (s['fate'] != TURN_LIMIT)
+        return mc.extract(P.MACHINE, P.ION, self.knobs, self.errors, s['w_last'], s['w_prev'], out, s['w_end'][lost].sum(), int(s['turns'].max()), self.h,
+                          s['counts'] / N, s['phase_sum'], s['counts'])
 
 
 def judged(condition, knobs, field, beam=None):
@@ -336,6 +358,71 @@ def one(job):
     return row['tune']
 
 
+def classes(s, fate):
+    w = s['w_end'][s['fate'] == fate]
+    return {f'n_{fate}': len(w), f'w_sum_{fate}_mev': float(w.sum()), f'w_median_{fate}_mev': float(np.median(w)) if len(w) else float('nan')}
+
+
+def limit_one(job):
+    row, mapdir, parts = job
+    path = parts / f"{row['tune']:03d}.pkl"
+    if path.exists():
+        return row['tune']
+    mp = Map(mapdir)
+    work = mp.workdir(parts / f"work_{row['tune']:03d}")
+    ref = reference_orbit(work, mp)
+    m = of_tune(row)
+    began = time.perf_counter()
+    p = Pass(work, mp, ref, m.knobs, m.errors, m.draws, factors=LIMIT_FACTORS)
+    wall = time.perf_counter() - began
+    base = {k: row[k] for k in ('tune', 'method', 'training_seed', 'condition')}
+    tunes_, particles = [], []
+    for f in LIMIT_FACTORS:
+        s = p.snaps[f]
+        with_c = judged(row['condition'], m.knobs, row['field_error'], p.beam_at(s, True))
+        without = judged(row['condition'], m.knobs, row['field_error'], p.beam_at(s, False))
+        b = with_c.beam
+        tunes_.append({**base, 'factor': f, 'limit_turns': p.base * f, 'wall_s': wall, 'turn_max': int(s['turns'].max()), 'transmission': float(b.transmission), 'extracted_ua': float(b.extracted_ua),
+                       'w_mean': float(b.w_mean), 'w_spread': float(b.w_spread), 'lost_kw_with_circulating': float(b.lost_kw), 'lost_kw_without_circulating': float(without.beam.lost_kw),
+                       'in_spec_with_circulating': bool(with_c.ready()), 'in_spec_without_circulating': bool(without.ready()), 'terms_with_circulating': json.dumps(with_c.spec_terms()),
+                       'terms_without_circulating': json.dumps(without.spec_terms()), **{k: v for fate in (EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT) for k, v in classes(s, fate).items()}})
+        particles += [{**base, 'factor': f, 'particle': i, 'phi_start_deg': float(np.degrees(p.phi[i])), 'z0_m': float(p.z0[i]), 'fate': str(s['fate'][i]), 'w_end_mev': float(s['w_end'][i]),
+                       'turns': int(s['turns'][i]), 'r_end_m': float(s['r'][i])} for i in range(N)]
+    with open(path, 'wb') as out:
+        pickle.dump((tunes_, particles), out)
+    shutil.rmtree(work)
+    print(row['tune'], row['method'], row['condition'], f'{wall:.0f} s', [(r['factor'], r['n_turn_limit'], r['in_spec_with_circulating'], r['in_spec_without_circulating']) for r in tunes_], flush=True)
+    return row['tune']
+
+
+def limit_study(outdir, mp, workers, reference):
+    rows = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()
+    parts = outdir / 'parts'
+    parts.mkdir(parents=True, exist_ok=True)
+    with multiprocessing.get_context('spawn').Pool(workers) as pool:
+        list(pool.imap_unordered(limit_one, [(r, mp.dir, parts) for r in rows]))
+    done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
+    v = [r for d in done for r in d[0]]
+    units = 'lost_kw kW, w_mean w_* MeV, w_spread 1, extracted_ua uA, limit_turns turns, r_end_m m, phi_start_deg deg, z0_m m. turn_limit is a particle still circulating'
+    write(v, outdir / 'case_v_limit_verdict.parquet', 'turn limit study per tune', mp, units)
+    write([p for d in done for p in d[1]], outdir / 'case_v_limit_particles.parquet', 'turn limit study per particle', mp, units)
+    shutil.rmtree(parts)
+    was = {r['tune']: r for r in pq.read_table(reference / 'case_v_verdict.parquet').to_pylist()}
+    one_x = [r for r in v if r['factor'] == 1]
+    print('1x against case_v: max |transmission diff|', max(abs(r['transmission'] - was[r['tune']]['lions_transmission']) for r in one_x), 'max |lost diff| kW',
+          max(abs(r['lost_kw_with_circulating'] - was[r['tune']]['lions_lost_kw']) for r in one_x), 'verdict differs', sum(r['in_spec_with_circulating'] != was[r['tune']]['lions_in_spec'] for r in one_x))
+    for key in ('with_circulating', 'without_circulating'):
+        by = {f: {r['tune']: r for r in v if r['factor'] == f} for f in LIMIT_FACTORS}
+        print(key, 'in spec', {f: sum(r[f'in_spec_{key}'] for r in by[f].values()) for f in LIMIT_FACTORS}, 'of', len(rows))
+        for quantity in (f'lost_kw_{key}', 'transmission'):
+            change = [abs(by[4][k][quantity] - by[2][k][quantity]) / max(by[4][k][quantity], 1e-12) for k in by[4]]
+            print(' ', quantity, 'relative change 2x to 4x: median', float(np.median(change)), 'max', float(np.max(change)))
+        print('  tunes changing verdict 2x to 4x', sum(by[2][k][f'in_spec_{key}'] != by[4][k][f'in_spec_{key}'] for k in by[4]))
+    for f in LIMIT_FACTORS:
+        s = [r for r in v if r['factor'] == f]
+        print(f, 'x:', {c: sum(r[f'n_{c}'] for r in s) for c in (EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT)}, 'of', N * len(s), 'median lost kW with', float(np.median([r['lost_kw_with_circulating'] for r in s])), 'without', float(np.median([r['lost_kw_without_circulating'] for r in s])))
+
+
 def verdict(outdir, mp, workers, start_mev):
     rows = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()
     parts = outdir / 'parts'
@@ -355,7 +442,7 @@ def verdict(outdir, mp, workers, start_mev):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('step', choices=('tunes', 'check', 'verdict'))
+    parser.add_argument('step', choices=('tunes', 'check', 'verdict', 'limit'))
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_v')
     parser.add_argument('--mapdir', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
     parser.add_argument('--reference', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
@@ -369,5 +456,7 @@ if __name__ == '__main__':
         sys.exit(1 if tunes(outdir, args.reference.resolve(), mp_) else 0)
     elif args.step == 'check':
         check(outdir, mp_)
+    elif args.step == 'limit':
+        limit_study(outdir, mp_, args.workers, args.reference.resolve())
     else:
         verdict(outdir, mp_, args.workers, args.start_mev)

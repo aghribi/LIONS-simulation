@@ -124,6 +124,24 @@ Limits of this result, found after the data, not registered:
 - Lost power outside the septum below 2 MeV, median per tune: 0.002 and 0.003 kW. The higher start energy adds little by itself.
 - Cost: 1.21 core-h of passes, 113 s per pass (median, 100 to 150 s), 13 min 33 s on 8 cores with the checks. Closed orbit closes to 6.3 nm. The maximum first-crossing difference of 359.9 deg is a wrap at +-180 deg, median 0.04 deg.
 
+### Turn limit convergence (registered 2026-11-02, before running)
+
+**Standing rule.** No invented unphysical rule enters a verdict. Each rule considered is checked and stated. T0's turn limit (`machine.turn_limit`, 3 W / gain + 50) is an invented numerical rule, and T0's `cos(phi) < 0.2` is an invented loss rule. From here on `cos(phi) < 0.2` is no verdict: the columns "with the rule" above stay only as a diagnostic of T0, and this study does not compute them.
+
+**Question.** How much of the lost-power gap and of the in-spec verdict comes from where tracking stops?
+
+**Change.** Same 38 tunes, same map, start 0.0909 MeV, one deterministic pass per tune, `benchmarks/case_v.py limit`, output `benchmarks/runs/case_v_limit`. One pass to 4 times T0's limit per tune, read at 1, 2 and 4 times it. The reading at 1 times must reproduce `benchmarks/runs/case_v`.
+
+**Classes, at each limit, counts and energy.** Extracted. Lost: |z| above 15 mm, or leaving the map, the two apart, the map edge split by `r_end_m` into inner and outer. Still circulating: no fate is assigned. Lost power and the verdict are reported with and without the energy of circulating particles.
+
+**What ends a particle, from the code.** In LIONS itself, on this deck, nothing does. `apply_traps` returns at once with no trap circle, and this deck has none, so its z limits of +-0.1 m remove nobody. `check_box` only switches the fields off outside the map and those limits. `lions.cli.track` runs to its last step. The removals are rules of `case_v.py`, and neither is a verified aperture:
+- |z| above 15 mm: T0's `z_aperture`, illustrative, no source.
+- Map edge: r below 5 mm or at or above 0.4975 m. The inner one is the end of the map grid. The field is unknown there, and nothing physical sits at 5 mm. The outer one is LIONS' own margin of 2 cm inside the map's 0.5175 m.
+
+**Not modelled, so a circulating particle cannot end through them:** space charge, stripping and charge exchange, the full 3D map (`docs/guide/01_overview.md`), residual gas, hardware apertures, a real central region and septum. The extraction radius is the counterpart of T0's, with no deflector tracked.
+
+**Convergence, fixed before the data.** Between 2 and 4 times the limit, per tune: lost power and transmission change by less than F18's 0.5% reading noise, relative, at every tune, and no tune changes verdict. Lost power and verdict are tested with and without circulating particles, each stated. If this fails, the result is "not converged at 4 times", with the fraction circulating. The limit is not extended without reporting first.
+
 ## Stage B: reduced model
 
 LIONS on the map tabulates revolution frequency, Qr and Qz against energy. The T0 turn loop reads the tables in place of its closed forms.
