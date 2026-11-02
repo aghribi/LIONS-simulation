@@ -83,3 +83,51 @@ Output in `benchmarks/runs/case_t_drift`, code pinned at one commit in a worktre
 
 - New baseline: CMA-ES (`cma` 4.5.0 defaults, sigma 0.3 of the search box, starting at the start point, restart from a random point when it stops). Objective `tune_score`, stop when in spec. Same box, same 20 conditions, 200 evaluations. It sets knobs directly, as the other optimisers.
 - Run apart from the first amendment, into `case_t_classical_cma_es.parquet`, from a later commit. `machine.py`, `missions.py`, `env.py` and `physics.py` must be unchanged since eea287d.
+
+## Results with drift
+
+Source: `benchmarks/runs/case_t_drift/`, from `benchmarks/case_t.py` at eea287d, CMA-ES at 8a6e9e2. In spec out of 20 held-out conditions, with median evaluations to spec among those reached:
+
+| Mission | Coach | Nelder-Mead | Bayesian | CMA-ES | NSGA-II | Random |
+|---|---|---|---|---|---|---|
+| EYE | 20 (50) | 13 (102) | 1 (184) | 1 (48) | 0 | 0 |
+| DEEP | 13 (81) | 10 (103.5) | 0 | 0 | 0 | 0 |
+| F18 | 11 (46) | 18 (59.5) | 11 (143) | 5 (124) | 0 | 2 (126) |
+| NEON | 12 (109.5) | 3 (56) | 0 | 0 | 0 | 0 |
+| ISOL | 20 (43) | 16 (65.5) | 7 (73) | 3 (82) | 1 (161) | 0 |
+| QUAL | 4 (60.5) | 0 | 0 | 0 | 0 | 0 |
+
+PPO, 100k steps, in spec out of 20 per training seed 0 to 4, and the median:
+
+| Mission | Seeds | Median | Evaluations to spec, median over seeds |
+|---|---|---|---|
+| F18 | 20, 20, 20, 20, 20 | 20 | 4 |
+| ISOL | 20, 20, 20, 20, 20 | 20 | 4 |
+| EYE | 1, 0, 0, 0, 1 | 0 | 59.5 |
+| DEEP | 8, 0, 0, 0, 0 | 0 | 12.5 |
+| NEON | 0, 0, 0, 0, 0 | 0 | none |
+| QUAL | 0, 0, 0, 0, 5 | 0 | 41 |
+
+PPO does not beat the coach on EYE, DEEP, NEON or QUAL. Why it reaches all or nothing is unknown.
+
+## Post-hoc checks with drift, not registered
+
+`benchmarks/case_t_check.py` at eea287d, output `check.parquet`, written unlabelled. In-spec runs, knobs held 50 passes with drift, then a noise-free read:
+
+| Method, mission | In spec | Stayed in spec at all 50 passes | Noise-free read in spec |
+|---|---|---|---|
+| PPO F18, held-out | 100/100 | 81 | 91 |
+| PPO F18, fresh | 100/100 | 85 | 94 |
+| PPO ISOL, held-out | 100/100 | 74 | 87 |
+| PPO ISOL, fresh | 100/100 | 76 | 90 |
+| Nelder-Mead F18 | 18/20 | 8 | 13 |
+| Coach F18 | 11/20 | 6 | 8 |
+| Nelder-Mead ISOL | 16/20 | 7 | 13 |
+| Coach ISOL | 20/20 | 17 | 17 |
+| Coach EYE | 20/20 | 17 | 19 |
+
+- A first read in spec overstates the result: a run stops at its first such read, and noise and drift can then take it out. The first runs, without drift, gave 100% on the same hold.
+- Memorised sequence: replaying one sequence blind reaches spec on 5/100 for F18 and 7/100 for ISOL on held-out conditions. The policy uses its readings.
+- Fresh conditions 20000 to 20019: PPO F18 100/100, median 5 evaluations, maximum 8; PPO ISOL 100/100, median 4, maximum 6.
+- Reproducibility: Bayesian optimisation on F18 gives 11/20 in the registered run and 10/20 here with the same seeds. Unexplained.
+

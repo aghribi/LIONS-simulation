@@ -1,8 +1,9 @@
 """Case P: synthetic F18 machine for LIONS, stage A gates of docs/training/PHYSICAL.md. Synthetic: says nothing about a real machine.
 
-usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_p.py {design,dees,slip} [--outroot DIR]
+usage: uv run --extra game --group bench --group dev python benchmarks/case_p.py {design,dees,slip,offaxis} [--outroot DIR]
 design: isochronous map from closed orbits, tunes (analytic field, Boris; LIONS Hermite at a few energies).
 dees: gain per turn against T0 energy_gain. slip: RF phase slip from injection to extraction at the design setting.
+offaxis: from the verdict start energy, centred and off the median plane.
 """
 import argparse
 import concurrent.futures
@@ -36,6 +37,7 @@ OPTIONS = {'interpolation': 'hermite', 'azimuth': 'atan2'}
 GAP_DEG = 1.5                   # tanh half width of a dee gap, seen from the centre: invented, as the whole central region
 GAP_MIN = 5e-4                  # m, smallest gap half width, resolved by the potential grid
 WORKERS = 2
+START_MEV = 0.091               # verdicts start here, the lowest energy where the dee gate holds
 M = mission_by_id('F18')
 M.reset(0)
 MACHINE, ION, HARMONIC = M.machine, M.ion, M.harmonic
@@ -161,11 +163,11 @@ def write_machine(outdir, field):
         syn.write_pot_outer('pot2.dat', dee_potential, xmin=0.0, xmax=rmax, ymin=-width, ymax=width, nx=OUTER_NX, ny=OUTER_NY)
 
 
-def accelerate(workdir, w0, r0, pr0_mrad, phi0_deg, turns, one_turn=False):
+def accelerate(workdir, w0, r0, pr0_mrad, phi0_deg, turns, one_turn=False, z0=0.0):
     """Design setting, one proton from (r0, theta = 0): crossings of theta = 0 as (t [s], energy [MeV], r [m], z [m]), or the gain [MeV] over one nominal turn."""
     with contextlib.chdir(workdir):
         syn.write_deck('deck.dat', fhf=HARMONIC * F0, r0=r0, w0=w0, npaspt=STEPS, turns=turns, v_dee=DEE_KV * 1e3, teta1=MACHINE.dee_angle_deg / 2,
-                       harm=float(HARMONIC), pr0=pr0_mrad, phi0=phi0_deg, tail=orbits.deck_tail(OPTIONS))
+                       harm=float(HARMONIC), z0=z0, pr0=pr0_mrad, phi0=phi0_deg, tail=orbits.deck_tail(OPTIONS))
         rows = []
 
         def record(d):
@@ -265,14 +267,14 @@ def serial_gains(jobs):
     return [gain_job(j) for j in jobs]
 
 
-def slip(outdir, w0=None, r0=None, pr0=0.0, phi0=None, tag='injection'):
+def slip(outdir, w0=None, r0=None, pr0=0.0, phi0=None, tag='injection', z0=0.0):
     rec = [r for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic']
     w0 = rec[0]['w_mev'] if w0 is None else w0
     r0 = next(r['r_co_m'] for r in rec if abs(r['w_mev'] - w0) < 1e-9) if r0 is None else r0
     gains = pq.read_table(outdir / 'case_p_gain.parquet').to_pylist()
     phi0 = float(np.median([g['crest_phi0_deg'] for g in gains])) if phi0 is None else phi0
     turns = int(2 * W_EXT / float(mc.energy_gain(MACHINE, ION, DEE_KV, HARMONIC, 0.0)))
-    s = accelerate(workdirs(outdir, 1)[0], w0, r0, pr0, phi0, turns)
+    s = accelerate(workdirs(outdir, 1)[0], w0, r0, pr0, phi0, turns, z0=z0)
     phase = 360.0 * HARMONIC * (F0 * s[:, 0] - np.arange(len(s)))
     phase -= phase[0]
     out = [{'tag': tag, 'turn': i, 't_s': float(a[0]), 'w_mev': float(a[1]), 'r_m': float(a[2]), 'z_m': float(a[3]), 'phase_deg': float(b)} for i, (a, b) in enumerate(zip(s, phase))]
@@ -282,14 +284,25 @@ def slip(outdir, w0=None, r0=None, pr0=0.0, phi0=None, tag='injection'):
     print(f'{tag}: {len(s)} crossings, reached r = {s[k, 2]:.4f} m at turn {k}, w = {s[k, 1]:.3f} MeV; max |slip| to there {np.max(np.abs(phase[:k + 1])):.2f} deg, end slip {phase[k]:.2f} deg', flush=True)
     print('w', np.round(s[:k + 1:max(k // 12, 1), 1], 3).tolist())
     print('phase', np.round(phase[:k + 1:max(k // 12, 1)], 1).tolist())
+    print(f'{tag}: max |z| at the section {1e3 * np.max(np.abs(s[:k + 1, 3])):.3f} mm, final energy {s[k, 1]:.3f} MeV')
     gain = np.diff(s[:k + 1, 1])
     print('gain per turn: median', np.median(gain), 'max', gain.max(), 'T0 peak', mc.energy_gain(MACHINE, ION, DEE_KV, HARMONIC, 0.0))
 
 
+def offaxis(outdir):
+    """Gate of PHYSICAL.md: from START_MEV at the crest, z0 = 0, T0's z_injection and twice it (T0 spreads z0 by 30% rms)."""
+    rec = {r['w_mev']: r['r_co_m'] for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic'}
+    w0 = min(rec, key=lambda w: abs(w - START_MEV))
+    gains = pq.read_table(outdir / 'case_p_gain.parquet').to_pylist()
+    phi0 = min(gains, key=lambda g: abs(g['w_mev'] - w0))['crest_phi0_deg']
+    for factor in (0.0, 1.0, 2.0):
+        slip(outdir, w0, rec[w0], phi0=phi0, tag=f'offaxis_{factor:g}', z0=factor * MACHINE.z_injection * 1e-3)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('step', choices=('design', 'dees', 'slip'))
+    parser.add_argument('step', choices=('design', 'dees', 'slip', 'offaxis'))
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
     args = parser.parse_args()
     outdir = args.outroot.resolve()
-    {'design': design, 'dees': dees, 'slip': slip}[args.step](outdir)
+    {'design': design, 'dees': dees, 'slip': slip, 'offaxis': offaxis}[args.step](outdir)

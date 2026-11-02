@@ -26,7 +26,7 @@ LIONS has no space charge (`docs/guide/01_overview.md`). The T0 space charge ter
 - Map: passed. Largest phase slip 9.44 deg, Qr and Qz real at 30 energies from 0.03 to 18.54 MeV.
 - Dees: gain within 5% at 0.091 MeV and above (0.989 to 1.020), failed at 0.03 MeV (0.510). A 30 keV proton cannot lose what T0's cosine formula asks, and the crest gain matches.
 - Amendment: verdict runs start at 0.091 MeV. Below it lies the invented central region, so LIONS does not judge the first turns.
-- Added gate, before the verdicts: off-axis particles at T0's z = 3 mm, since the constant flutter at small radius is unphysical near the centre.
+- Added gate, before the verdicts: off-axis particles, since the constant flutter at small radius is unphysical near the centre. From 0.091 MeV at the crest, z0 = 3 mm (T0's `z_injection`) and 6 mm. Passes if the proton reaches 18 MeV, |z| at the theta = 0 section stays below the 15 mm of `z_aperture`, and phase slip stays below 20 deg.
 
 **Test set.** The tunes in spec from `benchmarks/runs/case_t_drift`, F18: 20 conditions for PPO seed 0, and those Nelder-Mead reached. The tunes must be regenerated from the pinned code, since the Parquet files hold outcomes only.
 
