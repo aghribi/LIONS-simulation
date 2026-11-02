@@ -29,6 +29,9 @@ rl = [
     "scipy>=1.13",
     "stable-baselines3>=2.9",
 ]
+bo = [
+    "botorch>=0.15",
+]
 
 [dependency-groups]
 bench = [

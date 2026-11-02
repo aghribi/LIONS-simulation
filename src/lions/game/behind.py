@@ -24,7 +24,7 @@ OMITTED = 'No field map, no isochronism error from a real map, no misalignment o
 PASS = ['Knobs, set by you or by a method', 'machine.run: for each turn, energy gain from the dee voltage and phase; phase slip from RF, field and gamma; Qz from flutter, spiral, gradient and current; losses on the dee aperture and when behind the RF',
         'Septum, energy slit, deflector and steerers: position and spot at the target, by closed forms',
         'Mission physics: Bragg peak, activity, flux, power density', 'Readings with noise: what the control room shows',
-        'spec_terms: one normalised error per client requirement. ready: all at 1 or below. tune_score: the same terms as one number']
+        'measured_terms: one normalised error per client requirement, from the readings. tune_score: the same terms as one number. spec_terms and ready: the same on the true beam, not seen by any method']
 PACKAGES = ('numpy', 'scipy', 'scikit-learn', 'pymoo', 'cma', 'stable-baselines3', 'torch', 'PyQt5')
 
 

@@ -580,7 +580,7 @@ def test_each_challenge_runs_a_method_with_real_keys(tmp_path, monkeypatch, name
     w.grab()
     run = w.tuning.run
     assert w.tuning.error is None and w.replayed == run.evals
-    assert w.stage.ready() == (run.reached is not None)
+    assert w.tuning.m.measured_ready() == (run.reached is not None)
     assert w.stage.errors.steer_x == w.tuning.m.errors.steer_x      # the screen's machine is the method's machine
     lives, total = w.lives, w.total
     QTest.keyClick(w, Qt.Key_O)
@@ -708,3 +708,77 @@ def test_training_from_the_game_is_a_subprocess_that_esc_stops(tmp_path, monkeyp
     QTest.keyClick(w, Qt.Key_Escape)
     assert w.state == 'pick' and w.training is None and process.poll() is not None
     w.close()
+
+
+@pytest.mark.parametrize('mission_id', ['EYE', 'DEEP', 'F18', 'NEON', 'ISOL', 'QUAL'])
+def test_measured_terms_are_the_true_terms_without_noise(mission_id):
+    from lions.game.env import mission_by_id
+    m = mission_by_id(mission_id)
+    m.reset(5)
+    m.knobs = m.ideal()
+    m.p['noise'] = 0.0
+    m.refresh()
+    assert m.has_beam()
+    assert m.measured_terms() == pytest.approx(m.spec_terms(), rel=1e-12, abs=1e-12)
+    assert m.measured_ready() == m.ready()
+
+
+@pytest.mark.parametrize('mission_id', ['EYE', 'DEEP', 'F18', 'NEON', 'ISOL', 'QUAL'])
+def test_the_measured_terms_read_the_noise_and_the_true_terms_do_not(mission_id):
+    from lions.game.env import mission_by_id
+    m = mission_by_id(mission_id)
+    m.reset(5)
+    m.knobs = m.ideal()
+    m.p['noise'] = 0.05
+    true = set()
+    measured = {k: set() for k in m.spec_terms()}
+    for _ in range(12):
+        m.refresh()
+        true.add(tuple(m.spec_terms().values()))
+        for k, v in m.measured_terms().items():
+            measured[k].add(v)
+    assert len(true) == 1 and all(len(v) > 1 for k, v in measured.items() if k != 'spread')
+
+
+def test_run_stops_on_the_measured_test_unless_told_otherwise():
+    from lions.game import tuners
+    calls = []
+
+    def stop():
+        calls.append(1)
+        return True
+
+    run = tuners.tune(fresh_mission(), tuners.random_search, 1, stop=stop)
+    assert run.reached == 1 and len(calls) == 1
+    assert tuners.Run(fresh_mission()).stop.__name__ == 'measured_ready'
+
+
+def test_a_wider_box_moves_only_its_knob():
+    from lions.game import tuners
+    m = fresh_mission()
+    plain = tuners.Run(m)
+    key, spec = plain.keys[0], m.specs[0]
+    below, above = 2 * tuners.BOX_ERRORS * spec['start_error'], 3 * tuners.BOX_ERRORS * spec['start_error']
+    wide = tuners.Run(m, box={key: (below, above)})
+    assert wide.lo[0] == max(m.knobs[key] - below, spec['min']) and wide.hi[0] == min(m.knobs[key] + above, spec['max'])
+    assert list(wide.lo[1:]) == list(plain.lo[1:]) and list(wide.hi[1:]) == list(plain.hi[1:])
+
+
+def test_log_terms_rank_no_beam_behind_any_beam(monkeypatch):
+    from lions.game import tuners
+    m = fresh_mission()
+    run = tuners.Run(m)
+    m.knobs['rf_mhz'] = next(s for s in m.specs if s['key'] == 'rf_mhz')['min']
+    monkeypatch.setattr(run, 'set', lambda u: m.refresh())
+    terms = run.log_terms(run.start)
+    assert not m.has_beam() and min(terms) > math.log(tuners.TERM_CLAMP) and len(terms) == len(m.spec_terms())
+
+
+@pytest.mark.parametrize('name', ['turbo', 'constrained_bo', 'mobo'])
+def test_botorch_methods_spend_the_budget(name):
+    pytest.importorskip('botorch')
+    from lions.game import tuners
+    m = fresh_mission()
+    budget = 2 * len(m.specs) + 22
+    run = tuners.tune(m, getattr(tuners, name), 1, budget=budget)
+    assert (run.evals == budget or run.reached) and run.model_failures == 0

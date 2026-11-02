@@ -23,6 +23,8 @@ TRAIN_SEEDS = list(range(1000))
 HELD_OUT = list(range(10000, 10020))
 POLICIES = Path.home() / '.lions_arcade' / 'policies'
 NO_BEAM = 1e12    # worse than any term with beam out
+TERM_CLAMP = 1e3  # per-term models: log(term) within +- log of this
+ACQ_RESTARTS, ACQ_RAW_SAMPLES = 4, 256
 
 
 class Run:
@@ -31,14 +33,18 @@ class Run:
     class Done(Exception):
         pass
 
-    def __init__(self, m, budget=BUDGET, on_pass=None):
+    def __init__(self, m, budget=BUDGET, on_pass=None, box=None, stop=None):
+        """box: {knob: (below, above)}, offsets from the start replacing BOX_ERRORS. stop: the end test, the measured one by default."""
         self.m, self.budget, self.on_pass = m, budget, on_pass
+        self.stop = stop or m.measured_ready
         self.evals, self.reached, self.score, self.best, self.best_knobs = 0, None, -1.0, -1.0, dict(m.knobs)
+        self.best_terms, self.model_failures = None, 0
         self.keys = [s['key'] for s in m.specs]
         centre = np.array([m.knobs[k] for k in self.keys])
         width = np.array([BOX_ERRORS * s['start_error'] for s in m.specs])
-        self.lo = np.maximum(centre - width, [s['min'] for s in m.specs])
-        self.hi = np.minimum(centre + width, [s['max'] for s in m.specs])
+        below, above = (np.array([box[k][i] if box and k in box else w for k, w in zip(self.keys, width)]) for i in (0, 1))
+        self.lo = np.maximum(centre - below, [s['min'] for s in m.specs])
+        self.hi = np.minimum(centre + above, [s['max'] for s in m.specs])
         self.start = (centre - self.lo) / (self.hi - self.lo)
 
     def passed(self):
@@ -50,9 +56,10 @@ class Run:
         self.score = m.tune_score()
         if self.score > self.best:
             self.best, self.best_knobs = self.score, dict(m.knobs)
+            self.best_terms = {'measured': m.measured_terms(), 'true': m.spec_terms()} if m.has_beam() else None
         if self.on_pass:
             self.on_pass(self)
-        if m.ready():
+        if self.stop():
             self.reached = self.evals
             raise Run.Done
         if self.evals >= self.budget:
@@ -71,7 +78,15 @@ class Run:
         """One objective per term of the client's spec. Without beam every term is worse than with beam, closer on the radial probe."""
         self.set(u)
         m = self.m
-        return list(m.spec_terms().values()) if m.has_beam() else [NO_BEAM * (2 - m.reach())] * len(m.spec_terms())
+        return list(m.measured_terms().values()) if m.has_beam() else [NO_BEAM * (2 - m.reach())] * len(m.spec_terms())
+
+    def log_terms(self, u):
+        """The same terms for a model: log, clamped. Without beam worse than any beam, closer on the radial probe."""
+        self.set(u)
+        m = self.m
+        if not m.has_beam():
+            return [np.log(TERM_CLAMP) + 1 - m.reach()] * len(m.spec_terms())
+        return np.log(np.clip(list(m.measured_terms().values()), 1 / TERM_CLAMP, TERM_CLAMP)).tolist()
 
 
 def coach(run, rng):
@@ -151,6 +166,113 @@ def cma_es(run, rng):
         start = rng.uniform(0, 1, len(start))
 
 
+def _fitted_gp(x, y):
+    """One independent GP per column of y: Matern 5/2 with automatic relevance and inferred noise, BoTorch's dimension-scaled prior."""
+    import torch
+    from botorch.fit import fit_gpytorch_mll
+    from botorch.models import SingleTaskGP
+    from botorch.models.transforms.outcome import Standardize
+    from botorch.models.utils.gpytorch_modules import get_covar_module_with_dim_scaled_prior
+    from gpytorch.mlls import ExactMarginalLogLikelihood
+    outputs = y.shape[-1]
+    kernel = get_covar_module_with_dim_scaled_prior(x.shape[-1], torch.Size([outputs]) if outputs > 1 else torch.Size(), use_rbf_kernel=False)
+    gp = SingleTaskGP(x, y, covar_module=kernel, outcome_transform=Standardize(outputs))
+    fit_gpytorch_mll(ExactMarginalLogLikelihood(gp.likelihood, gp))
+    return gp
+
+
+def _per_term_bo(run, rng, acquisition):
+    """20 points as Bayesian optimisation, then one model per spec term. acquisition(gp, x): an acquisition function on the log terms."""
+    import torch
+    from botorch.exceptions.errors import ModelFittingError
+    from botorch.optim import optimize_acqf
+    from linear_operator.utils.errors import NotPSDError
+    torch.manual_seed(int(rng.integers(2**31)))
+    n = len(run.start)
+    xs = [run.start, *rng.uniform(0, 1, (BO_INITIAL - 1, n))]
+    ys = [run.log_terms(x) for x in xs]
+    bounds = torch.stack([torch.zeros(n, dtype=torch.double), torch.ones(n, dtype=torch.double)])
+    while True:
+        x, y = torch.tensor(np.array(xs), dtype=torch.double), torch.tensor(np.array(ys), dtype=torch.double)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                candidate, _ = optimize_acqf(acquisition(_fitted_gp(x, y), x), bounds, q=1, num_restarts=ACQ_RESTARTS, raw_samples=ACQ_RAW_SAMPLES)
+            next_x = candidate[0].numpy()
+        except (ModelFittingError, NotPSDError):
+            run.model_failures += 1
+            next_x = rng.uniform(0, 1, n)
+        ys.append(run.log_terms(next_x))
+        xs.append(next_x)
+
+
+def constrained_bo(run, rng):
+    """One GP per spec term, the point most likely to meet them all."""
+    from botorch.acquisition.analytic import LogProbabilityOfFeasibility
+    _per_term_bo(run, rng, lambda gp, x: LogProbabilityOfFeasibility(gp, {i: (None, 0.0) for i in range(gp.num_outputs)}))
+
+
+def mobo(run, rng):
+    """qLogNEHVI on the spec terms, reference point at the spec limits: objectives -log(term), in spec above 0."""
+    import torch
+    from botorch.acquisition.multi_objective.logei import qLogNoisyExpectedHypervolumeImprovement
+    from botorch.acquisition.multi_objective.objective import WeightedMCMultiOutputObjective
+    from botorch.acquisition.multi_objective.utils import get_default_partitioning_alpha
+
+    def acquisition(gp, x):
+        n = gp.num_outputs
+        return qLogNoisyExpectedHypervolumeImprovement(gp, torch.zeros(n, dtype=torch.double), x, prune_baseline=True, alpha=get_default_partitioning_alpha(n),
+                                                       objective=WeightedMCMultiOutputObjective(-torch.ones(n, dtype=torch.double)))
+
+    _per_term_bo(run, rng, acquisition)
+
+
+def turbo(run, rng):
+    """TuRBO-1 on the score: Thompson sampling in a trust region around the best point, restarted on collapse."""
+    import torch
+    from botorch.exceptions.errors import ModelFittingError
+    from botorch.generation.sampling import MaxPosteriorSampling
+    from linear_operator.utils.errors import NotPSDError
+    torch.manual_seed(int(rng.integers(2**31)))
+    n = len(run.start)
+    candidates, perturb = min(5000, 200 * n), min(1.0, 20 / n)
+    first = run.start
+    while True:     # one trust region
+        length, success, failure, fail_limit = 0.8, 0, 0, max(4, n)
+        xs = [first, *rng.uniform(0, 1, (2 * n - 1, n))]
+        ys = [-run(x) for x in xs]
+        while length >= 0.5**7:
+            x, y = torch.tensor(np.array(xs), dtype=torch.double), torch.tensor(np.array(ys), dtype=torch.double).unsqueeze(-1)
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    gp = _fitted_gp(x, y)
+                    scales = gp.covar_module.lengthscale.detach().squeeze()
+                    scales = scales / scales.mean() / scales.prod().pow(1.0 / n)
+                    centre = x[y.argmax()]
+                    lo, hi = (centre - scales * length / 2).clamp(0, 1), (centre + scales * length / 2).clamp(0, 1)
+                    pert = lo + (hi - lo) * torch.tensor(rng.uniform(0, 1, (candidates, n)), dtype=torch.double)
+                    mask = torch.tensor(rng.uniform(0, 1, (candidates, n)) <= perturb)
+                    empty = ~mask.any(dim=1)
+                    mask[empty, torch.tensor(rng.integers(0, n, int(empty.sum())), dtype=torch.long)] = True
+                    pool = torch.where(mask, pert, centre.expand(candidates, n))
+                    with torch.no_grad():
+                        next_x = MaxPosteriorSampling(model=gp, replacement=False)(pool, num_samples=1)[0].numpy()
+            except (ModelFittingError, NotPSDError):
+                run.model_failures += 1
+                next_x = rng.uniform(0, 1, n)
+            best = max(ys)
+            value = -run(next_x)
+            xs.append(next_x)
+            ys.append(value)
+            success, failure = (success + 1, 0) if value > best + 1e-3 * abs(best) else (0, failure + 1)
+            if success == 3:
+                length, success = min(2 * length, 1.6), 0
+            elif failure == fail_limit:
+                length, failure = length / 2, 0
+        first = rng.uniform(0, 1, n)
+
+
 def policy(run, rng, model):
     """A trained policy, deterministic: one action per pass, every knob at once."""
     from lions.game.env import MissionEnv
@@ -162,9 +284,9 @@ def policy(run, rng, model):
         run.passed()
 
 
-def tune(m, method, seed, budget=BUDGET, on_pass=None, **options):
+def tune(m, method, seed, budget=BUDGET, on_pass=None, box=None, stop=None, **options):
     """Runs a method on mission m until in spec or out of budget. Same seed, same search."""
-    run = Run(m, budget, on_pass)
+    run = Run(m, budget, on_pass, box, stop)
     try:
         method(run, np.random.default_rng(seed), **options)
     except Run.Done:

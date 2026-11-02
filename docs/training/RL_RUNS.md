@@ -138,3 +138,39 @@ PPO does not beat the coach on EYE, DEEP, NEON or QUAL. Why it reaches all or no
 - The noise of the registration reaches only `readings`. Optimisers and the stop rule saw an exact objective in every run above, an advantage not stated in the registration.
 - PPO observes `readings`, with noise.
 - The "noise-free read" of `case_t_check.py` changes nothing, so it measures one more pass of drift. Its agreement in the first post-hoc check, and the rejection of transient reads there, say nothing about noise.
+
+## Third amendment, registered 2026-11-02 before running (new analysis)
+
+**Question.** With the score and stop rule reading what the control room reads, and a search box that holds the tunes other methods found, which methods reach the client's spec, and does the spec hold afterwards? Are the QUAL zeros of the optimisers an artefact of the box, and which spec terms still block QUAL?
+
+Output in `benchmarks/runs/case_t3`, from `benchmarks/case_t3.py`, on CRIANN. Same 20 held-out conditions, 200 passes, 0.5 s of drift per pass. Earlier results and files stay as they are.
+
+**Noise.**
+- `Mission.tune_score`, `Run` and the end of a `MissionEnv` episode read `Mission.measured_terms`: the spec terms built from `Mission.readings`, one draw per pass. `Mission.spec_terms` and `Mission.ready` stay on the true beam and score the result.
+- Quantities derive from the readings: current, energy, x, y, spot, lost power. Target power from current and energy. ISOL density from that power and the spot. QUAL flux from current and spot, sample energy from the energy reading, uniformity from spot and position. Depth of the Bragg peak moves by the range difference between the energy reading and the true energy.
+- No reading has noise on spread, the radial probe or the phase probe, as before. No spec threshold changes.
+- 0.5% on the energy of a 230 MeV beam moves the range by about 0.29 cm, against half widths of 0.4 and 0.8 cm (EYE, DEEP), and the sample energy of QUAL by about 5%, its tolerance (estimates from the range law). Measured in spec can then be chance. "True in spec at that point" below separates it.
+- The coach still reads the true beam in part (`w_mean`, phase profile, `spot()`), and has no box. An advantage, stated here.
+- PPO observes readings as before. Its reward and end of episode use the measured score and test.
+
+**Box check, then rule, written before looking.**
+- Tunes: coach and PPO with the old stop rule (true beam), the five policies of `benchmarks/runs/case_t_drift`, on the 20 held-out conditions. In-spec counts are compared with `case_t_drift` and differences reported.
+- Containment, per mission and knob: is each tune inside its own condition's original box (start +- 3 `start_error`, clipped)?
+- Rule: for each knob of a mission, with d = tune - that condition's start over all such tunes, the box of every condition becomes [start + min(-3 `start_error`, min d), start + max(3 `start_error`, max d)], clipped to the knob range. Other knobs are unchanged.
+- The coach and PPO define the widened box, so the optimisers use their knowledge. Every optimiser is reported on both boxes. Where a mission's box does not change, its widened rows repeat the original ones, flagged.
+
+**Methods, 200 passes per condition.** Coach, Nelder-Mead, random, Bayesian optimisation, CMA-ES, NSGA-II as in the amendments above. New, BoTorch 0.18, GP models with Matern 5/2 and automatic relevance, inferred noise, refit at every pass, double precision:
+- TuRBO-1 on `tune_score`: 2d initial points, the first at the start; trust region 0.8, range 0.5^7 to 1.6, 3 successes to grow, max(4, d) failures to shrink; Thompson sampling on min(5000, 200 d) candidates, each coordinate perturbed with probability min(1, 20 / d). Restart from new random points on collapse.
+- Per-term constrained BO: one GP per spec term on y = log(term), maximising the log probability that all y <= 0 (`LogProbabilityOfFeasibility`).
+- MOBO: `qLogNoisyExpectedHypervolumeImprovement` on the same models, objectives -y, reference point 0 (the spec limits), `prune_baseline=True`, partitioning `alpha` from `get_default_partitioning_alpha`.
+
+Both start like Bayesian optimisation: 20 points, the first at the start, then the acquisition optimised by `optimize_acqf` with 4 restarts and 256 raw samples. Terms are clamped to [1e-3, 1e3] before the log. Without beam every y = log(1e3) + 1 - reach, worse than any beam. A failed GP fit gives one random point for that pass and is counted. Stop on measured all terms <= 1.
+
+PPO: 100k steps, 5 seeds, SB3 defaults, all six missions, trained on the noisy score. Registered defaults only, no tuning after seeing results. If the cost of the BoTorch methods rules out this configuration, the run stops and the change is documented as a deviation.
+
+**Metrics, per mission and method.**
+- In spec at the first measured read, out of 20, with median evaluations.
+- True in spec at that point (`Mission.ready`).
+- Stayed in spec: knobs held 50 more passes with drift, fraction of passes truly in spec, and whether all 50 held.
+- Best spec terms, measured and true, for the blocking question.
+- PPO: median and range over seeds. An agent that does not beat the coach and the classical methods is reported as such.
