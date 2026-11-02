@@ -164,7 +164,37 @@ Where the lost power comes from, median over tunes, at 4 times: T0's closed-form
 
 LIONS on the map tabulates revolution frequency, Qr and Qz against energy. The T0 turn loop reads the tables in place of its closed forms.
 
-**Success.** On tunes not used to build the tables, in-spec disagreement with LIONS is below T0's, and a pass stays below the 0.15 s refresh on the laptop. Isochronism, phase history and tune crossings come from the map. Betatron dynamics and the central region do not.
+Isochronism, phase history and vertical amplitude come from the map. Betatron oscillations in r and the central region do not.
+
+**Amendment, 2026-11-02, before the model ran.** The earlier success test, in-spec disagreement with LIONS, mostly measures T0's septum formula (turn limit study), so it is dropped. In-spec stays a game score only. Standing rule: no invented rule; each rule derived, from a checked source, or shown against tracking; a numerical limit shown converged; a labelled value never decides a physics result.
+
+**Tables.** Built from independent settings, with no fit to any tune: LIONS Hermite closed orbits at the 30 energies of case P, no RF (path length, section radius, Qz, Qr), and the crest gains of case P at the design setting. All 38 tunes of `case_v_tunes.parquet` are held out.
+
+**Rules of the model, `lions.game.reduced`, and how each is verified (`benchmarks/case_r.py check`).**
+
+| Rule | Basis | Check |
+|---|---|---|
+| Energy: w + G(w) V cos(phi) per turn | Crest gains of LIONS; V linear because the potential is | LIONS crest gain at 60 kV against 40 kV |
+| Phase: phi + 2 pi (f_rf / f_rev - h) per turn | Definition of the RF phase | Stage A: +-2.14 deg against +-2.16 deg |
+| f_rev(p, s) = v(p) / L(p / s), L the closed-orbit path length, s the field scale | Exact: momentum p in s B has the orbit of p / s in B | Boris closed orbits in a scaled field |
+| z = z0 sqrt(Qz0 (p / R)0 / (Qz p / R)) | Betatron action J = p Qz z^2 / (2 R), derived | Off-axis tracks of case P against energy |
+| Section radius and extraction: r(p, s) = r(p / s), extracted at the first crossing with r >= 0.4633 m | Same scaling; same definition as the verdict | Labelled definition |
+| Removed: \|z\| > 15 mm, r < 5 mm | Same labelled definitions as the verdict, not apertures of a machine | Labelled definition |
+| Particle still circulating at the numerical turn limit reported apart; limit read at 1, 2, 4 times T0's | Numerical | Convergence, as the LIONS study |
+
+Not a rule of physics, reported as unverified: below 0.0909 MeV, G is held at its lowest valid value and r proportional to p. A decelerating particle follows the two update rules until r < 5 mm. Per-particle fate against LIONS checks this. There is no phase cut, stall, clamp or septum in the turn loop. Septum, slit, deflector, steerers and quadrupole stay T0's closed forms through `machine.extract` and are not scored here.
+
+**Success.** On all 38 tunes, reduced model against LIONS, with T0 against LIONS beside it as the baseline. Median absolute error over tunes:
+
+| Quantity | Threshold | Tied to |
+|---|---|---|
+| Transmission before the septum | at most 1/120 | One macroparticle, the resolution of a pass; finer than this the 0.5% noise cannot be resolved |
+| Mean extraction energy | below 0.5%, relative | Reading noise |
+| Relative energy spread | below 0.005, absolute | Reading noise of the energy |
+| Phase against radius, rms over bins weighted by LIONS' counts | below 5.06 deg | Largest slip LIONS itself shows on a centred crest particle (off-axis gate), which this model has no term for |
+| Pass time | below 0.15 s | Refresh; on CRIANN `debug`, one core, condition stated, and on the laptop |
+
+The model must pass every line and also be closer than T0 on each quantity. Failing a line is reported as such. Thresholds are not changed after the data. Reported besides: per-particle fate agreement, survival against start phase, turns on crest, largest errors, convergence with the turn limit.
 
 ## Surrogate of the LIONS pass (plan, thresholds fixed before any training)
 
