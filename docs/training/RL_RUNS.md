@@ -27,3 +27,43 @@ scores at most 0.5; too much current is out of spec.
 
 **What the simulator omits.** Everything in `lions.game.machine`'s docstring: no field map, no misalignments of the dees, no hysteresis, no
 finite actuator speed beyond the knob rate, closed forms in place of tracking. A policy trained here is not a candidate for any machine.
+
+## Results
+
+Source: `benchmarks/runs/case_t/case_t_{classical,rl}.parquet`, from `benchmarks/case_t.py`. Classical at e6ad608, RL at fd5a5e9. Between them
+`machine.py`, `physics.py` and `env.py` are unchanged and the `missions.py` diff touches attributes only.
+
+In spec out of 20 held-out conditions, with median evaluations to spec among those reached:
+
+| Mission | Coach | Nelder-Mead | Bayesian | Random |
+|---|---|---|---|---|
+| EYE | 19 (37) | 15 (84) | 1 (186) | 0 |
+| DEEP | 8 (43.5) | 18 (107) | 3 (137) | 0 |
+| F18 | 8 (40) | 17 (60) | 13 (154) | 3 (86) |
+| NEON | 8 (97.5) | 5 (126) | 0 | 0 |
+| ISOL | 20 (48.5) | 19 (84) | 10 (106.5) | 0 |
+| QUAL | 3 (48) | 0 | 0 | 0 |
+
+RL, in spec out of 20, median and range over 5 training seeds:
+
+| Mission | PPO, 100k steps | SAC, 30k steps |
+|---|---|---|
+| F18 | 20 (20 to 20) | 0 (0 to 1) |
+| EYE | 0 (0 to 5) | 0 (0 to 0) |
+
+## Deviation from the registration
+
+Drift is in the registration and in no run. `Mission.advance` applies it; `MissionEnv.step`, `Counter` and `coach_run` call `refresh` directly.
+The accumulated field drift over 100 s is 1e-4 (1 sigma), against a hidden field error of 5e-4 to 1e-3. The results above are without drift.
+
+## Post-hoc checks, not registered
+
+Run after PPO on F18 reached spec in 3 to 4 evaluations. `benchmarks/case_t_check.py`, output `check_{classical,rl}.parquet`.
+
+- Transient reads: rejected as an explanation. Holding the knobs 50 passes, every in-spec run stayed in spec at every pass, and a noise-free read agreed
+  (170 classical, 7 PPO on EYE, 200 PPO on F18).
+- Memorised sequence: rejected. Replaying one successful action sequence blind reaches spec only on its own condition, plus one more of 20 on the
+  fresh set, at every training seed. The policy uses its readings.
+- Reproduction: PPO on F18, 20/20 at each of 5 seeds on fresh conditions 20000 to 20019, median 5 evaluations, maximum 8.
+- Knob count: PPO moves all 8 knobs per evaluation, the coach one. Evaluations to spec are not comparable as operator effort.
+- Training cost: 100k machine evaluations per PPO seed, outside the 200 budget.
