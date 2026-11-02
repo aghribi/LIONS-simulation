@@ -1,6 +1,6 @@
 """Case P: synthetic F18 machine for LIONS, stage A gates of docs/training/PHYSICAL.md. Synthetic: says nothing about a real machine.
 
-usage: uv run --extra game --group bench --group dev python benchmarks/case_p.py {design,dees,slip,offaxis} [--outroot DIR]
+usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_p.py {design,dees,slip,offaxis} [--outroot DIR]
 design: isochronous map from closed orbits, tunes (analytic field, Boris; LIONS Hermite at a few energies).
 dees: gain per turn against T0 energy_gain. slip: RF phase slip from injection to extraction at the design setting.
 offaxis: from the verdict start energy, centred and off the median plane.
