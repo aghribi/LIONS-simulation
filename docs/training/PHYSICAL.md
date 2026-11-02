@@ -142,6 +142,24 @@ Limits of this result, found after the data, not registered:
 
 **Convergence, fixed before the data.** Between 2 and 4 times the limit, per tune: lost power and transmission change by less than F18's 0.5% reading noise, relative, at every tune, and no tune changes verdict. Lost power and verdict are tested with and without circulating particles, each stated. If this fails, the result is "not converged at 4 times", with the fraction circulating. The limit is not extended without reporting first.
 
+**Results, 2026-11-02.** `benchmarks/runs/case_v_limit/`, `benchmarks/case_v.py` at 2e3cc59 on CRIANN (job 3316822), one deterministic pass per tune, synthetic map. The reading at 1 times reproduces `case_v` exactly: transmission and lost power differ by 0, no verdict differs.
+
+**Not converged at 4 times, by the registered criterion.** Between 2 and 4 times, lost power with circulating particles moves by 0.5% or more on 8 tunes (largest 10.4%), without them on 5 tunes (largest 4.2%), transmission on 5 tunes (largest 1.25%). No tune changes verdict. Medians over tunes do not move. Still circulating at 4 times: 69 of 4560 particles, 1.5%, on 7 tunes.
+
+| Limit | Turns | In spec, circulating counted lost | In spec, circulating left out | Extracted | |z| above 15 mm | Map edge (inner, outer) | Circulating |
+|---|---|---|---|---|---|---|---|
+| 1 times | 499 to 734 | 14 of 38 | 17 of 38 | 3157 | 631 | 667 (595, 72) | 105 |
+| 2 times | 998 to 1468 | 14 | 17 | 3160 | 649 | 674 (601, 73) | 77 |
+| 4 times | 1996 to 2936 | 14 | 17 | 3166 | 650 | 675 (602, 73) | 69 |
+
+Median energy at 4 times: extracted 18.11 MeV, z 0.048 MeV, map edge 0.025 MeV, circulating 13.6 MeV. Lost power at any limit, median over tunes: 0.620 kW with circulating, 0.611 kW without.
+
+Where the lost power comes from, median over tunes, at 4 times: T0's closed-form septum 0.602 kW, of 0.620 kW; z 0.0012 kW; map edge 0.0012 kW. The tuner's limit is 0.6 kW. Found after the data, not registered. The septum formula (`machine.extract`) multiplies the extracted energy by a loss fraction from `septum` and `r_size`, neither with a source, and the turn gain from tracking. LIONS extracts more particles than T0, so the same formula loses more. This is not a tracked result and no rule of the standing rule has verified it.
+
+- Circulating at 4 times: energy 0.26 to 17.5 MeV, median 13.6 MeV; radius 0.054 to 0.425 m, below the extraction radius of 0.463 m; start phase -122 to -55 deg. Why they stay is not known. Their phase history is not recorded here.
+- Also unverified: |z| above 15 mm (illustrative) and the inner map edge at 5 mm (end of a grid), which together remove 1252 of 4560 particles at low energy. Both change transmission, so both feed the septum term.
+- Cost: 1.77 core-h, 97 s per pass (median, 58 to 543 s), 13 min 13 s on 16 cores. Extending the limit costs little: passes end when the last particle does.
+
 ## Stage B: reduced model
 
 LIONS on the map tabulates revolution frequency, Qr and Qz against energy. The T0 turn loop reads the tables in place of its closed forms.
