@@ -99,6 +99,31 @@ Median [min, max] over the 38 tunes:
 
 Also reported, with no threshold: in-spec agreement with T0 with and without the rule, survival against start phase, median spread and lost power. Lost particles carry at least their energy at loss, so a higher start can raise lost power by itself: reported with the fates of the lost particles.
 
+**Results, 2026-11-02.** `benchmarks/runs/case_v_1mev/`, `benchmarks/case_v.py` at 88957ca on CRIANN (job 3316806), one deterministic pass per tune, synthetic map.
+
+| Start | LIONS in spec, of 38 | With T0's rule | Spread, LIONS, median | Lost power, LIONS, median | Lost power with the rule, median |
+|---|---|---|---|---|---|
+| 0.091 MeV | 14 | 35 | 0.022 | 0.620 kW | 0.516 kW |
+| 1.04 MeV | 8 | 20 | 0.019 | 0.707 kW | 0.592 kW |
+
+T0: spread 0.0015, lost power 0.548 kW. The 8 tunes in spec from 1.04 MeV are also in spec from 0.091 MeV. Failing terms from 1.04 MeV: `lost` 30 of 30; with the rule `lost` 18, `current` 2, `axis` 1. T0's phase change from 0.03 to 1.04 MeV, on the crest: median 0.35 deg, maximum 2.83 deg.
+
+Registered attribution:
+
+| Effect | From 0.091 MeV | From 1.04 MeV | R | Outcome |
+|---|---|---|---|---|
+| Asymmetry | 0.562 | -0.037 | -0.07 | from the central region |
+| Spread gap | 0.0205 | 0.0172 | 0.84 | not from the central region |
+| Lost-power gap | 0.090 kW | 0.177 kW | 1.96 | not from the central region |
+
+Limits of this result, found after the data, not registered:
+- The start does not remove the centre for every particle. Each one starting between -180 and -120 deg or between +90 and +180 deg first decelerates to below its start radius, so it still crosses the centre. Over -120 to -90 deg, 82% do.
+- The registered asymmetry bands miss what remains. Survival moves to a new lobe: 0.80 at -150 to -120 deg against 0.09 at +120 to +150 deg, and 0.39 at -120 to -90 deg against 0.07 at +90 to +120 deg. Mirror bands agree only at 60 to 90 deg (0.56 and 0.52). The R above says the asymmetry of those bands went away. It does not say the machine is symmetric.
+- Lost-power gap: particles reaching the turn limit rise from 105 to 450 of 4560, most at -120 to -60 deg, and they carry high energy. From 0.091 MeV those phases gain energy faster (survivors at -90 to -60 deg: median 273 turns against 334). The turn limit is T0's, so this gap depends on that choice. A longer limit was not run.
+- Spread with T0's rule: gap 0.0168 to 0.0033, R 0.20. In the primary verdict most of the spread comes from particles off the crest. Within the rule's window most of it goes away with the centre.
+- Lost power outside the septum below 2 MeV, median per tune: 0.002 and 0.003 kW. The higher start energy adds little by itself.
+- Cost: 1.21 core-h of passes, 113 s per pass (median, 100 to 150 s), 13 min 33 s on 8 cores with the checks. Closed orbit closes to 6.3 nm. The maximum first-crossing difference of 359.9 deg is a wrap at +-180 deg, median 0.04 deg.
+
 ## Stage B: reduced model
 
 LIONS on the map tabulates revolution frequency, Qr and Qz against energy. The T0 turn loop reads the tables in place of its closed forms.
