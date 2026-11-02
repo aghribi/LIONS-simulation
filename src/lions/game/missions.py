@@ -17,6 +17,8 @@ KNOB_UNITS = {'rf_mhz': 'MHz', 'dee_kv': 'kV', 'phase_deg': 'deg', 'buncher': '1
 COMMON_UNITS = {'w_target': 'MeV', 'dee_kv': 'kV', 'source_ua': 'uA', 'time_limit': 's', 'noise': '1', 'drift': '1/s^0.5',
                 'field_error': '1', 'steer_error': 'mm', 'quad_error': '1', 'phase_error': 'deg', 'heat_rate': '1/s'}
 REFRESH = 0.15    # s of game time between passes of the machine model
+STEP_S = 0.5      # s of knob travel and of drift per pass, for tuning methods
+BUDGET = 200      # passes per tuning run
 
 
 def checked(block, units, where):
@@ -119,6 +121,10 @@ class Mission(Stage):
         terms = self.spec_terms().values()
         return 0.3 + 0.7 * sum(1 / max(e, 1.0) for e in terms) / len(terms)
 
+    def wait(self, dt):
+        """The field drifts with time."""
+        self.errors.field += self.noise_rng.normal(0, self.p['drift'] * math.sqrt(dt))
+
     def advance(self, action, dt):
         p = self.p
         if self.y_edge:
@@ -126,7 +132,7 @@ class Mission(Stage):
         spec = self.specs[self.selected]
         if action.x:
             self.knobs[spec['key']] = self.clip(spec, self.knobs[spec['key']] + action.x * spec['rate'] * dt)
-        self.errors.field += self.noise_rng.normal(0, p['drift'] * math.sqrt(dt))
+        self.wait(dt)
         self.since_refresh += dt
         if self.since_refresh >= REFRESH:
             self.since_refresh = 0.0

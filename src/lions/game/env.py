@@ -8,12 +8,11 @@ import math
 import gymnasium as gym
 import numpy as np
 
+from lions.game.missions import BUDGET, STEP_S
 from lions.game.stages import load_scenario
 
-STEP_S = 0.5           # s of knob travel per action, at full rate
 ACTION_COST = 0.002
 SPEC_BONUS = 1.0
-EPISODE_STEPS = 200
 
 
 def mission_by_id(mission_id):
@@ -50,11 +49,16 @@ class MissionEnv(gym.Env):
         self.steps, self.score = 0, self.m.tune_score()
         return self.observe(), {'condition': drawn}
 
+    def act(self, action):
+        m = self.m
+        for spec, a in zip(m.specs, np.clip(action, -1, 1)):
+            m.knobs[spec['key']] = m.clip(spec, m.knobs[spec['key']] + float(a) * spec['rate'] * STEP_S)
+
     def step(self, action):
         m = self.m
         action = np.clip(action, -1, 1)
-        for spec, a in zip(m.specs, action):
-            m.knobs[spec['key']] = m.clip(spec, m.knobs[spec['key']] + float(a) * spec['rate'] * STEP_S)
+        self.act(action)
+        m.wait(STEP_S)
         m.refresh()
         self.steps += 1
         score = m.tune_score()
@@ -63,4 +67,4 @@ class MissionEnv(gym.Env):
         terminated = bool(m.ready())
         if terminated:
             reward += SPEC_BONUS
-        return self.observe(), float(reward), terminated, self.steps >= EPISODE_STEPS, {'in_spec': terminated, 'score': score}
+        return self.observe(), float(reward), terminated, self.steps >= BUDGET, {'in_spec': terminated, 'score': score}

@@ -474,3 +474,67 @@ def test_walkthrough_covers_every_knob_and_the_helper(name):
     s.reset(3)
     advice = Coach(s).advise()
     assert advice.knob in named or not advice.knob
+
+
+TUNING_MISSION = 'F18'
+
+
+def fresh_mission(seed=3):
+    from lions.game.env import mission_by_id
+    m = mission_by_id(TUNING_MISSION)
+    m.reset(seed)
+    return m
+
+
+def test_a_pass_drifts_the_field():
+    from lions.game import tuners
+    m = fresh_mission()
+    before = m.errors.field
+    run = tuners.Run(m)
+    run.m.knobs.update(m.knobs)
+    try:
+        run.passed()
+    except tuners.Run.Done:
+        pass
+    assert m.errors.field != before and abs(m.errors.field - before) < 10 * m.p['drift']
+
+
+def test_the_environment_drifts_too():
+    pytest.importorskip('gymnasium')
+    from lions.game.env import MissionEnv
+    env = MissionEnv(TUNING_MISSION, seeds=[3])
+    env.reset(seed=0)
+    before = env.m.errors.field
+    env.step(np.zeros(env.action_space.shape))
+    assert env.m.errors.field != before
+
+
+@pytest.mark.parametrize('name', ['COACH', 'NELDER-MEAD', 'NSGA-II (MOGA)', 'RANDOM', 'BAYESIAN OPT.'])
+def test_every_method_keeps_the_budget_and_repeats(name):
+    from lions.game import tuners
+    method = next(x for x in tuners.METHODS if x.name == name)
+    if method.missing():
+        pytest.skip(f'needs {method.missing()}')
+    budget = 25
+    first, second = (tuners.tune(fresh_mission(), method.fn, 7, budget) for _ in range(2))
+    assert first.evals <= budget and first.evals == second.evals and first.best == second.best
+    assert first.reached is None or first.reached == first.evals
+
+
+def test_nsga_objectives_rank_no_beam_behind_any_beam():
+    from lions.game import tuners
+    m = fresh_mission()
+    run = tuners.Run(m)
+    m.knobs['rf_mhz'] = m.specs[2]['min']
+    run.passed()
+    assert not m.has_beam()
+    assert min(run.terms(run.start * 0 + 0.0)) > 1e9 or m.has_beam()
+
+
+def test_a_policy_runs_on_the_same_budget(tmp_path):
+    pytest.importorskip('stable_baselines3')
+    from lions.game import tuners
+    path = tmp_path / 'F18_ppo_0.zip'
+    tuners.train_policy(TUNING_MISSION, 'ppo', 0, path, steps=64)
+    run = tuners.tune(fresh_mission(), tuners.policy, 1, budget=5, model=tuners.load_policy(path))
+    assert run.evals <= 5

@@ -67,3 +67,14 @@ Run after PPO on F18 reached spec in 3 to 4 evaluations. `benchmarks/case_t_chec
 - Reproduction: PPO on F18, 20/20 at each of 5 seeds on fresh conditions 20000 to 20019, median 5 evaluations, maximum 8.
 - Knob count: PPO moves all 8 knobs per evaluation, the coach one. Evaluations to spec are not comparable as operator effort.
 - Training cost: 100k machine evaluations per PPO seed, outside the 200 budget.
+
+## Amendment, registered 2026-11-02 before running (new analysis, decided after the results above)
+
+Output in `benchmarks/runs/case_t_drift`, code pinned at one commit in a worktree. Metric, conditions and budget as above.
+
+- Drift is on: the field error takes one `Mission.wait(0.5 s)` per pass, for every method, in training too. `lions.game.tuners` holds the methods for the game and this benchmark.
+- New baseline: NSGA-II (pymoo 0.6.2 defaults, population 40, first population the start plus random points). Objectives: the terms of `spec_terms`; without beam every term is 1e12 (2 - reach). Stop when in spec. Search box as the other optimisers. It sets knobs directly, as they do.
+- PPO on all six missions: 100k steps, 5 training seeds. SAC is not rerun.
+- `score` is the best `tune_score` of the run for every method. The coach had reported its last value.
+- Comparison with the runs above mixes drift with a changed random stream: readings draw from the same generator as drift.
+- `benchmarks/case_t_check.py` reruns the post-hoc checks, with drift in the hold. Not a registered metric.
