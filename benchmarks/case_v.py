@@ -321,7 +321,7 @@ def one(job):
     verdict = {**base, **inputs, 'field_scale': float(p.s), 'wall_s': wall, 'limit_turns': p.limit, **t0, **row_of('lions', lions_m), **row_of('rule', rule_m)}
     with np.errstate(invalid='ignore', divide='ignore'):
         by_bin = p.phase_sum / p.counts
-    particles = [{**base, **inputs, 'particle': i, 'phi_start_deg': float(np.degrees(p.phi[i])), 'z0_m': float(p.z0[i]), 'survives': p.fate[i] == EXTRACTED, 'fate': str(p.fate[i]),
+    particles = [{**base, **inputs, 'particle': i, 'phi_start_deg': float(np.degrees(p.phi[i])), 'phi_first_deg': float(np.degrees(p.phi_first[i])), 'z0_m': float(p.z0[i]), 'survives': p.fate[i] == EXTRACTED, 'fate': str(p.fate[i]),
                   'turns': int(p.turns[i]), 'w_final_mev': float(p.w_end[i]), 'w_extraction_mev': float(p.w_last[i]) if p.fate[i] == EXTRACTED else float('nan'),
                   'behind_rf': bool(p.flagged[i]), 'phase_by_bin_deg': [float(v) for v in by_bin[i]]} for i in range(N)]
     bl = lions_m.beam
@@ -342,7 +342,7 @@ def verdict(outdir, mp, workers):
         list(pool.imap_unordered(one, [(r, mp.dir, parts) for r in rows]))
     done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
     write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s')
-    write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
+    write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
     write([c for d in done for c in d[2]], outdir / 'case_v_curves.parquet', 'probe and phase against radius', mp, 'r_m m, probe particle-turns per macroparticle, phase deg')
     shutil.rmtree(parts)
     v = [d[0] for d in done]
