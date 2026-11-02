@@ -82,6 +82,23 @@ Median [min, max] over the 38 tunes:
 - Checks: closed orbit closes to 1.6 nm; scale by coefficient against a rewritten map, 2e-13 MeV after 20 turns; phase motion over 60 turns +2.14 and -2.13 deg against +2.16 and -2.16 deg from T0's update. Phase at first crossing against the set phase: median 0.43 deg, maximum 5.3 deg, growing with z0, as the off-plane field is large near the centre.
 - Cost: 0.97 core-h for 38 tunes, 95 s per pass (median, 59 to 135 s), at 499 to 734 turn limits on 8 cores. Stragglers set the length: survivors take a median 196 turns.
 
+### Verdict without the central region (registered 2026-11-02, before running)
+
+**Question.** Do the phase asymmetry of survival, the energy spread and the lost-power gap of the verdict above come from the invented central region?
+
+**Change.** Only the start. `benchmarks/case_v.py --start-mev 1.0`, closed-orbit energy nearest above 1 MeV: 1.0399 MeV, in `benchmarks/runs/case_v_1mev`. Same 38 tunes, same map, same definitions, one deterministic pass per tune. Crest: median fit at the energies above the start, 91.40 deg against 91.33 deg.
+
+**T0's phases at that energy.** The T0 start phases and heights are used unchanged, each particle on the closed orbit at its phase. This keeps all 120 particles and adds no T0 rule. It ignores T0's phase motion and T0's losses between 0.03 and 1.04 MeV, and any adiabatic damping of z, absent from T0. T0's phase change over that range is computed for each tune and reported with the result.
+
+**Metrics.** Each against its value from 0.091 MeV, R = value at 1.04 MeV / value at 0.091 MeV:
+- Asymmetry: survival at start phase -120 to -60 deg minus survival at +60 to +90 deg, over all tunes. 0.562 from 0.091 MeV.
+- Spread gap: median over tunes of LIONS minus T0 relative spread. 0.0205 from 0.091 MeV.
+- Lost-power gap: median over tunes of LIONS minus T0 lost power, primary verdict. 0.090 kW from 0.091 MeV. With T0's rule it is already -0.014 kW, so it is reported and not attributed.
+
+**Attribution, fixed before the data.** Per effect: R at or below 0.25, it comes from the central region; R at or above 0.75, it does not; between, partly, with the central region one contributor. A start at 1 MeV removes every low-energy effect at once, so a low R does not name which one.
+
+Also reported, with no threshold: in-spec agreement with T0 with and without the rule, survival against start phase, median spread and lost power. Lost particles carry at least their energy at loss, so a higher start can raise lost power by itself: reported with the fates of the lost particles.
+
 ## Stage B: reduced model
 
 LIONS on the map tabulates revolution frequency, Qr and Qz against energy. The T0 turn loop reads the tables in place of its closed forms.

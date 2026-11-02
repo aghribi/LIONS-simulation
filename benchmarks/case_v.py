@@ -1,8 +1,9 @@
 """Case V: LIONS judges the F18 tunes of case T, stage A of docs/training/PHYSICAL.md. Synthetic map: says nothing about a real machine.
 
-usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N]
+usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N] [--start-mev W]
 tunes: the in-spec tunes of case T, regenerated and compared with its tables. check: time one pass, sign of the phase conversion, field scaling.
 verdict: every tune through LIONS, one pass per tune; finished tunes are kept in parts/ and skipped on a rerun.
+--start-mev: start at the closed-orbit energy nearest above W, for the verdict without the central region; case_v_tunes.parquet is then copied into --outroot.
 """
 import argparse
 import contextlib
@@ -60,11 +61,12 @@ def t0_phase(omega_t, crest_deg):
 class Map:
     """What the verdict takes from case P: start orbit, crest, extraction radius."""
 
-    def __init__(self, mapdir):
+    def __init__(self, mapdir, start_mev=None):
         self.dir = Path(mapdir).resolve()
         rec = [r for r in pq.read_table(self.dir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic']
         gains = pq.read_table(self.dir / 'case_p_gain.parquet').to_pylist()
-        self.w0, self.r0 = min(((r['w_mev'], r['r_co_m']) for r in rec), key=lambda a: abs(a[0] - P.START_MEV))
+        by_energy = [(r['w_mev'], r['r_co_m']) for r in rec]
+        self.w0, self.r0 = min(by_energy, key=lambda a: abs(a[0] - P.START_MEV)) if start_mev is None else min(a for a in by_energy if a[0] >= start_mev)
         self.crest_deg = float(np.median([g['crest_phi0_deg'] for g in gains if g['w_mev'] >= self.w0]))
         self.r_ext = float(np.interp(P.MACHINE.radius, [r['rbar_m'] for r in rec], [r['r_co_m'] for r in rec]))
         self.inputs = [self.dir / name for name in ('bmap.dat', 'pot2.dat', 'case_p_gain.parquet', 'case_p_orbits.parquet')]
@@ -300,11 +302,11 @@ def check(outdir, mp):
 
 
 def one(job):
-    row, mapdir, parts = job
+    row, mapdir, parts, start_mev = job
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
         return row['tune']
-    mp = Map(mapdir)
+    mp = Map(mapdir, start_mev)
     work = mp.workdir(parts / f"work_{row['tune']:03d}")
     ref = reference_orbit(work, mp)
     m = of_tune(row)
@@ -334,12 +336,12 @@ def one(job):
     return row['tune']
 
 
-def verdict(outdir, mp, workers):
+def verdict(outdir, mp, workers, start_mev):
     rows = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()
     parts = outdir / 'parts'
     parts.mkdir(parents=True, exist_ok=True)
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
-        list(pool.imap_unordered(one, [(r, mp.dir, parts) for r in rows]))
+        list(pool.imap_unordered(one, [(r, mp.dir, parts, start_mev) for r in rows]))
     done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
     write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s')
     write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
@@ -357,14 +359,15 @@ if __name__ == '__main__':
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_v')
     parser.add_argument('--mapdir', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
     parser.add_argument('--reference', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
+    parser.add_argument('--start-mev', type=float)
     parser.add_argument('--workers', type=int, default=int(os.environ.get('SLURM_CPUS_PER_TASK', 1)))
     args = parser.parse_args()
     outdir = args.outroot.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
-    mp_ = Map(args.mapdir)
+    mp_ = Map(args.mapdir, args.start_mev)
     if args.step == 'tunes':
         sys.exit(1 if tunes(outdir, args.reference.resolve(), mp_) else 0)
     elif args.step == 'check':
         check(outdir, mp_)
     else:
-        verdict(outdir, mp_, args.workers)
+        verdict(outdir, mp_, args.workers, args.start_mev)
