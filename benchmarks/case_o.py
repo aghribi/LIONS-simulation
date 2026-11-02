@@ -127,17 +127,23 @@ def analyse(outdir, mp, reference):
     w_of = lambda r, s: (np.sqrt(1 + (s * np.interp(r, r_grid, grid))**2) - 1) * V.REST_MEV  # noqa: E731
     tunes = {r['tune']: r for r in pq.read_table(outdir / 'case_o_tunes.parquet').to_pylist()}
     particles = pq.read_table(outdir / 'case_o_particles.parquet').to_pylist()
-    h = pq.read_table(outdir / 'case_o_history.parquet').to_pandas()
-    groups = {k: g.sort_values('turn') for k, g in h.groupby(['tune', 'particle'])}
+    h = pq.read_table(outdir / 'case_o_history.parquet', columns=['tune', 'particle', 'turn', 'r_m', 'w_mev'])
+    tune_id, particle_id, turn_n, radius, energy = (h[c].to_numpy() for c in h.column_names)
+    order = np.lexsort((turn_n, particle_id, tune_id))
+    tune_id, particle_id, turn_n, radius, energy = tune_id[order], particle_id[order], turn_n[order], radius[order], energy[order]
+    edges = np.flatnonzero((np.diff(tune_id) != 0) | (np.diff(particle_id) != 0)) + 1
+    starts = np.r_[0, edges]
+    ends = np.r_[edges, len(order)]
+    groups = {(int(tune_id[a]), int(particle_id[a])): (a, b) for a, b in zip(starts, ends)}
     was = {r['tune']: r for r in pq.read_table(reference).to_pylist()}
     print('against the verdict table: max |w_spread diff|', max(abs(t['w_spread'] - was[k]['lions_w_spread']) for k, t in tunes.items()), 'max |w_mean diff| MeV', max(abs(t['w_mean_mev'] - was[k]['lions_w_mean']) for k, t in tunes.items()))
     fits = []
     for q in particles:
         if q['fate'] != V.EXTRACTED:
             continue
-        g = groups[(q['tune'], q['particle'])]
+        first, last = groups[(q['tune'], q['particle'])]
         s = tunes[q['tune']]['field_scale']
-        n, r, w = g['turn'].to_numpy(dtype=float), g['r_m'].to_numpy(), g['w_mev'].to_numpy()
+        n, r, w = turn_n[first:last].astype(float), radius[first:last], energy[first:last]
         x = r - orbit(momentum(w) / s)
         out = {**q, 'n_crossings': len(n), 'r_last_m': r[-1], 'r_prev_m': r[-2] if len(r) > 1 else float('nan'), 'x_last_m': x[-1], 'gain_last_mev': w[-1] - w[-2] if len(w) > 1 else float('nan')}
         if len(n) > MIN_CROSSINGS:
