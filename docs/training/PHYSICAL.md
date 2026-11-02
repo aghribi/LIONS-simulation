@@ -28,6 +28,16 @@ LIONS has no space charge (`docs/guide/01_overview.md`). The T0 space charge ter
 - Amendment: verdict runs start at 0.091 MeV. Below it lies the invented central region, so LIONS does not judge the first turns.
 - Added gate, before the verdicts: off-axis particles, since the constant flutter at small radius is unphysical near the centre. From 0.091 MeV at the crest, z0 = 3 mm (T0's `z_injection`) and 6 mm. Passes if the proton reaches 18 MeV, |z| at the theta = 0 section stays below the 15 mm of `z_aperture`, and phase slip stays below 20 deg.
 
+**Off-axis gate result, CRIANN job 3316753 at 684ffdc.** Passed. Same setting and phase, single deterministic tracks, z at the theta = 0 section only:
+
+| z0 | Final energy | Largest z | Largest phase slip |
+|---|---|---|---|
+| 0 mm | 18.040 MeV | 0 mm | 5.06 deg |
+| 3 mm | 18.042 MeV | 3.35 mm | 4.97 deg |
+| 6 mm | 18.050 MeV | 6.92 mm | 4.96 deg |
+
+The rerun on CRIANN reproduces the laptop's map and dee gate numbers as printed (9.44 deg, gain ratios 0.510 and 0.989 to 1.020). Particles off the design radius or momentum remain untested.
+
 **Test set.** The tunes in spec from `benchmarks/runs/case_t_drift`, F18: 20 conditions for PPO seed 0, and those Nelder-Mead reached. The tunes must be regenerated from the pinned code, since the Parquet files hold outcomes only.
 
 **Metric.** In-spec agreement fraction; transmission, extraction energy and phase against radius for T0 and LIONS. Disagreement is reported as the result. There is no success threshold for this stage.
