@@ -225,3 +225,29 @@ Found after the data, not registered:
 - Between: partial.
 
 **Also reported.** Rms before the slit, against 0.15% published and 1.27% from T0's phases; each failing term; in spec with current terms; energy error.
+
+**Results.** CRIANN job 3318020 at bc503af, `benchmarks/runs/case_v_NEON_energy_1mev_phase10/`. 1.1 core-h reserved. Single deterministic passes. This run's Parquet files predate the metadata fields added at bd386d2: its settings are in the directory name, this section and the job script `~/lions/neon_phase.sbatch`.
+
+**Registered outcome: partial.** LIONS is in spec without the current terms on 12 of T0's 21, between 11 and 17.
+
+| | T0's phases, 1.196 MeV/u, `energy` | 10 deg rms, same |
+|---|---|---|
+| In spec without current, of 21 | 9 | 12 |
+| Coach, of 12 | 8 | 9 |
+| MOBO, of 5 | 1 | 2 |
+| Constrained BO, of 4 | 0 | 1 |
+| In spec with current, of 21 | 7 | 9 |
+| Rms before the slit, median (range) | 1.270% (0.256 to 3.558), 25 tunes | 0.125% (0.058 to 4.088), 22 tunes |
+| Spread fails, of 25 | 15 | 10 |
+| Energy fails, of 25 | 5 | 8 |
+| Axis fails, of 25 | 1 | 6 |
+| Tunes with no particle at extraction | 0 | 3 |
+
+The median rms, 0.125%, is below the published 0.15%, and against 1.27% from T0's phases. Current terms stay uninterpreted, as registered: 8 too high and 5 too low.
+
+Found after the data, not registered:
+- The 9 of T0's 21 that fail. Five on spread alone: coach tunes 8, 9, 10 at 1.05 to 1.10 of the limit, MOBO tune 20 at 1.16, constrained BO tune 13 at 7.9. Three on energy, spread and axis: constrained BO 14 and 15, MOBO 22. One with no particle at extraction: MOBO 18.
+- Counting the four marginal spread failures as passes would give 16, still under 17.
+- Failures concentrate where the tune sits far from the crest. Tunes 14, 15, 18, 22, 23, 24 have phases of 40 to 90 deg and keep at most 0.21 of the beam to extraction. T0's full RF cycle gives such a tune particles near the crest anyway, so the phase knob costs little there. A narrow bunch has none. Tune 13 is the exception: phase 12 deg, 0.07 reach extraction, not explained.
+- Near the crest the agreement is better: the 12 coach tunes all reach extraction with all 120 particles and rms 0.105 to 0.163%.
+- Tunes were found with T0's phases, so they are not tuned for a narrow bunch. A method retuning under the narrow law may differ.
