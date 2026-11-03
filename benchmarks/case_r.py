@@ -148,7 +148,7 @@ def compare(verdict, outdir):
         wall_t0 = time.perf_counter() - began
         converged = {f: model.run(m.machine, m.ion, m.knobs, m.errors, m.draws, limit_factor=f) for f in (2, 4)}
         rec = {'tune': row['tune'], 'method': row['method'], 'condition': row['condition'], 'wall_s': wall, 'wall_t0_s': wall_t0, 'turns_reduced': b.turns, 'turns_t0': t0.turns,
-               'lions_extracted': int(extracted.sum()), 'lions_transmission': float(extracted.mean()), 'lions_w_mev': float('nan') if none else float(w_ext.mean()), 'lions_spread': 0.0 if none else float(w_ext.std() / w_ext.mean())}
+               'lions_extracted': int(extracted.sum()), 'lions_transmission': float(extracted.mean()), 'lions_w_mev': float('nan') if none else float(w_ext.mean()), 'lions_spread': float('nan') if none else float(w_ext.std() / w_ext.mean())}
         for name, beam in (('reduced', b), ('t0', t0)):
             e = beam.energies
             rec |= {f'{name}_extracted': len(e), f'{name}_transmission': len(e) / V.N, f'{name}_w_mev': float(e.mean()) if len(e) else float('nan'),
@@ -172,19 +172,31 @@ def particle_rows(model, m, lions, row):
              'reduced_fate': str(fate[p['particle']]), 'reduced_w': float(w_end[p['particle']]), 'reduced_turns': int(turns[p['particle']])} for p in lions]
 
 
-def report(rows, particles):
+def lines_report(rows, title):
+    """Median absolute error per line. A tune where LIONS extracts nothing has no energy or spread and is left out, counted. A model that extracts nothing where LIONS does counts as infinite error."""
     a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
-    lines = {'transmission': lambda n: np.abs(a(f'{n}_transmission') - a('lions_transmission')), 'energy': lambda n: np.abs(a(f'{n}_w_mev') / a('lions_w_mev') - 1),
-             'spread': lambda n: np.abs(a(f'{n}_spread') - a('lions_spread')), 'phase_deg': lambda n: a(f'{n}_phase_rms_deg')}
+    beam = a('lions_extracted') > 0
+    measured = {'energy': lambda n: np.abs(a(f'{n}_w_mev') / a('lions_w_mev') - 1), 'spread': lambda n: np.abs(a(f'{n}_spread') - a('lions_spread'))}
+    lines = {'transmission': lambda n: np.abs(a(f'{n}_transmission') - a('lions_transmission')), **{k: lambda n, g=g: np.where(a(f'{n}_extracted') > 0, g(n), np.inf)[beam] for k, g in measured.items()},
+             'phase_deg': lambda n: np.where(np.isfinite(a(f'{n}_phase_rms_deg')), a(f'{n}_phase_rms_deg'), np.inf)[beam]}
+    print(f'{title}: {len(rows)} tunes, {int((~beam).sum())} with no LIONS beam, left out of energy, spread and phase')
+    outcome = []
     for key, f in lines.items():
         red, t0 = f('reduced'), f('t0')
-        red, t0 = red[np.isfinite(red)], t0[np.isfinite(t0)]
-        verdict = 'PASS' if np.median(red) < THRESHOLD[key] + (1e-12 if key == 'transmission' else 0) and np.median(red) < np.median(t0) else 'FAIL'
-        print(f'{key}: threshold {THRESHOLD[key]:.4g}; reduced median {np.median(red):.4g} [{red.min():.4g}, {red.max():.4g}]; T0 median {np.median(t0):.4g} [{t0.min():.4g}, {t0.max():.4g}]: {verdict}')
+        passed = np.median(red) < THRESHOLD[key] + (1e-12 if key == 'transmission' else 0) and np.median(red) < np.median(t0)
+        outcome.append(passed)
+        print(f'  {key}: threshold {THRESHOLD[key]:.4g}; reduced median {np.median(red):.4g} [{red.min():.4g}, {red.max():.4g}]; T0 median {np.median(t0):.4g} [{t0.min():.4g}, {t0.max():.4g}]: {"PASS" if passed else "FAIL"}')
+    print(f'  {sum(outcome)} of {len(outcome)} lines pass')
+
+
+def report(rows, particles):
+    a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
+    lines_report(rows, 'all tunes')
+    lines_report([r for r in rows if r['method'] == 'coach'], 'coach')
     wall = a('wall_s')
     print(f"pass time: median {np.median(wall) * 1e3:.1f} ms, max {wall.max() * 1e3:.1f} ms; T0 median {np.median(a('wall_t0_s')) * 1e3:.1f} ms: {'PASS' if wall.max() < THRESHOLD['pass_s'] else 'FAIL'}")
     for q, label in (('lions_transmission', 'LIONS'), ('reduced_transmission', 'reduced'), ('t0_transmission', 'T0')):
-        print(f'{label} transmission median {np.median(a(q)):.3f} [{a(q).min():.3f}, {a(q).max():.3f}]; energy {np.median(a(q.split("_")[0] + "_w_mev")):.3f}; spread {np.median(a(q.split("_")[0] + "_spread")):.4f}')
+        print(f'{label} transmission median {np.median(a(q)):.3f} [{a(q).min():.3f}, {a(q).max():.3f}]; energy {np.nanmedian(a(q.split("_")[0] + "_w_mev")):.3f}; spread {np.nanmedian(a(q.split("_")[0] + "_spread")):.4f}')
     print('turn limit, extracted summed over tunes: 1x', int(a('reduced_extracted').sum()), '2x', int(a('reduced_extracted_2x').sum()), '4x', int(a('reduced_extracted_4x').sum()), '; tunes changing 2x to 4x', int((a('reduced_extracted_2x') != a('reduced_extracted_4x')).sum()))
     fate = np.array([(p['lions_fate'] == V.EXTRACTED, p['reduced_fate'] == V.EXTRACTED) for p in particles])
     print('per particle: extracted in both', int((fate[:, 0] & fate[:, 1]).sum()), 'LIONS only', int((fate[:, 0] & ~fate[:, 1]).sum()), 'reduced only', int((~fate[:, 0] & fate[:, 1]).sum()), 'in neither', int((~fate[:, 0] & ~fate[:, 1]).sum()), 'of', len(fate))
