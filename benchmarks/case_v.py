@@ -88,7 +88,7 @@ class Map:
 
 
 def load(deck_args):
-    syn.write_deck('deck.dat', npaspt=P.STEPS, teta1=P.MACHINE.dee_angle_deg / 2, tail=orbits.deck_tail(P.OPTIONS), **deck_args)
+    syn.write_deck('deck.dat', npaspt=P.STEPS, teta1=P.MACHINE.dee_angle_deg / 2, species=P.SPECIES, tail=orbits.deck_tail(P.OPTIONS), **deck_args)
     d = lions.State()
     d.run.swap_bytes = 'n'
     lions.load(d, 'deck.dat')
