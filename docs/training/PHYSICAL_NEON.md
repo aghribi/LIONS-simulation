@@ -248,6 +248,6 @@ The median rms, 0.125%, is below the published 0.15%, and against 1.27% from T0'
 Found after the data, not registered:
 - The 9 of T0's 21 that fail. Five on spread alone: coach tunes 8, 9, 10 at 1.05 to 1.10 of the limit, MOBO tune 20 at 1.16, constrained BO tune 13 at 7.9. Three on energy, spread and axis: constrained BO 14 and 15, MOBO 22. One with no particle at extraction: MOBO 18.
 - Counting the four marginal spread failures as passes would give 16, still under 17.
-- Failures concentrate where the tune sits far from the crest. Tunes 14, 15, 18, 22, 23, 24 have phases of 40 to 90 deg and keep at most 0.21 of the beam to extraction. T0's full RF cycle gives such a tune particles near the crest anyway, so the phase knob costs little there. A narrow bunch has none. Tune 13 is the exception: phase 12 deg, 0.07 reach extraction, not explained.
+- Six tunes with phases of 40 to 90 deg keep at most 0.21 of the beam to extraction: 14, 15, 18, 22, 23, 24. Phase alone does not decide it: tunes 12, 16, 20, 21, also at 41 to 69 deg, keep 0.88 to 1.0, not explained. T0's full RF cycle gives such a tune particles near the crest anyway, so the phase knob costs little there. A narrow bunch has none. Tune 13 is the exception: phase 12 deg, 0.07 reach extraction, not explained.
 - Near the crest the agreement is better: the 12 coach tunes all reach extraction with all 120 particles and rms 0.105 to 0.163%.
 - Tunes were found with T0's phases, so they are not tuned for a narrow bunch. A method retuning under the narrow law may differ.
