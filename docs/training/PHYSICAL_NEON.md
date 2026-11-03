@@ -374,7 +374,7 @@ Out of 20, measured in spec / truly in spec / held for all 50 passes:
 
 Found after the data, not registered:
 - The tunes moved to the crest: median |phase| 3.8 deg, largest 42 deg. On T0, tunes reached 90 deg.
-- The 3 failures in LIONS are all on spread alone, at 1.14 to 1.36 of the limit, with |phase| near 40 deg on the two checked here. The model has no radial motion, the candidate named before running.
+- The 3 failures in LIONS are all on spread alone, at 1.26, 1.14 and 1.36 of the limit, with phases of -38, -5 and -42 deg. The model has no radial motion, the candidate named before running, not tested.
 - All 8 tunes that read in spec and are truly out fail on energy. The reading noise of 0.5% is above the 0.3% tolerance, so a method can stop on a lucky read. Same effect as on QUAL.
 - One MOBO tune truly out on the model passes in LIONS. So LIONS passes 14 of 24 in all.
 - Medians over the 16: LIONS energy error -0.07%, model -0.11%. Transmission 0.60 against 0.66. Spread after the slit 0.082% against 0.083%.
