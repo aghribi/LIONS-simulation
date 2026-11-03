@@ -1,9 +1,10 @@
-"""Case P: synthetic F18 machine for LIONS, stage A gates of docs/training/PHYSICAL.md. Synthetic: says nothing about a real machine.
+"""Case P: synthetic machine for LIONS, F18 (docs/training/PHYSICAL.md) or NEON (docs/training/PHYSICAL_NEON.md). Synthetic: says nothing about a real machine.
 
-usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_p.py {design,dees,slip,offaxis} [--outroot DIR]
+usage: [CASE_P_MISSION=NEON] uv run --extra game --extra rl --group bench --group dev python benchmarks/case_p.py {design,dees,slip,offaxis,published} [--outroot DIR]
+Energies are per nucleon unless named total; gains per turn are total, as T0's. CASE_P_MISSION is read at import, since the machine sets the module constants.
 design: isochronous map from closed orbits, tunes (analytic field, Boris; LIONS Hermite at a few energies).
 dees: gain per turn against T0 energy_gain. slip: RF phase slip from injection to extraction at the design setting.
-offaxis: from the verdict start energy, centred and off the median plane.
+offaxis: from the verdict start energy, centred and off the median plane. published: the design against CIME's published ranges (NEON).
 """
 import argparse
 import concurrent.futures
@@ -38,18 +39,26 @@ GAP_DEG = 1.5                   # tanh half width of a dee gap, seen from the ce
 GAP_MIN = 5e-4                  # m, smallest gap half width, resolved by the potential grid
 WORKERS = 2
 START_MEV = 0.091               # verdicts start here, the lowest energy where the dee gate holds
-M = mission_by_id('F18')
+MISSION = os.environ.get('CASE_P_MISSION', 'F18')
+M = mission_by_id(MISSION)
 M.reset(0)
 MACHINE, ION, HARMONIC = M.machine, M.ion, M.harmonic
-W_EXT, DEE_KV = M.p['w_target'], M.p['dee_kv']
-F0 = mc.nominal(MACHINE, ION, W_EXT)[1]             # Hz, revolution frequency at the design setting of T0
+A = ION.mass_number
+W_EXT, DEE_KV = M.p['w_target'] / A, M.p['dee_kv']
+F0 = mc.nominal(MACHINE, ION, W_EXT * A)[1]             # Hz, revolution frequency at the design setting of T0
 EPS = np.sqrt(2 * MACHINE.flutter)                  # F = <(B - <B>)^2> / <B>^2 = eps^2 / 2 for B = <B> (1 + eps cos N theta), lecture eq. for F
-MASS_KG = syn.proton_gamma(1.0)[1]
-BC = 2 * np.pi * F0 * MASS_KG / syn.QE              # T, field that turns a slow proton at F0, with LIONS constants
+SPECIES = (syn.HYDROGEN if MISSION == 'F18' else A, A, ION.charge)     # atomic mass in the deck: T0's for an ion, A u
+MASS_KG = syn.U * (SPECIES[0] - ION.charge * syn.ME_U)
+CHARGE = ION.charge * syn.QE
+BC = 2 * np.pi * F0 * MASS_KG / CHARGE              # T, field that turns a slow ion at F0, with LIONS constants
+
+
+def gamma(w):
+    return 1.0 + w * A * syn.MEV / (MASS_KG * syn.C**2)
 
 
 def momentum(w):
-    return np.sqrt(syn.proton_gamma(w)[0]**2 - 1)
+    return np.sqrt(gamma(w)**2 - 1)
 
 
 class Field:
@@ -88,7 +97,7 @@ class Field:
 def closed_orbit(field, w, guess):
     """State, frequency [Hz], mean radius [m] of the closed orbit at kinetic energy w, Boris at the deck step."""
     p = momentum(w)
-    track = orbits.BorisTracker(field, MASS_KG, syn.QE, p, F0, STEPS).track
+    track = orbits.BorisTracker(field, MASS_KG, CHARGE, p, F0, STEPS).track
     s, _ = orbits.closed_orbit(track, (guess, 0.0))
     t, pos, mom = track(s, 3)
     sec = orbits.section_series(t, pos, mom)[0]
@@ -102,7 +111,7 @@ def isochronise(energies, iterations=8, tol=2e-6):
         rows = []
         for w in energies:
             p = momentum(w)
-            guess = rows[-1][0][0] * p / rows[-1][-1] if rows else p * MASS_KG * syn.C / (syn.QE * BC)
+            guess = rows[-1][0][0] * p / rows[-1][-1] if rows else p * MASS_KG * syn.C / (CHARGE * BC)
             rows.append(closed_orbit(field, w, guess))
         f = np.array([r[1] for r in rows])
         rbar = np.array([r[2] for r in rows])
@@ -111,7 +120,7 @@ def isochronise(energies, iterations=8, tol=2e-6):
         if worst < tol:
             break
         # A local relative field change delta moves the orbit by -delta / gamma^2 (k = gamma^2 - 1): f changes by delta / gamma^2.
-        delta = syn.proton_gamma(energies)[0]**2 * (F0 / f - 1)
+        delta = gamma(energies)**2 * (F0 / f - 1)
         old = field.spline(rbar) if field.spline is not None else 0.0
         field = Field(rbar, (1 + old) * (1 + delta) - 1)
     return field, rows
@@ -122,7 +131,7 @@ def rows_of(energies, field, rows):
     for w, (s, f, rbar, track, p) in zip(energies, rows):
         m = orbits.jacobian(track, s, 1e-6, 1e-6 * p)
         tr_r, tr_z = np.trace(m[:2, :2]) / 2, np.trace(m[2:, 2:]) / 2
-        k = syn.proton_gamma(w)[0]**2 - 1
+        k = gamma(w)**2 - 1
         out.append({'code': 'boris_analytic', 'w_mev': float(w), 'r_co_m': float(s[0]), 'rbar_m': rbar, 'f_rel_error': float(f / F0 - 1),
                     'half_trace_r': float(tr_r), 'half_trace_z': float(tr_z), 'qr_frac': float(np.arccos(np.clip(tr_r, -1, 1)) / (2 * np.pi)),
                     'qz_frac': float(np.arccos(np.clip(tr_z, -1, 1)) / (2 * np.pi)),
@@ -134,7 +143,7 @@ def rows_of(energies, field, rows):
 def lions_check(job):
     """Closed orbit, frequency and tunes with LIONS Hermite on the written map, no E field."""
     workdir, w, guess = job
-    track = orbits.LionsTracker(workdir, w, F0, STEPS, options=OPTIONS).track
+    track = orbits.LionsTracker(workdir, w, F0, STEPS, species=SPECIES, options=OPTIONS).track
     s, _ = orbits.closed_orbit(track, (guess, 0.0))
     p = momentum(w)
     t, pos, mom = track(s, 3)
@@ -164,10 +173,10 @@ def write_machine(outdir, field):
 
 
 def accelerate(workdir, w0, r0, pr0_mrad, phi0_deg, turns, one_turn=False, z0=0.0):
-    """Design setting, one proton from (r0, theta = 0): crossings of theta = 0 as (t [s], energy [MeV], r [m], z [m]), or the gain [MeV] over one nominal turn."""
+    """Design setting, one ion from (r0, theta = 0): crossings of theta = 0 as (t [s], energy [MeV/u], r [m], z [m]), or the total gain [MeV] over one nominal turn."""
     with contextlib.chdir(workdir):
         syn.write_deck('deck.dat', fhf=HARMONIC * F0, r0=r0, w0=w0, npaspt=STEPS, turns=turns, v_dee=DEE_KV * 1e3, teta1=MACHINE.dee_angle_deg / 2,
-                       harm=float(HARMONIC), z0=z0, pr0=pr0_mrad, phi0=phi0_deg, tail=orbits.deck_tail(OPTIONS))
+                       harm=float(HARMONIC), z0=z0, pr0=pr0_mrad, phi0=phi0_deg, species=SPECIES, tail=orbits.deck_tail(OPTIONS))
         rows = []
 
         def record(d):
@@ -184,7 +193,7 @@ def accelerate(workdir, w0, r0, pr0_mrad, phi0_deg, turns, one_turn=False, z0=0.
     k = np.nonzero((y[:-1] < 0) & (y[1:] >= 0) & (x[:-1] > 0))[0]
     frac = -y[k] / (y[k + 1] - y[k])
     pc = p[k] + frac * (p[k + 1] - p[k])
-    w = (np.sqrt(1 + pc * pc) - 1) * MASS_KG * syn.C**2 / syn.MEV
+    w = (np.sqrt(1 + pc * pc) - 1) * MASS_KG * syn.C**2 / syn.MEV / A
     return np.column_stack([t[k] + frac * (t[k + 1] - t[k]), w, np.hypot(x[k], y[k]), z[k]])
 
 
@@ -206,7 +215,7 @@ def workdirs(outdir, n):
 
 
 def write(records, path, step, *inputs):
-    meta = {'case': f'synthetic F18, {step}', 'registration': 'docs/training/PHYSICAL.md', 'label': 'SYNTHETIC', **provenance(*inputs),
+    meta = {'case': f'synthetic {MISSION}, {step}', 'registration': 'docs/training/PHYSICAL_NEON.md' if MISSION == 'NEON' else 'docs/training/PHYSICAL.md', 'label': 'SYNTHETIC', **provenance(*inputs),
             'machine': platform.platform(), 'python': platform.python_version(),
             'flutter_formula': 'F = eps^2 / 2', 'eps': str(EPS), 'gap_half_width_deg': str(GAP_DEG), 'steps_per_turn': str(STEPS), 'interpolation': 'hermite',
             'units': 'w_mev MeV, r m, gain MeV, phase deg, f_rel_error 1'}
@@ -273,7 +282,7 @@ def slip(outdir, w0=None, r0=None, pr0=0.0, phi0=None, tag='injection', z0=0.0):
     r0 = next(r['r_co_m'] for r in rec if abs(r['w_mev'] - w0) < 1e-9) if r0 is None else r0
     gains = pq.read_table(outdir / 'case_p_gain.parquet').to_pylist()
     phi0 = float(np.median([g['crest_phi0_deg'] for g in gains])) if phi0 is None else phi0
-    turns = int(2 * W_EXT / float(mc.energy_gain(MACHINE, ION, DEE_KV, HARMONIC, 0.0)))
+    turns = int(2 * W_EXT * A / float(mc.energy_gain(MACHINE, ION, DEE_KV, HARMONIC, 0.0)))
     s = accelerate(workdirs(outdir, 1)[0], w0, r0, pr0, phi0, turns, z0=z0)
     phase = 360.0 * HARMONIC * (F0 * s[:, 0] - np.arange(len(s)))
     phase -= phase[0]
@@ -285,15 +294,36 @@ def slip(outdir, w0=None, r0=None, pr0=0.0, phi0=None, tag='injection', z0=0.0):
     print('w', np.round(s[:k + 1:max(k // 12, 1), 1], 3).tolist())
     print('phase', np.round(phase[:k + 1:max(k // 12, 1)], 1).tolist())
     print(f'{tag}: max |z| at the section {1e3 * np.max(np.abs(s[:k + 1, 3])):.3f} mm, final energy {s[k, 1]:.3f} MeV')
-    gain = np.diff(s[:k + 1, 1])
+    gain = np.diff(s[:k + 1, 1]) * A
     print('gain per turn: median', np.median(gain), 'max', gain.max(), 'T0 peak', mc.energy_gain(MACHINE, ION, DEE_KV, HARMONIC, 0.0))
 
 
+def start_energy(gains, rec):
+    """The closed-orbit energy of the lowest gain row from which every gain ratio is within 5%."""
+    keep = [g['w_mev'] for g in sorted(gains, key=lambda g: g['w_mev'])]
+    for g in sorted(gains, key=lambda g: -g['w_mev']):
+        if abs(g['ratio'] - 1) >= 0.05:
+            keep = [w for w in keep if w > g['w_mev']]
+            break
+    return min(rec, key=lambda w: abs(w - keep[0]))
+
+
+def published(outdir):
+    """Registered checks against CIME's published ranges, PHYSICAL_NEON.md. Qr close to 1 is read from its fractional part."""
+    rows = [r for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic']
+    inner = [r for r in rows if 0.2 <= r['rbar_m'] <= 1.4]
+    qr, qz = [r['qr_frac'] for r in inner], [r['qz_frac'] for r in inner]
+    mean = -load_field(outdir).mean(MACHINE.radius)[0]
+    print(f'{len(inner)} orbits at 0.2 to 1.4 m. |Qr - 1|: max {max(qr):.4f}, limit 0.04. Qz: {min(qz):.3f} to {max(qz):.3f}, limits 0.2 and 0.45')
+    print(f'<B> at r_ext {mean:.4f} T, range 0.75 to 1.56. B rho {mean * MACHINE.radius:.4f} T m, limit 2.344. f_rf {HARMONIC * F0 / 1e6:.4f} MHz, range 9.6 to 14.5')
+    print(f'peak B {mean * (1 + EPS):.3f} T, published maximum on the hills 2.1 T')
+
+
 def offaxis(outdir):
-    """Gate of PHYSICAL.md: from START_MEV at the crest, z0 = 0, T0's z_injection and twice it (T0 spreads z0 by 30% rms)."""
+    """Gate of PHYSICAL.md: from the start energy at the crest, z0 = 0, T0's z_injection and twice it (T0 spreads z0 by 30% rms)."""
     rec = {r['w_mev']: r['r_co_m'] for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic'}
-    w0 = min(rec, key=lambda w: abs(w - START_MEV))
     gains = pq.read_table(outdir / 'case_p_gain.parquet').to_pylist()
+    w0 = start_energy(gains, rec)
     phi0 = min(gains, key=lambda g: abs(g['w_mev'] - w0))['crest_phi0_deg']
     for factor in (0.0, 1.0, 2.0):
         slip(outdir, w0, rec[w0], phi0=phi0, tag=f'offaxis_{factor:g}', z0=factor * MACHINE.z_injection * 1e-3)
@@ -301,8 +331,8 @@ def offaxis(outdir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('step', choices=('design', 'dees', 'slip', 'offaxis'))
-    parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
+    parser.add_argument('step', choices=('design', 'dees', 'slip', 'offaxis', 'published'))
+    parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / ('case_p' if MISSION == 'F18' else f'case_p_{MISSION}'))
     args = parser.parse_args()
     outdir = args.outroot.resolve()
-    {'design': design, 'dees': dees, 'slip': slip, 'offaxis': offaxis}[args.step](outdir)
+    {'design': design, 'dees': dees, 'slip': slip, 'offaxis': offaxis, 'published': published}[args.step](outdir)
