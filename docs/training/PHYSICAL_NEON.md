@@ -275,3 +275,47 @@ Found after the data, not registered:
 The model must pass every line and be closer than T0 on each. Thresholds do not change after the data. Reported besides: rule checks, per-particle fates, survival against start phase, turn limit at 1, 2, 4 times T0's, and the same lines on the coach tunes, which sit near the crest.
 
 Current stays labelled and is not scored: no source gives the intensity cut for a 10 deg bunch here. Passing here would allow a retuning test with this model. It would not make the model true of CIME.
+
+**Result: fails by the registered rule, on one line.** Four lines pass. The energy line meets its threshold but T0 is slightly closer. `benchmarks/case_r.py`, CRIANN jobs 3318071 (tables, checks) at 6a61a0f and 3318080 (comparison) at d6471dd. One deterministic pass per tune, against `case_v_NEON_energy_1mev_phase10`. Synthetic map.
+
+| Quantity, median absolute error [min, max] | Threshold | Reduced | T0 | Outcome |
+|---|---|---|---|---|
+| Transmission before the septum, 25 tunes | 0.0083 | 0 [0, 0.208] | 0.342 [0.05, 0.70] | Pass |
+| Mean extraction energy, relative, 22 tunes | 0.3% | 0.058% [0.001%, no beam] | 0.052% [0.001%, 4.6%] | Below threshold, T0 closer: **fail** |
+| Relative energy spread, 22 tunes | 0.1% | 0.016% [0.001%, no beam] | 0.022% [0.001%, 4.0%] | Pass |
+| Phase against radius, rms, deg, 22 tunes | 6.91 | 0.20 [0.09, 15.7] | 7.04 [2.3, 67.6] | Pass |
+| Pass time | 0.15 s | 27 ms median, 112 ms max, one core, `debug` | 41 ms | Pass |
+
+Coach tunes alone, 12 of 12 with beam, give the same outcomes: transmission 0 against 0.346, energy 0.058% against 0.054%, spread 0.008% against 0.013%, phase 0.15 against 6.56 deg.
+
+Three tunes with no LIONS beam are left out of energy, spread and phase, as registered. Three tunes where LIONS extracts 13, 20, 25 of 120 and the model none count as infinite error.
+
+Corrections to this comparison before its result was read, each committed:
+- The first comparison dropped missing values per model and wrote a spread of 0 for a tune with no beam. Replaced by one mask, and no beam in a model counts as failed (c1e97a6).
+- `Beam.energies` holds what the slit keeps, and the LIONS columns are before the slit. F18 never closes its slit, so it did not show there. All three models are now read with the slit open, as the line is named (d6471dd). The earlier table printed a transmission failure from this. Thresholds did not change.
+
+Rules against their checks:
+
+| Rule | Result |
+|---|---|
+| f_rev(p, s) = v(p) / L(p / s) | Verified: within 2.0e-7 of Boris closed orbits at s = 0.997 and 1.002, 0.56 and 5.6 MeV/u |
+| Gain linear in V | Verified: 40 to 60 kV ratio 1.4999 at 4.35 MeV/u, 1.5008 at 8.30 MeV/u |
+| Path-length interpolation | At most 4.7e-6 with every other energy held out |
+| Betatron action | 3.126 mm against 3.163 mm tracked at z0 = 3 mm, 6.253 against 6.328 at z0 = 6 mm, top band. Within 1.2% |
+| Numerical turn limit | Converged: extracted 2148, 2151, 2151 at 1x, 2x, 4x; no tune changes from 2x to 4x. LIONS' own limit was not studied here |
+
+Per particle, of 3000: extracted in both 2142, LIONS only 65, reduced only 6, neither 787.
+
+| Start phase, deg | -120 to -90 | -90 to -60 | -60 to 0 | 0 to 60 | 60 to 90 | 90 to 120 |
+|---|---|---|---|---|---|---|
+| LIONS | 0.00 | 0.23 | 0.89 | 0.79 | 0.46 | 0.16 |
+| Reduced | 0.00 | 0.22 | 0.89 | 0.77 | 0.42 | 0.03 |
+
+Found after the data:
+- The energy miss is 0.006 percentage points on single passes, a fiftieth of the tolerance. The registered rule still fails it. Only a user decision can set that aside.
+- The largest errors sit on tunes far from the crest with a small surviving beam: 13, 14, 15, 22. LIONS' spread there is 1.6 to 4.1%, against under 0.1% in the model. No radial motion in the model is a candidate, not tested.
+- Lost-particle classes differ: LIONS 420 at the z aperture, 135 at the map edge, 238 at the turn limit. Reduced 0, 836, 16. They agree on which particles are lost far more than on how.
+- T0's baseline keeps its own wide phases. Its transmission error measures that difference more than its turn loop.
+- Current is still not scored. The comparison reads the slit open, so slit behaviour on tracked energies is not tested here.
+
+Nothing here makes the model true of CIME. Not connected to the arcade.
