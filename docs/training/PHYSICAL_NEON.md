@@ -56,6 +56,35 @@ F18 regression: the same code at `CASE_P_MISSION=F18` must reproduce 9.44 deg an
 
 A failed gate stops the work and is reported. No limit moves after results.
 
+## Gate results, CRIANN jobs 3317824 (NEON) and 3317825 (F18), 53db11c
+
+All four gates pass, with the start energy set by the dee gate as registered. Single deterministic tracks, centred ion unless stated.
+
+| Gate | Limit | Result |
+|---|---|---|
+| Phase slip to extraction | Below 20 deg | 12.45 deg |
+| Stability, 30 design energies | Half traces inside -1 to 1 | All |
+| Dee gain against T0, 0.0587 to 8.30 MeV/u | 0.95 to 1.05 | 0.9996 to 1.0090 |
+| Dee gain against T0, 0.02 MeV/u | 0.95 to 1.05 | 0.696, fails |
+| Off axis, z0 = 0, 3, 6 mm | Reaches 10 MeV/u, z below 15 mm, slip below 20 deg | 10.02 MeV/u; z 0, 3.16, 6.33 mm; slip 6.91, 6.92, 6.75 deg |
+| \|Qr - 1\|, 18 orbits, 0.2 to 1.4 m | At most 0.04 | At most 0.0225 |
+| Qz, same orbits | 0.2 to 0.45 | 0.296 to 0.324 |
+| <B> at 1.5 m | 0.75 to 1.56 T | 1.511 T |
+| B rho from <B> | At most 2.344 T m | 2.267 T m |
+| f_rf | 9.6 to 14.5 MHz | 13.87 MHz |
+
+Verdicts start at 0.0587 MeV/u, as the registered rule gives. Off-axis runs start there.
+
+LIONS Hermite on the written map agrees with Boris on the analytic field: at 10.3 MeV/u, Qz 0.2888 against 0.2890 and f error 9e-7 for both.
+
+Reported, no gate: peak field 2.187 T against the published 2.1 T, 4.1% above. This is the limit of the cosine form registered above.
+
+F18 regression passed: gain, orbit, slip and off-axis tables and `bmap.dat` are identical to the runs before this change.
+
+Found after the data, not explained: T0's closed form gives 1.522 T where the tracked map has <B> = 1.511 T at 1.5 m, 0.7% apart. T0's knob and the map's field need a stated mapping before a verdict.
+
+What these gates do not test: particles off the design radius or momentum, any real CIME map, the central region, the first harmonic, and extraction.
+
 ## Found in T0's NEON, for after the talk
 
 Not changed here.
