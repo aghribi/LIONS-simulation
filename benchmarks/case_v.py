@@ -34,12 +34,13 @@ import lions.cli  # noqa: E402
 import orbits  # noqa: E402
 import synthetic as syn  # noqa: E402
 from lions.game import machine as mc  # noqa: E402
-from lions.game.reduced import gaussian_phases  # noqa: E402
+from lions.game.reduced import gaussian_phases, install_from_env  # noqa: E402
 from lions.game import tuners as t  # noqa: E402
 from lions.game.env import mission_by_id  # noqa: E402
 from provenance import provenance  # noqa: E402
 
 MISSION = P.MISSION
+MODEL = install_from_env()
 TUNERS = {'coach': t.coach, 'turbo': t.turbo, 'constrained_bo': t.constrained_bo, 'mobo': t.mobo}
 N = mc.MACROPARTICLES
 PPO_SEED = 0
@@ -264,7 +265,7 @@ def row_of(prefix, m):
 def write(records, path, what, mp, units, phase_rms_deg=None):
     meta = {'case': f'synthetic {MISSION}, {what}', 'registration': P.REGISTRATION, 'label': 'SYNTHETIC', **provenance(*mp.inputs),
             'machine': platform.platform(), 'python': platform.python_version(), 'steps_per_turn': str(P.STEPS), 'interpolation': 'hermite',
-            'start_mev': str(mp.w0), 'crest_deg': str(mp.crest_deg), 'r_ext_m': str(mp.r_ext), 'extraction': mp.extraction, 'start_phase_law': 'buncher' if phase_rms_deg is None else f'gaussian, {phase_rms_deg} deg rms, buncher unused', 'units': units}
+            'start_mev': str(mp.w0), 'crest_deg': str(mp.crest_deg), 'r_ext_m': str(mp.r_ext), 'tuning_model': MODEL or 'T0', 'extraction': mp.extraction, 'start_phase_law': 'buncher' if phase_rms_deg is None else f'gaussian, {phase_rms_deg} deg rms, buncher unused', 'units': units}
     path.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), path)
 
@@ -298,6 +299,21 @@ def tunes(outdir, reference, mp, workers):
     write(rows, outdir / 'case_v_tunes.parquet', 'tunes', mp, 'field_error 1, knobs as the scenario')
     wrong = sum(not d[0] for d in done)
     print(f'{len(rows)} tunes; true at stop {sum(r["t0_true_at_stop"] for r in rows)}; harmonics {sorted({r["harmonic"] for r in rows})}; {wrong} differ from case T3')
+    return wrong
+
+
+def tunes_from_table(outdir, reference, mp):
+    """Tunes read in spec on the tuning model, from their table: PPO seed 0 and the other methods. The stored state must give the stored true read, or the run stops."""
+    runs = [r for sub in ('classical', 'rl') for r in pq.read_table(reference / f'case_t3_{sub}.parquet', use_threads=False).to_pylist()
+            if r['mission'] == MISSION and r['in_spec_measured'] and r['training_seed'] in (-1, PPO_SEED)]
+    rows = [{'tune': i, 'method': r['method'], 'training_seed': r['training_seed'], 'condition': r['condition'], 'evals': r['evals_to_spec'], 'field_error': r['field_error_at_stop'],
+             'knobs': r['knobs_at_stop'], 't0_true_at_stop': r['true_at_stop']} for i, r in enumerate(runs)]
+    for r in rows:
+        m = of_tune(r)
+        r['harmonic'] = harmonic_of(m.knobs, m.errors)
+    wrong = sum(bool(of_tune(r).ready()) != r['t0_true_at_stop'] for r in rows)
+    write(rows, outdir / 'case_v_tunes.parquet', 'tunes', mp, 'field_error 1, knobs as the scenario')
+    print(f'{len(rows)} tunes; true at stop {sum(r["t0_true_at_stop"] for r in rows)}; harmonics {sorted({r["harmonic"] for r in rows})}; {wrong} differ from the table')
     return wrong
 
 
@@ -465,7 +481,7 @@ def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('step', choices=('tunes', 'check', 'verdict', 'limit'))
+    parser.add_argument('step', choices=('tunes', 'tunes_table', 'check', 'verdict', 'limit'))
     parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_v')
     parser.add_argument('--mapdir', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
     parser.add_argument('--reference', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
@@ -479,7 +495,9 @@ if __name__ == '__main__':
     outdir = args.outroot.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
     mp_ = Map(args.mapdir, args.start_mev, args.extraction)
-    if args.step == 'tunes':
+    if args.step == 'tunes_table':
+        sys.exit(1 if tunes_from_table(outdir, args.reference.resolve(), mp_) else 0)
+    elif args.step == 'tunes':
         sys.exit(1 if tunes(outdir, args.reference.resolve(), mp_, args.workers) else 0)
     elif args.step == 'check':
         check(outdir, mp_)

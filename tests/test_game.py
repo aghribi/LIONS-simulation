@@ -826,3 +826,21 @@ def test_the_screen_says_when_only_the_readings_are_in_spec(tmp_path, monkeypatc
     w.tuned[method.name] = (7, 0.9, True)
     assert w.method_state(method, s) == 'IN SPEC, 7 PASSES'
     w.close()
+
+
+def test_the_model_slot_holds_t0_in_the_game_and_the_table_model_in_a_benchmark(monkeypatch):
+    from lions.game import machine as mc
+    from lions.game.missions import Mission
+    from lions.game.reduced import install_from_env
+    m = MISSIONS['NEON']
+    m.reset(1)
+    assert Mission.run_model is mc.run
+    monkeypatch.setattr(Mission, 'run_model', Mission.run_model)
+    monkeypatch.setenv('CASE_REDUCED', 'neon_synthetic_orbits.parquet:10')
+    assert install_from_env()
+    m.knobs |= m.ideal()
+    m.refresh()
+    assert m.beam.transmission > 0.5
+    m.knobs['rf_mhz'] *= 2 / 3
+    m.refresh()
+    assert not m.has_beam()

@@ -45,6 +45,8 @@ class Quantities:
 
 
 class Mission(Stage):
+    run_model = staticmethod(mc.run)     # the one model slot of docs/training/PHYSICAL.md: T0 in the game
+
     GOAL_UNITS = {}
 
     def __init__(self, scenario, entry, params):
@@ -95,7 +97,7 @@ class Mission(Stage):
         pass
 
     def refresh(self):
-        self.beam = mc.run(self.machine, self.ion, self.knobs, self.errors, self.draws)
+        self.beam = self.run_model(self.machine, self.ion, self.knobs, self.errors, self.draws)
         self.after_beam()
         noise = lambda v: v * (1 + self.noise_rng.normal(0, self.p['noise']))  # noqa: E731
         b = self.beam

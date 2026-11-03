@@ -3,6 +3,7 @@
 Same arguments and Beam as machine.run. Rules and how each is verified: PHYSICAL.md. No phase cut, stall, clamp or septum in the turn loop. The labelled definitions
 (|z| aperture, r at the map edge, extraction radius) are those of the LIONS verdict. Below the lowest valid gain, gain and orbit are held or scaled: unverified.
 """
+import os
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,16 @@ def gaussian_phases(knobs, errors, rms_deg):
     """RF phase [rad] of each macroparticle at the start, in [-pi, pi): Gaussian quantiles around the tune's phase, no buncher."""
     phi = np.radians(knobs['phase_deg'] + errors.phase_deg + rms_deg * norm.ppf((np.arange(mc.MACROPARTICLES) + 0.5) / mc.MACROPARTICLES))
     return np.remainder(phi + np.pi, 2 * np.pi) - np.pi
+
+
+def install_from_env():
+    """CASE_REDUCED='table.parquet:rms_deg' puts this model in the missions' slot of a benchmark, workers included. Returns the setting, or '' for T0."""
+    setting = os.environ.get('CASE_REDUCED', '')
+    if setting:
+        from lions.game.missions import Mission
+        table, rms = setting.split(':')
+        Mission.run_model = Reduced(Path(__file__).parent / 'scenarios' / table, float(rms), no_beam_off_table=True).run
+    return setting
 
 
 class Tables:
@@ -46,9 +57,9 @@ class Tables:
 
 
 class Reduced:
-    def __init__(self, path, phase_rms_deg=None):
-        """phase_rms_deg: Gaussian start phases of this rms, in place of T0's buncher law."""
-        self.tables, self.phase_rms_deg = Tables(Path(path)), phase_rms_deg
+    def __init__(self, path, phase_rms_deg=None, no_beam_off_table=False):
+        """phase_rms_deg: Gaussian start phases of this rms, in place of T0's buncher law. no_beam_off_table: a tuner may reach another harmonic, where no gain was measured; no beam, labelled, instead of an error."""
+        self.tables, self.phase_rms_deg, self.no_beam_off_table = Tables(Path(path)), phase_rms_deg, no_beam_off_table
 
     def run(self, machine, ion, knobs, errors, draws, limit_factor=1):
         """One pass, as machine.run. limit_factor: the numerical turn limit, in units of T0's; a particle still circulating there counts as lost power."""
@@ -70,7 +81,11 @@ class Reduced:
         f_rf = knobs['rf_mhz'] * 1e6
         h = max(round(f_rf / ion.f_rev(w_inj, b0)), 1)
         if h != t.harmonic:
-            raise ValueError(f'harmonic {h}: the gain table was measured at {t.harmonic}')
+            if not self.no_beam_off_table:
+                raise ValueError(f'harmonic {h}: the gain table was measured at {t.harmonic}')
+            start = np.full(n, t.w_start)
+            return {'fate': np.full(n, OUT_OF_MAP, dtype=object), 'w': start, 'w_last': start, 'w_prev': start, 'turn': 0, 'turns': np.zeros(n, dtype=int), 'h': h,
+                    'probe': np.zeros(mc.PROBE_BINS), 'phase_sum': np.zeros(mc.PROBE_BINS)}
         dee_kv = knobs['dee_kv']
         phi = mc.start_phases(knobs, errors) if self.phase_rms_deg is None else gaussian_phases(knobs, errors, self.phase_rms_deg)
         z = mc.start_heights(machine, draws)

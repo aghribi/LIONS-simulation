@@ -321,3 +321,29 @@ Found after the data:
 Test suite: 200 passed at eac9a62, CRIANN job 3318081.
 
 Nothing here makes the model true of CIME. Not connected to the arcade.
+
+**User decision, 2026-11-03.** The energy line's miss is accepted for this test. The model still failed its registered rule, and that is stated wherever this test is reported.
+
+## Retuning on the reduced model (registered 2026-11-03, before running)
+
+**Question.** With a phase knob that costs something, do the methods change, and do the tunes hold in LIONS better than T0's?
+
+**Model.** `Mission.run_model`, the one model slot, holds the reduced model in these runs through `CASE_REDUCED`. The game stays on T0. Table `neon_synthetic_orbits.parquet`, 10 deg rms. Start 1.196 MeV/u, orbit-length extraction.
+
+**Added rule, labelled.** A setting whose nearest harmonic is not 3 returns no beam: no gain was measured there. Only a method exploring far in RF can reach this. CIME's RF range is not enforced.
+
+**Runs.** `benchmarks/case_t3.py`, NEON, original box: coach, Nelder-Mead, random, Bayesian, NSGA-II, CMA-ES, TuRBO, constrained BO, MOBO, 20 held-out conditions, 200 passes, 0.5 s of drift per pass, noise as T0, score and stop on the readings. PPO, 5 seeds, 100k steps. Knobs and field error at the stop are stored in each row. One pass each per method and condition.
+
+**LIONS check.** Every tune that reads in spec, PPO seed 0 only as on F18, through LIONS with the same phase law and extraction. The stored state must give the stored true read, or the run stops.
+
+**Primary metric.** Of the tunes truly in spec on the reduced model, the fraction in spec in LIONS without the current terms. T0's tunes gave 12 of 21, 57%.
+
+**Outcomes, set before running.**
+- At least 80%: tunes found on this model hold in LIONS.
+- At most 57%: no better than T0's.
+- Between: partial.
+With fewer than 10 tunes truly in spec, the fraction is reported and no outcome is drawn.
+
+**Also reported.** Measured, true and held counts per method against case T3. Median |phase| of the tunes. Failing terms. Model failures and elapsed times.
+
+**Doubts stated before running.** The model failed its energy line. No radial motion, so the model's low spread off crest favours tunes LIONS may reject. Current stays labelled, yet it is in the score and the stop, so it steers methods. The coach's rules were written for T0, and it reads the true beam in part. Differences of 1 or 2 of 20 mean nothing.
