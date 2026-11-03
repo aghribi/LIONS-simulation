@@ -782,3 +782,19 @@ def test_botorch_methods_spend_the_budget(name):
     budget = 2 * len(m.specs) + 22
     run = tuners.tune(m, getattr(tuners, name), 1, budget=budget)
     assert (run.evals == budget or run.reached) and run.model_failures == 0
+
+
+def test_the_screen_says_when_only_the_readings_are_in_spec(tmp_path, monkeypatch):
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtTest import QTest
+    from lions.game.tuners import METHODS
+    _, w = arcade_window(tmp_path, monkeypatch)
+    QTest.keyClick(w, Qt.Key_Down)
+    QTest.keyClick(w, Qt.Key_O)
+    assert {'TURBO', 'CONSTRAINED BO', 'MOBO'} <= {m.name for m in METHODS}
+    s, method = w.stages[w.index], METHODS[0]
+    w.tuned[method.name] = (7, 0.9, False)
+    assert w.method_state(method, s) == 'READS IN SPEC, 7 PASSES. TRUE BEAM OUT'
+    w.tuned[method.name] = (7, 0.9, True)
+    assert w.method_state(method, s) == 'IN SPEC, 7 PASSES'
+    w.close()

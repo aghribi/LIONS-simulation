@@ -168,7 +168,7 @@ class Arcade(QWidget):
             return 0.0
 
     def replay(self):
-        """Puts the next pass of the method on the screen's machine. The in-spec test does not depend on the noise of the readings."""
+        """Puts the next pass of the method on the screen's machine. A method stops on the readings: the true beam may be out of spec."""
         t = self.tuning
         self.replay_clock += 1
         if self.tuning_over or self.replay_clock % REPLAY_FRAMES:
@@ -182,7 +182,7 @@ class Arcade(QWidget):
                 self.stage.knobs.update(t.run.best_knobs)
                 self.stage.refresh()
             if t.run:
-                self.tuned[t.method.name] = (t.run.reached, t.run.best)
+                self.tuned[t.method.name] = (t.run.reached, t.run.best, self.stage.ready())
 
     def apply_pass(self, record):
         s = self.stage
@@ -488,12 +488,12 @@ class Arcade(QWidget):
             if selected:
                 self.p.fillRect(QRectF(50, y - 4, W - 100, 38), QColor(255, 225, 77, 26))
             self.text(66, y, method.name, 16, DIM if method.missing() else YELLOW if selected else WHITE, 'left')
-            self.text(W - 66, y + 2, self.method_state(method, s), 13, GREEN if self.tuned.get(method.name, (None,))[0] else WHITE, 'right')
+            self.text(W - 66, y + 2, self.method_state(method, s), 13, GREEN if self.tuned.get(method.name, (None, None, False))[2] else WHITE, 'right')
             y += 44
         method = METHODS[self.method_line]
         y = self.block(y + 16, method.what, 74, 14, CYAN) + 8
         if method.missing():
-            self.text(W / 2, y, 'NEEDS THE RL EXTRA: uv run --extra game --extra rl lions-arcade', 13, RED)
+            self.text(W / 2, y, f'NEEDS THE {method.extra.upper()} EXTRA: uv run --extra game --extra {method.extra} lions-arcade', 13, RED)
         elif self.training_failed and method.fn is policy:
             self.text(W / 2, y, f'TRAINING FAILED. TRY: uv run --extra game --extra rl python -m lions.game.train {s.mission_id}', 11, RED)
         elif method.fn is policy and not policy_path(s.mission_id).exists():
@@ -504,8 +504,10 @@ class Arcade(QWidget):
     def method_state(self, method, s):
         """The result on this machine, or for a policy its held-out test."""
         if method.name in self.tuned:
-            reached, best = self.tuned[method.name]
-            return f'IN SPEC, {reached} PASSES' if reached else f'NOT IN SPEC, BEST {best:.2f}'
+            reached, best, true = self.tuned[method.name]
+            if not reached:
+                return f'NOT IN SPEC, BEST {best:.2f}'
+            return f'IN SPEC, {reached} PASSES' if true else f'READS IN SPEC, {reached} PASSES. TRUE BEAM OUT'
         if method.missing():
             return 'NOT INSTALLED'
         if method.fn is policy:
@@ -538,8 +540,9 @@ class Arcade(QWidget):
         if t.error:
             self.text(left + 10, H - 46, wrapped(t.error, 80)[0], 11, RED, 'left')
         else:
-            reached = t.run.reached
-            self.text(left + 10, H - 46, f'IN SPEC AFTER {reached} PASSES' if reached else f'NOT IN SPEC AFTER {t.run.evals} PASSES. BEST SETTING LEFT ON', 12, GREEN if reached else RED, 'left')
+            reached, true = t.run.reached, self.stage.ready()
+            result = f'NOT IN SPEC AFTER {t.run.evals} PASSES. BEST SETTING LEFT ON' if not reached else f'IN SPEC AFTER {reached} PASSES' if true else f'READS IN SPEC AFTER {reached} PASSES. TRUE BEAM OUT OF SPEC'
+            self.text(left + 10, H - 46, result, 12, GREEN if reached and true else RED, 'left')
         self.text(left + 10, H - 26, 'ENTER: YOU TAKE THE BEAM   O: OTHER METHOD, SAME MACHINE', 11, CYAN, 'left')
 
     def draw_walkthrough(self):

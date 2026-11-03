@@ -332,8 +332,8 @@ def policy_report(mission_id):
 
 
 class Method:
-    def __init__(self, name, fn, needs, what):
-        self.name, self.fn, self.needs, self.what = name, fn, needs, what
+    def __init__(self, name, fn, needs, what, extra='rl'):
+        self.name, self.fn, self.needs, self.what, self.extra = name, fn, needs, what, extra
 
     def missing(self):
         return [module for module in self.needs if find_spec(module) is None]
@@ -343,6 +343,9 @@ METHODS = [
     Method('COACH', coach, (), 'Written rules, one knob per pass, from the probes and readings. Not the CIME operator procedure.'),
     Method('NELDER-MEAD', nelder_mead, ('scipy',), 'Simplex on the score, no model, no gradient. Restarts from a random point when it stalls.'),
     Method('BAYESIAN OPT.', bayesian, ('scipy', 'sklearn'), 'Gaussian process on the score, expected improvement. Random points first, then the most promising.'),
+    Method('TURBO', turbo, ('botorch',), 'Gaussian process on the score, in a trust region around the best point, restarted when it collapses. Takes minutes.', 'bo'),
+    Method('CONSTRAINED BO', constrained_bo, ('botorch',), 'One Gaussian process per term of the spec: the point most likely to meet them all. Takes minutes.', 'bo'),
+    Method('MOBO', mobo, ('botorch',), 'One Gaussian process per term of the spec, kept apart, hypervolume improvement from the spec limits. Takes minutes.', 'bo'),
     Method('NSGA-II (MOGA)', nsga2, ('pymoo',), 'Genetic algorithm on each term of the spec, kept apart: no weights between them.'),
     Method('CMA-ES', cma_es, ('cma',), 'Evolution strategy on the score: learns which knobs move together, no model of the machine.'),
     Method('PPO (RL)', policy, ('stable_baselines3',), 'A policy trained on other conditions, 100k passes. Reads the control room, moves every knob at once.'),
