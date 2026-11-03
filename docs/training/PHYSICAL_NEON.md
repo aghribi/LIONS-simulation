@@ -166,3 +166,18 @@ Labelled extra: share of extracted particles above 1.513 m at 250 deg, median 0.
 Checks: closed orbit closes to 0.3 um. Phase motion over 60 turns +3.19 and -3.20 deg against +3.24 and -3.24 deg from T0's update. Scale by coefficient against a rewritten map: 0 MeV after 20 turns. Phase at first crossing against the set phase: at most 0.46 deg. Test suite 200 passed at 926358e, before a one-line change to the deck's species.
 
 Not concluded: single passes, a cosine field, no central region, closed-form slit and septum. The turn limit is not shown converged on this machine. None of this says anything about CIME.
+
+## Diagnostic without the central region (registered 2026-11-03, before running)
+
+**Question.** Do the tracked spread and the low-energy losses come from below 1 MeV/u?
+
+**Change.** Start at 1.196 MeV/u, the table energy nearest above 1 MeV/u (`--start-mev 1.0`), crest from the gain rows at and above it. Same 25 tunes, knobs, field errors, draws, both extraction definitions, code otherwise as the verdict. T0 does not start there, so this is a diagnostic and not a new verdict.
+
+**Primary metric.** Median over the 25 tunes of the rms relative energy before the slit, per definition, against 1.3% from the verdict in `mean`.
+
+**Outcomes, set before running.**
+- At most 0.2%, the spec's scale: the central region drives the spread.
+- At least 0.7%, half the verdict's value: the spread comes mostly from later in acceleration.
+- In between: both contribute, not separated.
+
+Also reported: in-spec counts, failing terms, fates and their median energies, energy error, transmission. No threshold on these. Start phases keep their T0 values, so a particle far from the crest still loses energy, now from 24 MeV total.
