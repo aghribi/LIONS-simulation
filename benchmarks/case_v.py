@@ -5,6 +5,7 @@ tunes: the tunes of case T3 that read in spec, regenerated and compared with its
 verdict: every tune through LIONS, one pass per tune; finished tunes are kept in parts/ and skipped on a rerun.
 limit: every tune to 4 times T0's turn limit, read at 1, 2 and 4 times it, with particles still circulating reported apart.
 --start-mev: start at the closed-orbit energy nearest above W, for the verdict without the central region; case_v_tunes.parquet is then copied into --outroot.
+--phase-rms-deg: Gaussian start phases of this rms around the tune's phase, in place of T0's buncher law. Deterministic quantiles.
 --extraction: mean, the orbit of mean radius R, as F18. energy: the orbit at T0's energy for R, where beta c / omega = R.
 """
 import argparse
@@ -23,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+from scipy.stats import norm
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
@@ -118,7 +120,7 @@ class Pass:
     Each one starts before theta = 0 on the closed orbit, with its electric kick off until it arrives there: it arrives at the start energy, at its own phase.
     """
 
-    def __init__(self, workdir, mp, ref, knobs, errors, draws, max_turns=None, scale_in_map=False, factors=()):
+    def __init__(self, workdir, mp, ref, knobs, errors, draws, max_turns=None, scale_in_map=False, factors=(), phase_rms_deg=None):
         machine, ion = P.MACHINE, P.ION
         self.mp, self.knobs, self.errors = mp, knobs, errors
         self.b0 = knobs['b0'] * (1 + errors.field)
@@ -134,7 +136,7 @@ class Pass:
         self.read_at = {self.base * f * P.STEPS: f for f in factors}
         if factors:
             self.limit = self.base * max(factors)
-        self.phi = mc.start_phases(knobs, errors)
+        self.phi = mc.start_phases(knobs, errors) if phase_rms_deg is None else wrap(np.radians(knobs['phase_deg'] + errors.phase_deg + phase_rms_deg * norm.ppf((np.arange(N) + 0.5) / N)))
         self.z0 = mc.start_heights(machine, draws) * 1e-3
         hold = (self.phi + np.pi) / (2 * np.pi) * P.STEPS / self.h       # steps to theta = 0, under half a turn at harmonic 2
         at = P.STEPS - hold
@@ -344,7 +346,7 @@ def check(outdir, mp):
 
 
 def one(job):
-    row, mapdir, parts, start_mev, extraction = job
+    row, mapdir, parts, start_mev, extraction, phase_rms_deg = job
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
         return row['tune']
@@ -355,7 +357,7 @@ def one(job):
     t0 = row_of('t0', m)
     t0_beam = m.beam
     began = time.perf_counter()
-    p = Pass(work, mp, ref, m.knobs, m.errors, m.draws)
+    p = Pass(work, mp, ref, m.knobs, m.errors, m.draws, phase_rms_deg=phase_rms_deg)
     wall = time.perf_counter() - began
     base = {k: row[k] for k in ('tune', 'method', 'training_seed', 'condition')}
     inputs = {'rf_mhz': float(m.knobs['rf_mhz']), 'b0_t': float(p.b0), 'dee_kv': float(m.knobs['dee_kv']), 'phase_deg': float(m.knobs['phase_deg'] + m.errors.phase_deg),
@@ -444,12 +446,12 @@ def limit_study(outdir, mp, workers, reference):
         print(f, 'x:', {c: sum(r[f'n_{c}'] for r in s) for c in (EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT)}, 'of', N * len(s), 'median lost kW with', float(np.median([r['lost_kw_with_circulating'] for r in s])), 'without', float(np.median([r['lost_kw_without_circulating'] for r in s])))
 
 
-def verdict(outdir, mp, workers, start_mev, extraction):
+def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
     rows = [r for r in pq.read_table(outdir / 'case_v_tunes.parquet', use_threads=False).to_pylist() if r['harmonic'] == P.HARMONIC]
     parts = outdir / 'parts'
     parts.mkdir(parents=True, exist_ok=True)
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
-        list(pool.imap_unordered(one, [(r, mp.dir, parts, start_mev, extraction) for r in rows]))
+        list(pool.imap_unordered(one, [(r, mp.dir, parts, start_mev, extraction, phase_rms_deg) for r in rows]))
     done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
     write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s')
     write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
@@ -468,6 +470,7 @@ if __name__ == '__main__':
     parser.add_argument('--mapdir', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
     parser.add_argument('--reference', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
     parser.add_argument('--start-mev', type=float)
+    parser.add_argument('--phase-rms-deg', type=float)
     parser.add_argument('--extraction', choices=('mean', 'energy'), default='mean')
     parser.add_argument('--workers', type=int, default=int(os.environ.get('SLURM_CPUS_PER_TASK', 1)))
     args = parser.parse_args()
@@ -481,4 +484,4 @@ if __name__ == '__main__':
     elif args.step == 'limit':
         limit_study(outdir, mp_, args.workers, args.reference.resolve())
     else:
-        verdict(outdir, mp_, args.workers, args.start_mev, args.extraction)
+        verdict(outdir, mp_, args.workers, args.start_mev, args.extraction, args.phase_rms_deg)

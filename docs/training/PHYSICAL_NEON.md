@@ -202,3 +202,26 @@ Found after the data, not registered:
 - Of the 21, `energy` from 1.196 MeV/u passes 6 coach tunes and 1 MOBO tune. By slit: 6 of 11 below 0.5%, 1 of 10 at or above. T0's spread never exceeds 0.098%, so optimisers that left the slit open see no need to close it, and LIONS fails 9 of those 10 on spread.
 - Coach tune 1 has 88 particles at extraction and zero current in both 1.196 MeV/u runs. T0's slit keeps particles near the mean of all energies, and off-crest outliers move that mean out of the core. A closed-form artefact, not physics.
 - Published values, not used in any gate: CIME's longitudinal emittance is 0.15% x 10 deg rms (entry C13), and a semi-interceptive radial probe removes unwanted phases (Lieuvin 2001). NEON's 0.1% spread spec is tighter than that 0.15%. T0's cos rule stands in for a phase selection it does not model.
+
+## Published phase width (registered 2026-11-03, before running)
+
+**Change of primary definition, after seeing results.** For NEON, `energy` is the primary extraction definition from here on. The earlier tables stay as they are. It is derived from T0's rho = R, and from 1.196 MeV/u it fails energy on 5 tunes against 20. NEON and F18 verdicts then use different rules and are not directly comparable.
+
+**Question.** With a published phase width in place of T0's start phases, does LIONS agree with T0 on the 21 tunes?
+
+**Change.** Start phases Gaussian, 10 deg rms (entry C13: 0.15% x 10 deg rms), centred on each tune's `phase_deg` + phase error, as 120 deterministic quantiles. T0's buncher law is not used. Start at 1.196 MeV/u, `energy`, no cos rule in the primary reading. Same tunes, knobs, field errors and heights. T0's columns do not change.
+
+**Limits stated before running.**
+- C13 gives no location or definition beyond "RMS", and 10 deg is taken at the start here.
+- T0's law is a full RF cycle at injection with a buncher, consistent with a CW source: Lieuvin 2001 reports a buncher catching about 65% of the CW beam. The narrow width models what survives selection, with no selection hardware and no intensity loss.
+- Current is therefore inflated, as transmission counts 120 particles that were not cut. Current terms are not meaningful in this run, and the count without them is the primary one.
+- Tunes were found by T0 with its own phases. A good result shows where the mismatch comes from, not that the tunes are right.
+
+**Primary metric.** LIONS in spec without the current terms, of T0's 21.
+
+**Outcomes, set before running.**
+- At least 17 of 21: the phase width closes the gap.
+- At most 11 of 21: it does not, and another cause is needed.
+- Between: partial.
+
+**Also reported.** Rms before the slit, against 0.15% published and 1.27% from T0's phases; each failing term; in spec with current terms; energy error.
