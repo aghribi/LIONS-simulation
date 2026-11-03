@@ -69,7 +69,7 @@ class Map:
     """What the verdict takes from case P: start orbit, crest, extraction radius."""
 
     def __init__(self, mapdir, start_mev=None, extraction='mean'):
-        self.dir = Path(mapdir).resolve()
+        self.dir, self.extraction = Path(mapdir).resolve(), extraction
         rec = [r for r in pq.read_table(self.dir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic']
         gains = pq.read_table(self.dir / 'case_p_gain.parquet').to_pylist()
         by_energy = [(r['w_mev'], r['r_co_m']) for r in rec]
@@ -261,10 +261,10 @@ def row_of(prefix, m):
     return {**{f'{prefix}_{k}': float(getattr(b, k)) for k in BEAM_FIELDS}, f'{prefix}_terms': json.dumps(m.spec_terms()), f'{prefix}_in_spec': bool(m.ready())}
 
 
-def write(records, path, what, mp, units):
+def write(records, path, what, mp, units, phase_rms_deg=None):
     meta = {'case': f'synthetic {MISSION}, {what}', 'registration': P.REGISTRATION, 'label': 'SYNTHETIC', **provenance(*mp.inputs),
             'machine': platform.platform(), 'python': platform.python_version(), 'steps_per_turn': str(P.STEPS), 'interpolation': 'hermite',
-            'start_mev': str(mp.w0), 'crest_deg': str(mp.crest_deg), 'r_ext_m': str(mp.r_ext), 'units': units}
+            'start_mev': str(mp.w0), 'crest_deg': str(mp.crest_deg), 'r_ext_m': str(mp.r_ext), 'extraction': mp.extraction, 'start_phase_law': 'buncher' if phase_rms_deg is None else f'gaussian, {phase_rms_deg} deg rms, buncher unused', 'units': units}
     path.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), path)
 
@@ -453,9 +453,9 @@ def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
         list(pool.imap_unordered(one, [(r, mp.dir, parts, start_mev, extraction, phase_rms_deg) for r in rows]))
     done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
-    write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s')
-    write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
-    write([c for d in done for c in d[2]], outdir / 'case_v_curves.parquet', 'probe and phase against radius', mp, 'r_m m, probe particle-turns per macroparticle, phase deg')
+    write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s', phase_rms_deg)
+    write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run', phase_rms_deg)
+    write([c for d in done for c in d[2]], outdir / 'case_v_curves.parquet', 'probe and phase against radius', mp, 'r_m m, probe particle-turns per macroparticle, phase deg', phase_rms_deg)
     shutil.rmtree(parts)
     v = [d[0] for d in done]
     for method in sorted({r['method'] for r in v}):
@@ -474,6 +474,8 @@ if __name__ == '__main__':
     parser.add_argument('--extraction', choices=('mean', 'energy'), default='mean')
     parser.add_argument('--workers', type=int, default=int(os.environ.get('SLURM_CPUS_PER_TASK', 1)))
     args = parser.parse_args()
+    if args.phase_rms_deg is not None and args.step != 'verdict':
+        parser.error('--phase-rms-deg applies to verdict only')
     outdir = args.outroot.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
     mp_ = Map(args.mapdir, args.start_mev, args.extraction)
