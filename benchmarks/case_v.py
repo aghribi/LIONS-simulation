@@ -24,7 +24,6 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-from scipy.stats import norm
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
@@ -35,6 +34,7 @@ import lions.cli  # noqa: E402
 import orbits  # noqa: E402
 import synthetic as syn  # noqa: E402
 from lions.game import machine as mc  # noqa: E402
+from lions.game.reduced import gaussian_phases  # noqa: E402
 from lions.game import tuners as t  # noqa: E402
 from lions.game.env import mission_by_id  # noqa: E402
 from provenance import provenance  # noqa: E402
@@ -136,7 +136,7 @@ class Pass:
         self.read_at = {self.base * f * P.STEPS: f for f in factors}
         if factors:
             self.limit = self.base * max(factors)
-        self.phi = mc.start_phases(knobs, errors) if phase_rms_deg is None else wrap(np.radians(knobs['phase_deg'] + errors.phase_deg + phase_rms_deg * norm.ppf((np.arange(N) + 0.5) / N)))
+        self.phi = mc.start_phases(knobs, errors) if phase_rms_deg is None else gaussian_phases(knobs, errors, phase_rms_deg)
         self.z0 = mc.start_heights(machine, draws) * 1e-3
         hold = (self.phi + np.pi) / (2 * np.pi) * P.STEPS / self.h       # steps to theta = 0, under half a turn at harmonic 2
         at = P.STEPS - hold

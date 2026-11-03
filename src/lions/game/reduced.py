@@ -1,4 +1,4 @@
-"""Reduced model of a pass, stage B of docs/training/PHYSICAL.md: T0's turn loop reading tables from LIONS on a field map, in place of closed forms.
+"""Reduced model of a pass, stage B of docs/training/PHYSICAL.md and of PHYSICAL_NEON.md: T0's turn loop reading tables from LIONS on a field map, in place of closed forms.
 
 Same arguments and Beam as machine.run. Rules and how each is verified: PHYSICAL.md. No phase cut, stall, clamp or septum in the turn loop. The labelled definitions
 (|z| aperture, r at the map edge, extraction radius) are those of the LIONS verdict. Below the lowest valid gain, gain and orbit are held or scaled: unverified.
@@ -8,12 +8,19 @@ from pathlib import Path
 import numpy as np
 import pyarrow.parquet as pq
 from scipy.interpolate import CubicSpline
+from scipy.stats import norm
 
 from lions.constants import C_LIGHT as C
 from lions.game import machine as mc
 
 GRID = 4000
 EXTRACTED, Z_APERTURE, OUT_OF_MAP, CIRCULATING = 'extracted', 'z_aperture', 'out_of_map', 'turn_limit'
+
+
+def gaussian_phases(knobs, errors, rms_deg):
+    """RF phase [rad] of each macroparticle at the start, in [-pi, pi): Gaussian quantiles around the tune's phase, no buncher."""
+    phi = np.radians(knobs['phase_deg'] + errors.phase_deg + rms_deg * norm.ppf((np.arange(mc.MACROPARTICLES) + 0.5) / mc.MACROPARTICLES))
+    return np.remainder(phi + np.pi, 2 * np.pi) - np.pi
 
 
 class Tables:
@@ -39,8 +46,9 @@ class Tables:
 
 
 class Reduced:
-    def __init__(self, path):
-        self.tables = Tables(Path(path))
+    def __init__(self, path, phase_rms_deg=None):
+        """phase_rms_deg: Gaussian start phases of this rms, in place of T0's buncher law."""
+        self.tables, self.phase_rms_deg = Tables(Path(path)), phase_rms_deg
 
     def run(self, machine, ion, knobs, errors, draws, limit_factor=1):
         """One pass, as machine.run. limit_factor: the numerical turn limit, in units of T0's; a particle still circulating there counts as lost power."""
@@ -64,7 +72,7 @@ class Reduced:
         if h != t.harmonic:
             raise ValueError(f'harmonic {h}: the gain table was measured at {t.harmonic}')
         dee_kv = knobs['dee_kv']
-        phi = mc.start_phases(knobs, errors)
+        phi = mc.start_phases(knobs, errors) if self.phase_rms_deg is None else gaussian_phases(knobs, errors, self.phase_rms_deg)
         z = mc.start_heights(machine, draws)
         lns = np.log(s)
         w_min = t.rest_mev * (np.sqrt(1 + (np.exp(t.lnp_min) * s)**2) - 1)     # r = r_min

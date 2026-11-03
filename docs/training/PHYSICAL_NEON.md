@@ -251,3 +251,27 @@ Found after the data, not registered:
 - Six tunes with phases of 40 to 90 deg keep at most 0.21 of the beam to extraction: 14, 15, 18, 22, 23, 24. Phase alone does not decide it: tunes 12, 16, 20, 21, also at 41 to 69 deg, keep 0.88 to 1.0, not explained. T0's full RF cycle gives such a tune particles near the crest anyway, so the phase knob costs little there. A narrow bunch has none. Tune 13 is the exception: phase 12 deg, 0.07 reach extraction, not explained.
 - Near the crest the agreement is better: the 12 coach tunes all reach extraction with all 120 particles and rms 0.105 to 0.163%.
 - Tunes were found with T0's phases, so they are not tuned for a narrow bunch. A method retuning under the narrow law may differ.
+
+## Reduced model on NEON (registered 2026-11-03, before running)
+
+**Question.** Does the table model of `PHYSICAL.md` stage B describe LIONS on the NEON machine, with the published phase width?
+
+**Model.** `lions.game.reduced`, same rules and same checks as stage B: energy from LIONS crest gains, phase from f_rev(p, s) = v(p) / L(p / s), Betatron action, no phase cut, stall, clamp or septum in the turn loop. Radial motion and the central region are absent, as there.
+
+**NEON settings.** Start at 1.196 MeV/u, orbit-length extraction, Gaussian start phases of 10 deg rms from the same quantiles as LIONS. Table `scenarios/neon_synthetic_orbits.parquet`: LIONS Hermite closed orbits at the 30 design energies, no RF, independent of the tunes. Not connected to the arcade.
+
+**Reference.** The 25 tunes of `case_v_NEON_energy_1mev_phase10`, all held out from the tables. T0 unmodified, with its own phases, is the baseline: it is what the game runs.
+
+**Success.** Median absolute error over the tunes, each line tied to a NEON quantity. Tunes where LIONS extracts nothing have no energy and are left out of the energy line, counted.
+
+| Quantity | Threshold | Tied to |
+|---|---|---|
+| Transmission before the septum | At most 1/120 | One macroparticle, as F18 |
+| Mean extraction energy, relative | Below 0.3% | NEON's energy tolerance |
+| Relative energy spread | Below 0.1% | NEON's spread limit |
+| Phase against radius, rms over bins | Below 6.91 deg | Largest slip of a centred particle from the off-axis gate, as F18 |
+| Pass time | Below 0.15 s | Refresh, as F18 |
+
+The model must pass every line and be closer than T0 on each. Thresholds do not change after the data. Reported besides: rule checks, per-particle fates, survival against start phase, turn limit at 1, 2, 4 times T0's, and the same lines on the coach tunes, which sit near the crest.
+
+Current stays labelled and is not scored: no source gives the intensity cut for a 10 deg bunch here. Passing here would allow a retuning test with this model. It would not make the model true of CIME.
