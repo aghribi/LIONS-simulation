@@ -290,9 +290,9 @@ Coach tunes alone, 12 of 12 with beam, give the same outcomes: transmission 0 ag
 
 Three tunes with no LIONS beam are left out of energy, spread and phase, as registered. Three tunes where LIONS extracts 13, 20, 25 of 120 and the model none count as infinite error.
 
-Corrections to this comparison before its result was read, each committed:
+Corrections made after seeing the first printed tables, each committed. They changed the outcomes: at c1e97a6 transmission and spread failed and energy passed; at d6471dd transmission and spread pass and energy fails. The fixes follow the line names and the thresholds did not move, but they are not blind:
 - The first comparison dropped missing values per model and wrote a spread of 0 for a tune with no beam. Replaced by one mask, and no beam in a model counts as failed (c1e97a6).
-- `Beam.energies` holds what the slit keeps, and the LIONS columns are before the slit. F18 never closes its slit, so it did not show there. All three models are now read with the slit open, as the line is named (d6471dd). The earlier table printed a transmission failure from this. Thresholds did not change.
+- `Beam.energies` holds what the slit keeps, and the LIONS columns are before the slit. F18 never closes its slit, so it did not show there. All three models are now read with the slit open, as the line is named (d6471dd).
 
 Rules against their checks:
 
@@ -317,5 +317,7 @@ Found after the data:
 - Lost-particle classes differ: LIONS 420 at the z aperture, 135 at the map edge, 238 at the turn limit. Reduced 0, 836, 16. They agree on which particles are lost far more than on how.
 - T0's baseline keeps its own wide phases. Its transmission error measures that difference more than its turn loop.
 - Current is still not scored. The comparison reads the slit open, so slit behaviour on tracked energies is not tested here.
+
+Test suite: 200 passed at eac9a62, CRIANN job 3318081.
 
 Nothing here makes the model true of CIME. Not connected to the arcade.
