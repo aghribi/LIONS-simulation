@@ -93,7 +93,7 @@ def check(mapdir):
     gains = [g for g in pq.read_table(mapdir / 'case_p_gain.parquet').to_pylist() if g['w_mev'] >= mp.w0]
     orb = {r['w_mev']: r['r_co_m'] for r in pq.read_table(mapdir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic'}
     keep = P.DEE_KV
-    for g in (gains[1], gains[3]):
+    for g in (gains[1], gains[min(3, len(gains) - 1)]):
         out = []
         for kv in (40.0, 60.0):
             P.DEE_KV = kv
