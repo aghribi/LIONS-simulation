@@ -119,3 +119,50 @@ Measured on the design table: orbit length / (2 pi mean radius) = 1.0031 at all 
 **Metric.** In-spec agreement, per method and overall; which term fails; transmission, energy, spread, lost power against T0. No success threshold.
 
 **Doubts stated before running.** Single pass per tune, 25 tunes, 21 truly in spec. The spread term compares a slit closed form with tracked energies. The turn limit stays T0's, not shown converged for this machine.
+
+**Results, 2026-11-03.** CRIANN jobs 3317856 (tunes), 3317857 (`mean`), 3317858 (`energy`), all at 0a85120. `benchmarks/runs/case_v_NEON_{mean,energy}/` stay on CRIANN. All 25 tunes match case T3 in evaluations, final knobs and true read, all on harmonic 3. 12.3 core-h reserved. One deterministic pass per tune.
+
+| Method | Tunes | T0 truly in spec | LIONS `mean` | LIONS `energy` | With T0's cos rule, `mean` / `energy` |
+|---|---|---|---|---|---|
+| Coach | 12 | 12 | 4 | 0 | 1 / 2 |
+| MOBO | 8 | 5 | 0 | 0 | 0 / 0 |
+| Constrained BO | 4 | 4 | 0 | 0 | 0 / 0 |
+| TuRBO | 1 | 0 | 0 | 0 | 0 / 0 |
+| All | 25 | 21 | 4 | 0 | 1 / 2 |
+
+Failing terms over the 25 tunes, more than one per tune possible:
+
+| Term | T0 | `mean` | `energy` |
+|---|---|---|---|
+| Energy | 4 | 14 | 15 |
+| Spread | 0 | 16 | 17 |
+| Current too low | 0 | 4 | 5 |
+| Current too high | 0 | 2 | 2 |
+| Axis | 0 | 4 | 0 |
+
+Median [min, max]:
+
+| Quantity | T0 | `mean` | `energy` |
+|---|---|---|---|
+| Transmission | 0.355 [0.054, 0.525] | 0.186 [0.033, 0.559] | 0.188 [0.046, 0.553] |
+| Energy, MeV | 199.8 [198.0, 200.8] | 200.6 [199.2, 202.0] | 199.4 [198.0, 200.7] |
+| Relative spread after the slit | 0.00076 [0.00044, 0.00098] | 0.0027 [0.0006, 0.0167] | 0.0023 [0.0006, 0.0159] |
+| Lost power, kW | 0.0062 [0.0036, 0.052] | 0.0075 [0.0045, 0.047] | 0.0073 [0.0045, 0.047] |
+
+**The registered prediction failed.** `mean` fails energy on 14 tunes and `energy` on 15, so moving the radius corrects the median offset and not the count. `energy` is no more informative, and neither definition is shown better.
+
+**The verdict is not robust to the definition.** r_ext moves 4.7 mm and in-spec tunes go from 4 to 0, including all 4 from `mean`.
+
+Read from the tables, not tested:
+- Energy errors run from -0.38% to +1.0% against a 0.3% tolerance in `mean`. One crest turn is 0.18 to 0.53% of the energy, median 0.36%, so a turn is about the tolerance.
+- Tracked spread on the 25 tunes before the slit, rms, in `mean`: median 1.3%, 0.48 to 3.7%. The spec is 0.1%.
+- Coach tunes with the slit near 0.14% keep 0.03 to 0.27 in LIONS against 0.28 to 0.46 in T0, from 0.67 to 0.78 reaching extraction. The slit is T0's closed form on tracked energies.
+- Low-energy losses are large. Of 3000 particles, 586 hit the z aperture and 242 leave the map, at median final energies of 0.16 and 0.08 MeV total, against 1.17 MeV at the start. The start energy is within 1.4 crest gains of zero, in the invented central region. 428 are still circulating at the turn limit, median 39 MeV.
+- Survival by start phase: 0.93 at -30 to 0 deg, 0.87 at 0 to 30 deg, 0.29 at -120 to -60 deg, 0.16 at 90 to 180 deg.
+- T0's cos rule moves little here (4 to 1, 0 to 2). On F18 it moved 14 to 35, so this explanation does not carry over.
+
+Labelled extra: share of extracted particles above 1.513 m at 250 deg, median 0.114 in `mean`, 0.011 in `energy`. It decides nothing.
+
+Checks: closed orbit closes to 0.3 um. Phase motion over 60 turns +3.19 and -3.20 deg against +3.24 and -3.24 deg from T0's update. Scale by coefficient against a rewritten map: 0 MeV after 20 turns. Phase at first crossing against the set phase: at most 0.46 deg. Test suite 200 passed at 926358e, before a one-line change to the deck's species.
+
+Not concluded: single passes, a cosine field, no central region, closed-form slit and septum. The turn limit is not shown converged on this machine. None of this says anything about CIME.
