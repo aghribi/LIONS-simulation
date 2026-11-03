@@ -138,15 +138,16 @@ def compare(verdict, outdir):
         c = sorted((x for x in curves if x['tune'] == row['tune']), key=lambda x: x['bin'])
         counts = np.array([x['lions_probe'] for x in c]) * V.N * V.N     # the tables hold counts / N^2
         phase_lions = np.array([x['lions_phase_deg'] for x in c])
+        # Beam.energies holds what the slit keeps, and the LIONS columns are before it: all three are read with the slit open.
+        unslit = {**m.knobs, 'slit': 0.0}
         began = time.perf_counter()
-        b = model.run(m.machine, m.ion, m.knobs, m.errors, m.draws)
+        b = model.run(m.machine, m.ion, unslit, m.errors, m.draws)
         wall = time.perf_counter() - began
         times.append(wall)
-        t0 = m.beam
         began = time.perf_counter()
-        mc.run(m.machine, m.ion, m.knobs, m.errors, m.draws)
+        t0 = mc.run(m.machine, m.ion, unslit, m.errors, m.draws)
         wall_t0 = time.perf_counter() - began
-        converged = {f: model.run(m.machine, m.ion, m.knobs, m.errors, m.draws, limit_factor=f) for f in (2, 4)}
+        converged = {f: model.run(m.machine, m.ion, unslit, m.errors, m.draws, limit_factor=f) for f in (2, 4)}
         rec = {'tune': row['tune'], 'method': row['method'], 'condition': row['condition'], 'wall_s': wall, 'wall_t0_s': wall_t0, 'turns_reduced': b.turns, 'turns_t0': t0.turns,
                'lions_extracted': int(extracted.sum()), 'lions_transmission': float(extracted.mean()), 'lions_w_mev': float('nan') if none else float(w_ext.mean()), 'lions_spread': float('nan') if none else float(w_ext.std() / w_ext.mean())}
         for name, beam in (('reduced', b), ('t0', t0)):
