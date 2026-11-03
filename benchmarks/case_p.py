@@ -38,8 +38,8 @@ OPTIONS = {'interpolation': 'hermite', 'azimuth': 'atan2'}
 GAP_DEG = 1.5                   # tanh half width of a dee gap, seen from the centre: invented, as the whole central region
 GAP_MIN = 5e-4                  # m, smallest gap half width, resolved by the potential grid
 WORKERS = 2
-START_MEV = 0.091               # verdicts start here, the lowest energy where the dee gate holds
 MISSION = os.environ.get('CASE_P_MISSION', 'F18')
+REGISTRATION = 'docs/training/PHYSICAL_NEON.md' if MISSION == 'NEON' else 'docs/training/PHYSICAL.md'
 M = mission_by_id(MISSION)
 M.reset(0)
 MACHINE, ION, HARMONIC = M.machine, M.ion, M.harmonic
@@ -215,7 +215,7 @@ def workdirs(outdir, n):
 
 
 def write(records, path, step, *inputs):
-    meta = {'case': f'synthetic {MISSION}, {step}', 'registration': 'docs/training/PHYSICAL_NEON.md' if MISSION == 'NEON' else 'docs/training/PHYSICAL.md', 'label': 'SYNTHETIC', **provenance(*inputs),
+    meta = {'case': f'synthetic {MISSION}, {step}', 'registration': REGISTRATION, 'label': 'SYNTHETIC', **provenance(*inputs),
             'machine': platform.platform(), 'python': platform.python_version(),
             'flutter_formula': 'F = eps^2 / 2', 'eps': str(EPS), 'gap_half_width_deg': str(GAP_DEG), 'steps_per_turn': str(STEPS), 'interpolation': 'hermite',
             'units': 'w_mev MeV, r m, gain MeV, phase deg, f_rel_error 1'}

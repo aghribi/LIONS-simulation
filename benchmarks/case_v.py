@@ -1,10 +1,11 @@
-"""Case V: LIONS judges the F18 tunes of case T, stage A of docs/training/PHYSICAL.md. Synthetic map: says nothing about a real machine.
+"""Case V: LIONS judges the tunes of a mission, docs/training/PHYSICAL.md (F18) and PHYSICAL_NEON.md (NEON). Synthetic map: says nothing about a real machine.
 
-usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict,limit} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N] [--start-mev W]
-tunes: the in-spec tunes of case T, regenerated and compared with its tables. check: time one pass, sign of the phase conversion, field scaling.
+usage: CASE_P_MISSION=NEON uv run --extra game --extra rl --extra bo --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict,limit} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N] [--start-mev W] [--extraction {mean,energy}]
+tunes: the tunes of case T3 that read in spec, regenerated and compared with its table. The F18 tunes of case T need the code at a39faa0: the score has changed since. check: time one pass, sign of the phase conversion, field scaling.
 verdict: every tune through LIONS, one pass per tune; finished tunes are kept in parts/ and skipped on a rerun.
 limit: every tune to 4 times T0's turn limit, read at 1, 2 and 4 times it, with particles still circulating reported apart.
 --start-mev: start at the closed-orbit energy nearest above W, for the verdict without the central region; case_v_tunes.parquet is then copied into --outroot.
+--extraction: mean, the orbit of mean radius R, as F18. energy: the orbit at T0's energy for R, where beta c / omega = R.
 """
 import argparse
 import contextlib
@@ -36,11 +37,13 @@ from lions.game import tuners as t  # noqa: E402
 from lions.game.env import mission_by_id  # noqa: E402
 from provenance import provenance  # noqa: E402
 
-MISSION = 'F18'
+MISSION = P.MISSION
+TUNERS = {'coach': t.coach, 'turbo': t.turbo, 'constrained_bo': t.constrained_bo, 'mobo': t.mobo}
 N = mc.MACROPARTICLES
 PPO_SEED = 0
 MAP_FILES = ('bmap.dat', 'pot1.bin', 'pot2.dat')
 REST_MEV = P.MASS_KG * syn.C**2 / syn.MEV
+DEFLECTOR_DEG, DEFLECTOR_R = 250.0, 1.513        # entry of the Mo deck: another ion on another map, a labelled reading, decides nothing
 EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT = 'extracted', 'z_aperture', 'out_of_map', 'turn_limit'
 LIMIT_FACTORS = (1, 2, 4)
 BEAM_FIELDS = ('transmission', 'extracted_ua', 'w_mean', 'w_spread', 'lost_kw', 'turns', 'x', 'y')
@@ -63,14 +66,17 @@ def t0_phase(omega_t, crest_deg):
 class Map:
     """What the verdict takes from case P: start orbit, crest, extraction radius."""
 
-    def __init__(self, mapdir, start_mev=None):
+    def __init__(self, mapdir, start_mev=None, extraction='mean'):
         self.dir = Path(mapdir).resolve()
         rec = [r for r in pq.read_table(self.dir / 'case_p_orbits.parquet').to_pylist() if r['code'] == 'boris_analytic']
         gains = pq.read_table(self.dir / 'case_p_gain.parquet').to_pylist()
         by_energy = [(r['w_mev'], r['r_co_m']) for r in rec]
-        self.w0, self.r0 = min(by_energy, key=lambda a: abs(a[0] - P.START_MEV)) if start_mev is None else min(a for a in by_energy if a[0] >= start_mev)
+        table = dict(by_energy)
+        self.w0 = P.start_energy(gains, table) if start_mev is None else min(a[0] for a in by_energy if a[0] >= start_mev)
+        self.r0 = table[self.w0]
         self.crest_deg = float(np.median([g['crest_phi0_deg'] for g in gains if g['w_mev'] >= self.w0]))
-        self.r_ext = float(np.interp(P.MACHINE.radius, [r['rbar_m'] for r in rec], [r['r_co_m'] for r in rec]))
+        self.r_ext = float(np.interp(P.MACHINE.radius, [r['rbar_m'] for r in rec], [r['r_co_m'] for r in rec]) if extraction == 'mean'
+                           else np.interp(P.momentum(P.W_EXT), P.momentum(np.array([r['w_mev'] for r in rec])), [r['r_co_m'] for r in rec]))
         self.inputs = [self.dir / name for name in ('bmap.dat', 'pot2.dat', 'case_p_gain.parquet', 'case_p_orbits.parquet')]
 
     def workdir(self, path):
@@ -116,7 +122,7 @@ class Pass:
         machine, ion = P.MACHINE, P.ION
         self.mp, self.knobs, self.errors = mp, knobs, errors
         self.b0 = knobs['b0'] * (1 + errors.field)
-        self.s = self.b0 / mc.nominal(machine, ion, P.W_EXT)[0]
+        self.s = self.b0 / mc.nominal(machine, ion, P.W_EXT * P.A)[0]
         w_inj = machine.w_injection * ion.mass_number
         self.g0 = ion.gamma(w_inj)
         f_rf = knobs['rf_mhz'] * 1e6
@@ -135,7 +141,8 @@ class Pass:
         start = np.array([np.interp(at, np.arange(P.STEPS + 1), ref[:, c]) for c in range(6)])
         self.release = np.ceil(hold).astype(int)
         self.fate = np.full(N, TURN_LIMIT, dtype=object)
-        self.w_end, self.w_last, self.w_prev = np.full(N, mp.w0), np.full(N, mp.w0), np.full(N, mp.w0)
+        self.w_end, self.w_last, self.w_prev = (np.full(N, mp.w0 * P.A) for _ in range(3))
+        self.r_deflector = np.full(N, np.nan)
         self.turns = np.zeros(N, dtype=int)
         self.phi_first = np.full(N, np.nan)
         self.flagged, self.w_flag = np.zeros(N, dtype=bool), np.full(N, np.nan)
@@ -173,6 +180,10 @@ class Pass:
         w = (b.gamma - 1) * REST_MEV
         self.w_end[live] = w[live]
         r = np.hypot(b.x, b.y)
+        line = np.radians(DEFLECTOR_DEG)
+        side = lambda x, y: y * np.cos(line) - x * np.sin(line)  # noqa: E731
+        at = live & (side(xp, yp) < 0) & (side(b.x, b.y) >= 0) & (b.x * np.cos(line) + b.y * np.sin(line) > 0)
+        self.r_deflector[at] = r[at]
         over_z = live & (np.abs(b.z) > P.MACHINE.z_aperture * 1e-3)
         out = live & ~over_z & ((r < self.rmin) | (r >= self.rmax))
         self.fate[over_z], self.fate[out] = Z_APERTURE, OUT_OF_MAP
@@ -249,33 +260,42 @@ def row_of(prefix, m):
 
 
 def write(records, path, what, mp, units):
-    meta = {'case': f'synthetic F18, {what}', 'registration': 'docs/training/PHYSICAL.md', 'label': 'SYNTHETIC', **provenance(*mp.inputs),
+    meta = {'case': f'synthetic {MISSION}, {what}', 'registration': P.REGISTRATION, 'label': 'SYNTHETIC', **provenance(*mp.inputs),
             'machine': platform.platform(), 'python': platform.python_version(), 'steps_per_turn': str(P.STEPS), 'interpolation': 'hermite',
             'start_mev': str(mp.w0), 'crest_deg': str(mp.crest_deg), 'r_ext_m': str(mp.r_ext), 'units': units}
     path.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), path)
 
 
-def tunes(outdir, reference, mp):
-    """In-spec tunes with their field error at that pass. Every condition must end as in the tables of case T."""
-    runs = pq.read_table(reference / 'case_t_rl.parquet').to_pylist() + pq.read_table(reference / 'case_t_classical.parquet').to_pylist()
-    model = t.load_policy(reference / f'{MISSION}_ppo_{PPO_SEED}.zip')
-    methods = {'ppo': (PPO_SEED, t.policy, {'model': model}), 'nelder_mead': (-1, t.nelder_mead, {})}
-    rows, wrong = [], 0
-    for name, (seed, method, options) in methods.items():
-        for condition in t.HELD_OUT:
-            m = mission_by_id(MISSION)
-            m.reset(condition)
-            run = t.tune(m, method, condition, **options)
-            was = next(r for r in runs if (r['mission'], r['method'], r['training_seed'], r['condition']) == (MISSION, name, seed, condition))
-            same = (run.reached is not None) == was['in_spec'] and (run.reached is None or float(run.reached) == was['evals_to_spec'])
-            wrong += not same
-            print(name, condition, run.reached, was['evals_to_spec'], '' if same else 'DIFFERENT', flush=True)
-            if run.reached:
-                rows.append({'tune': len(rows), 'method': name, 'training_seed': seed, 'condition': condition, 'evals': run.reached,
-                             'field_error': float(m.errors.field), 'knobs': json.dumps(m.knobs)})
+def tune_job(job):
+    """One tune of case T3, regenerated: the Parquet holds no field error. torch on one thread, as there."""
+    import torch
+    torch.set_num_threads(1)
+    was = job
+    m = mission_by_id(MISSION)
+    m.reset(was['condition'])
+    run = t.tune(m, TUNERS[was['method']], was['condition'])
+    knobs = {k: float(m.knobs[k]) for k in run.keys}
+    same = run.reached is not None and float(run.reached) == was['evals_to_spec'] and knobs == json.loads(was['final_knobs']) and bool(m.ready()) == was['true_at_stop']
+    print(was['method'], was['condition'], run.reached, was['evals_to_spec'], '' if same else 'DIFFERENT', flush=True)
+    return same, {'method': was['method'], 'training_seed': -1, 'condition': was['condition'], 'evals': run.reached, 'field_error': float(m.errors.field), 'knobs': json.dumps(m.knobs),
+                  't0_true_at_stop': bool(m.ready()), 'harmonic': harmonic_of(m.knobs, m.errors)}
+
+
+def harmonic_of(knobs, errors):
+    w_inj = P.MACHINE.w_injection * P.ION.mass_number
+    return max(round(knobs['rf_mhz'] * 1e6 / P.ION.f_rev(w_inj, knobs['b0'] * (1 + errors.field))), 1)
+
+
+def tunes(outdir, reference, mp, workers):
+    """Every tune that read in spec on the original box in case T3. Each must end as in its table, or the run stops."""
+    runs = [r for r in pq.read_table(reference / 'case_t3_classical.parquet', use_threads=False).to_pylist() if r['mission'] == MISSION and r['box'] == 'original' and r['in_spec_measured']]
+    with multiprocessing.get_context('spawn').Pool(workers) as pool:
+        done = pool.map(tune_job, runs, chunksize=1)
+    rows = [{'tune': i, **d[1]} for i, d in enumerate(done)]
     write(rows, outdir / 'case_v_tunes.parquet', 'tunes', mp, 'field_error 1, knobs as the scenario')
-    print(f'{len(rows)} tunes; {wrong} conditions differ from case T')
+    wrong = sum(not d[0] for d in done)
+    print(f'{len(rows)} tunes; true at stop {sum(r["t0_true_at_stop"] for r in rows)}; harmonics {sorted({r["harmonic"] for r in rows})}; {wrong} differ from case T3')
     return wrong
 
 
@@ -296,7 +316,7 @@ def check(outdir, mp):
     print('first crossing against the set phase: max |diff|', float(np.nanmax(np.abs(np.degrees(wrap(p.phi_first - p.phi))))), 'deg; never crossed', int(np.isnan(p.phi_first).sum()))
     # Sign and size of the phase conversion against T0's update: phi += 2 pi (f_rf / f_rev - h) per turn.
     calm = {**m.knobs, 'phase_deg': -m.errors.phase_deg, 'buncher': 0.0}
-    turns, nominal_b0 = 60, mc.nominal(P.MACHINE, P.ION, P.W_EXT)[0]
+    turns, nominal_b0 = 60, mc.nominal(P.MACHINE, P.ION, P.W_EXT * P.A)[0]
     calm['b0'] = nominal_b0 / (1 + m.errors.field)
     calm['rf_mhz'] = P.HARMONIC * P.F0 / 1e6
     for name, change in (('rf +1e-4', {'rf_mhz': calm['rf_mhz'] * (1 + 1e-4)}), ('b0 +1e-4', {'b0': calm['b0'] * (1 + 1e-4)})):
@@ -324,11 +344,11 @@ def check(outdir, mp):
 
 
 def one(job):
-    row, mapdir, parts, start_mev = job
+    row, mapdir, parts, start_mev, extraction = job
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
         return row['tune']
-    mp = Map(mapdir, start_mev)
+    mp = Map(mapdir, start_mev, extraction)
     work = mp.workdir(parts / f"work_{row['tune']:03d}")
     ref = reference_orbit(work, mp)
     m = of_tune(row)
@@ -342,12 +362,13 @@ def one(job):
               'buncher': float(m.knobs['buncher'])}
     lions_m = judged(row['condition'], m.knobs, row['field_error'], p.beam())
     rule_m = judged(row['condition'], m.knobs, row['field_error'], p.beam(behind_rule=True))
-    verdict = {**base, **inputs, 'field_scale': float(p.s), 'wall_s': wall, 'limit_turns': p.limit, **t0, **row_of('lions', lions_m), **row_of('rule', rule_m)}
+    reading = p.fate == EXTRACTED
+    verdict = {**base, **inputs, 'field_scale': float(p.s), 'wall_s': wall, 'limit_turns': p.limit, 'extracted_past_deflector_entry': float(np.mean(p.r_deflector[reading] >= DEFLECTOR_R)) if reading.any() else float('nan'), **t0, **row_of('lions', lions_m), **row_of('rule', rule_m)}
     with np.errstate(invalid='ignore', divide='ignore'):
         by_bin = p.phase_sum / p.counts
     particles = [{**base, **inputs, 'particle': i, 'phi_start_deg': float(np.degrees(p.phi[i])), 'phi_first_deg': float(np.degrees(p.phi_first[i])), 'z0_m': float(p.z0[i]), 'survives': p.fate[i] == EXTRACTED, 'fate': str(p.fate[i]),
                   'turns': int(p.turns[i]), 'w_final_mev': float(p.w_end[i]), 'w_extraction_mev': float(p.w_last[i]) if p.fate[i] == EXTRACTED else float('nan'),
-                  'behind_rf': bool(p.flagged[i]), 'phase_by_bin_deg': [float(v) for v in by_bin[i]]} for i in range(N)]
+                  'behind_rf': bool(p.flagged[i]), 'r_at_deflector_azimuth_m': float(p.r_deflector[i]), 'phase_by_bin_deg': [float(v) for v in by_bin[i]]} for i in range(N)]
     bl = lions_m.beam
     curves = [{**base, 'bin': j, 'r_m': float(t0_beam.probe_r[j]), 't0_probe': float(t0_beam.probe[j]), 't0_phase_deg': float(t0_beam.phase[j]),
                'lions_probe': float(bl.probe[j]), 'lions_phase_deg': float(bl.phase[j])} for j in range(mc.PROBE_BINS)]
@@ -423,19 +444,19 @@ def limit_study(outdir, mp, workers, reference):
         print(f, 'x:', {c: sum(r[f'n_{c}'] for r in s) for c in (EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT)}, 'of', N * len(s), 'median lost kW with', float(np.median([r['lost_kw_with_circulating'] for r in s])), 'without', float(np.median([r['lost_kw_without_circulating'] for r in s])))
 
 
-def verdict(outdir, mp, workers, start_mev):
-    rows = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()
+def verdict(outdir, mp, workers, start_mev, extraction):
+    rows = [r for r in pq.read_table(outdir / 'case_v_tunes.parquet', use_threads=False).to_pylist() if r['harmonic'] == P.HARMONIC]
     parts = outdir / 'parts'
     parts.mkdir(parents=True, exist_ok=True)
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
-        list(pool.imap_unordered(one, [(r, mp.dir, parts, start_mev) for r in rows]))
+        list(pool.imap_unordered(one, [(r, mp.dir, parts, start_mev, extraction) for r in rows]))
     done = [pickle.loads((parts / f"{r['tune']:03d}.pkl").read_bytes()) for r in rows]
     write([d[0] for d in done], outdir / 'case_v_verdict.parquet', 'verdict per tune', mp, 'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s')
     write([p for d in done for p in d[1]], outdir / 'case_v_particles.parquet', 'one row per particle', mp, 'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run')
     write([c for d in done for c in d[2]], outdir / 'case_v_curves.parquet', 'probe and phase against radius', mp, 'r_m m, probe particle-turns per macroparticle, phase deg')
     shutil.rmtree(parts)
     v = [d[0] for d in done]
-    for method in ('ppo', 'nelder_mead'):
+    for method in sorted({r['method'] for r in v}):
         s = [r for r in v if r['method'] == method]
         print(method, len(s), 'tunes; T0 in spec', sum(r['t0_in_spec'] for r in s), 'LIONS', sum(r['lions_in_spec'] for r in s), 'LIONS with the behind-RF rule', sum(r['rule_in_spec'] for r in s))
 
@@ -447,16 +468,17 @@ if __name__ == '__main__':
     parser.add_argument('--mapdir', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_p')
     parser.add_argument('--reference', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
     parser.add_argument('--start-mev', type=float)
+    parser.add_argument('--extraction', choices=('mean', 'energy'), default='mean')
     parser.add_argument('--workers', type=int, default=int(os.environ.get('SLURM_CPUS_PER_TASK', 1)))
     args = parser.parse_args()
     outdir = args.outroot.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
-    mp_ = Map(args.mapdir, args.start_mev)
+    mp_ = Map(args.mapdir, args.start_mev, args.extraction)
     if args.step == 'tunes':
-        sys.exit(1 if tunes(outdir, args.reference.resolve(), mp_) else 0)
+        sys.exit(1 if tunes(outdir, args.reference.resolve(), mp_, args.workers) else 0)
     elif args.step == 'check':
         check(outdir, mp_)
     elif args.step == 'limit':
         limit_study(outdir, mp_, args.workers, args.reference.resolve())
     else:
-        verdict(outdir, mp_, args.workers, args.start_mev)
+        verdict(outdir, mp_, args.workers, args.start_mev, args.extraction)

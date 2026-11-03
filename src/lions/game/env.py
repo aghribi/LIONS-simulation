@@ -64,7 +64,7 @@ class MissionEnv(gym.Env):
         score = m.tune_score()
         reward = score - self.score - ACTION_COST * float(np.abs(action).mean())
         self.score = score
-        terminated = bool(m.ready())
+        terminated = bool(m.measured_ready())
         if terminated:
             reward += SPEC_BONUS
-        return self.observe(), float(reward), terminated, self.steps >= BUDGET, {'in_spec': terminated, 'score': score}
+        return self.observe(), float(reward), terminated, self.steps >= BUDGET, {'in_spec': terminated, 'truly_in_spec': bool(m.ready()), 'score': score}

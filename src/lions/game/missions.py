@@ -1,5 +1,6 @@
 """Missions: a client request, a machine with knobs, control-room readings. Same reset, step, score as the stages."""
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -29,6 +30,18 @@ def checked(block, units, where):
             raise ValueError(f"{where}.{key}: unit {item['unit']}, expected {unit}")
         out[key] = item['value']
     return out
+
+
+@dataclass
+class Quantities:
+    """What the spec terms are built from: the true beam, or one pass of readings."""
+    current: float    # uA
+    w: float          # MeV
+    x: float          # mm
+    y: float          # mm
+    spot: float       # mm
+    lost: float       # kW
+    spread: float     # relative
 
 
 class Mission(Stage):
@@ -107,18 +120,34 @@ class Mission(Stage):
         seen = np.flatnonzero(self.beam.probe > 0)
         return float((seen[-1] + 1) / len(self.beam.probe)) if len(seen) else 0.0
 
-    def spec_terms(self):
-        """What the client asks, as normalised errors: each term is in spec at 1 or below. Measured quantities only."""
+    def terms(self, q):
+        """What the client asks, as normalised errors: each term is in spec at 1 or below."""
         raise NotImplementedError
+
+    def true_quantities(self):
+        b = self.beam
+        return Quantities(b.extracted_ua, b.w_mean, b.x, b.y, self.spot(), b.lost_kw, b.w_spread)
+
+    def spec_terms(self):
+        """On the true beam: what the machine delivers."""
+        return self.terms(self.true_quantities())
+
+    def measured_terms(self):
+        """On the readings of this pass: what the control room can tell."""
+        r = self.readings
+        return self.terms(Quantities(r['extracted_uA'], r['w_MeV'], r['x_mm'], r['y_mm'], r['spot_mm'], r['lost_kW'], r['spread']))
 
     def ready(self):
         return self.has_beam() and max(self.spec_terms().values()) <= 1
+
+    def measured_ready(self):
+        return self.has_beam() and max(self.measured_terms().values()) <= 1
 
     def tune_score(self):
         """In [0, 1], from what the control room reads. No beam out of the machine scores on the radial probe only."""
         if not self.has_beam():
             return 0.3 * self.reach()
-        terms = self.spec_terms().values()
+        terms = self.measured_terms().values()
         return 0.3 + 0.7 * sum(1 / max(e, 1.0) for e in terms) / len(terms)
 
     def wait(self, dt):
@@ -225,10 +254,11 @@ class Therapy(Degraded):
         p = self.p
         return abs(self.peak - p['depth_cm']) <= p['half_width_cm'] and math.hypot(self.beam.x, self.beam.y) <= p['lateral_mm']
 
-    def spec_terms(self):
-        p, b = self.p, self.beam
-        return {'depth': abs(self.peak - p['depth_cm']) / p['half_width_cm'], 'axis': math.hypot(b.x, b.y) / p['lateral_mm'],
-                'lost': b.lost_kw / self.machine.max_lost_kw}
+    def terms(self, q):
+        p = self.p
+        peak = self.peak + float(physics.proton_range(q.w) - physics.proton_range(self.beam.w_mean))
+        return {'depth': abs(peak - p['depth_cm']) / p['half_width_cm'], 'axis': math.hypot(q.x, q.y) / p['lateral_mm'],
+                'lost': q.lost / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p = self.p
@@ -271,11 +301,11 @@ class Isotope(Mission):
     def on_window(self):
         return math.hypot(self.beam.x, self.beam.y) <= self.p['window_mm']
 
-    def spec_terms(self):
-        p, b = self.p, self.beam
-        return {'energy': abs(b.w_mean / p['w_ref'] - 1) / p['w_tolerance'], 'current': p['current_min'] / max(b.extracted_ua, 1e-9),
-                'power': self.target_kw / p['target_kw'], 'axis': math.hypot(b.x, b.y) / p['window_mm'],
-                'lost': b.lost_kw / self.machine.max_lost_kw}
+    def terms(self, q):
+        p = self.p
+        return {'energy': abs(q.w / p['w_ref'] - 1) / p['w_tolerance'], 'current': p['current_min'] / max(q.current, 1e-9),
+                'power': q.current * q.w * 1e-3 / p['target_kw'], 'axis': math.hypot(q.x, q.y) / p['window_mm'],
+                'lost': q.lost / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p, b = self.p, self.beam
@@ -306,11 +336,11 @@ class Experiment(Mission):
     GOAL_UNITS = {'w_tolerance': '1', 'spread_max': '1', 'current_min': 'uA', 'current_max': 'uA', 'position_mm': 'mm', 'spot_max': 'mm', 'hold_s': 's'}
     UNITS = {**COMMON_UNITS, **GOAL_UNITS}
 
-    def spec_terms(self):
-        p, b = self.p, self.beam
-        return {'energy': abs(b.w_mean / p['w_target'] - 1) / p['w_tolerance'], 'spread': b.w_spread / p['spread_max'],
-                'current_low': p['current_min'] / max(b.extracted_ua, 1e-9), 'current_high': b.extracted_ua / p['current_max'],
-                'axis': math.hypot(b.x, b.y) / p['position_mm'], 'spot': b.spot / p['spot_max'], 'lost': b.lost_kw / self.machine.max_lost_kw}
+    def terms(self, q):
+        p = self.p
+        return {'energy': abs(q.w / p['w_target'] - 1) / p['w_tolerance'], 'spread': q.spread / p['spread_max'],
+                'current_low': p['current_min'] / max(q.current, 1e-9), 'current_high': q.current / p['current_max'],
+                'axis': math.hypot(q.x, q.y) / p['position_mm'], 'spot': q.spot / p['spot_max'], 'lost': q.lost / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p = self.p
@@ -333,11 +363,12 @@ class IsolTarget(Mission):
     def power(self):
         return self.beam.extracted_ua * self.beam.w_mean * 1e-3
 
-    def spec_terms(self):
-        p, b = self.p, self.beam
-        return {'power_low': p['power_min_kw'] / max(self.power(), 1e-9), 'power_high': self.power() / p['power_limit_kw'],
-                'density': self.density() / p['density_limit'], 'axis': (math.hypot(b.x, b.y) + b.spot) / p['target_radius_mm'],
-                'lost': b.lost_kw / self.machine.max_lost_kw}
+    def terms(self, q):
+        p = self.p
+        power = q.current * q.w * 1e-3
+        return {'power_low': p['power_min_kw'] / max(power, 1e-9), 'power_high': power / p['power_limit_kw'],
+                'density': power / (2 * math.pi * max(q.spot, 1e-3)**2) / p['density_limit'], 'axis': (math.hypot(q.x, q.y) + q.spot) / p['target_radius_mm'],
+                'lost': q.lost / self.machine.max_lost_kw}
 
     def density(self):
         return self.power() / (2 * math.pi * max(self.beam.spot, 1e-3)**2)
@@ -380,23 +411,26 @@ class Qualification(Degraded):
     def after_beam(self):
         self.degrade()
 
-    def w_sample(self):
-        return float(physics.energy_at_range(max(physics.proton_range(self.beam.w_mean) - self.knobs['degrader_cm'], 1e-6))) if self.has_beam() else 0.0
+    def w_sample(self, q=None):
+        w = q.w if q else self.beam.w_mean
+        return float(physics.energy_at_range(max(physics.proton_range(w) - self.knobs['degrader_cm'], 1e-6))) if self.has_beam() else 0.0
 
-    def flux(self):
+    def flux(self, q=None):
         """Peak flux [protons/cm2/s]: a Gaussian spot, sigma in mm."""
-        return self.protons_per_s() / (2 * math.pi * (self.spot() / 10)**2)
+        q = q or self.true_quantities()
+        return q.current * 1e-6 * self.deg_transmission / E_CHARGE / (2 * math.pi * (q.spot / 10)**2)
 
-    def edge_ratio(self):
+    def edge_ratio(self, q=None):
         """Flux at the worst point of the sample over the peak flux."""
-        edge = self.p['sample_radius_mm'] + math.hypot(self.beam.x, self.beam.y)
-        return math.exp(-0.5 * (edge / self.spot())**2)
+        q = q or self.true_quantities()
+        edge = self.p['sample_radius_mm'] + math.hypot(q.x, q.y)
+        return math.exp(-0.5 * (edge / q.spot)**2)
 
-    def spec_terms(self):
+    def terms(self, q):
         p = self.p
-        return {'energy': abs(self.w_sample() / p['w_sample'] - 1) / p['w_sample_tolerance'], 'flux_low': p['flux_min'] / max(self.flux(), 1.0),
-                'flux_high': self.flux() / p['flux_max'], 'uniformity': (1 - self.edge_ratio()) / (1 - p['uniformity']),
-                'lost': self.beam.lost_kw / self.machine.max_lost_kw}
+        return {'energy': abs(self.w_sample(q) / p['w_sample'] - 1) / p['w_sample_tolerance'], 'flux_low': p['flux_min'] / max(self.flux(q), 1.0),
+                'flux_high': self.flux(q) / p['flux_max'], 'uniformity': (1 - self.edge_ratio(q)) / (1 - p['uniformity']),
+                'lost': q.lost / self.machine.max_lost_kw}
 
     def deliver(self, dt):
         p = self.p

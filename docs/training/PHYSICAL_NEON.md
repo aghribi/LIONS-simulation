@@ -95,3 +95,27 @@ Not changed here.
 ## After the gates
 
 Registered separately once the gates are known: the verdict on NEON tunes (coach 12, MOBO 8, constrained 4, TuRBO 1 of 20 on T0), and the deflector geometry from the published values.
+
+## Verdict on the NEON tunes (registered 2026-11-03, before running)
+
+**Question.** How often do T0 and LIONS agree on a NEON tune T0 reads in spec, on this synthetic machine?
+
+**Test set.** Every run that read in spec on the original box in case T3: coach 12, MOBO 8, constrained BO 4, TuRBO 1. The T3 table holds no field error, so tunes are regenerated with the same seeds on CRIANN. Evaluations, final knobs and the true read must match the table, or the run stops. The 4 tunes T3 found truly out of spec are judged too, and counted apart. A tune on a harmonic other than 3 is not judged, since the map and crest are built for 3; the count is reported.
+
+**As F18, `PHYSICAL.md`.** One deterministic pass per tune, 120 macroparticles, Hermite, 360 steps per turn. Same field scale, phase conversion, T0 start phases and heights, z aperture, map edge, T0 turn limit. `cos(phi) < 0.2` applied only in the second verdict. Septum, slit, deflector, steerers, quadrupole and spec terms from T0's closed forms, so those columns are not physics. Start at 0.0587 MeV/u, from the dee gate. No space charge in LIONS.
+
+**Field mapping.** Field scale = `b0 (1 + field error)` / T0's nominal `b0`. Scale 1 is the map as built, isochronous at T0's frequency. T0's 1.522 T and the map's mean field are not compared directly: the map holds the frequency at each energy, so the design point is the frequency.
+
+**Extraction, two definitions, both run.**
+- `mean`, primary, F18's rule: first theta = 0 crossing at or above the closed orbit with mean radius 1.5 m. r_ext = 1.5443 m.
+- `energy`: the closed orbit at T0's 10 MeV/u. T0's rho = R is beta c / omega = R, an orbit length over 2 pi. r_ext = 1.5396 m. Derived here from T0's formula.
+
+Measured on the design table: orbit length / (2 pi mean radius) = 1.0031 at all checked energies, scalloping from the flutter. So the mean radius rule gives 10.062 MeV/u at the orbit, 0.62% above target.
+
+**Prediction, before running.** With tolerance 0.3%, the `mean` verdict fails the energy term on most tunes, from the definition alone. F18 did not show this as its tolerance is 3%. If this holds, `mean` does not measure tuning on NEON and `energy` is the informative reading. The decision between them stays with the user.
+
+**Labelled extra, decides nothing.** Share of extracted particles above the entry radius of the Mo deck's deflector, 1.513 m at 250 deg. Another ion on another map, whose azimuth is not tied to these hills. LIONS' deflector has no blade and removes nothing.
+
+**Metric.** In-spec agreement, per method and overall; which term fails; transmission, energy, spread, lost power against T0. No success threshold.
+
+**Doubts stated before running.** Single pass per tune, 25 tunes, 21 truly in spec. The spread term compares a slit closed form with tracked energies. The turn limit stays T0's, not shown converged for this machine.
