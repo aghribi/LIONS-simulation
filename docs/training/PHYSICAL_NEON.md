@@ -181,3 +181,24 @@ Not concluded: single passes, a cosine field, no central region, closed-form sli
 - In between: both contribute, not separated.
 
 Also reported: in-spec counts, failing terms, fates and their median energies, energy error, transmission. No threshold on these. Start phases keep their T0 values, so a particle far from the crest still loses energy, now from 24 MeV total.
+
+**Results.** CRIANN jobs 3317996 (`mean`) and 3317997 (`energy`), at cfec373, in `benchmarks/runs/case_v_NEON_{mean,energy}_1mev/`. 3.4 core-h reserved. Single deterministic passes.
+
+| | Verdict, `mean` | Verdict, `energy` | 1.196 MeV/u, `mean` | 1.196 MeV/u, `energy` |
+|---|---|---|---|---|
+| Rms before the slit, median | 1.315% | 1.295% | 1.119% | 1.270% |
+| LIONS in spec, of 21 | 4 | 0 | 0 | 7 |
+| With T0's cos rule, of 21 | 1 | 2 | 0 | 15 |
+| Energy fails, of 25 | 14 | 15 | 20 | 5 |
+| Spread fails, of 25 | 16 | 17 | 15 | 15 |
+| Energy error, median | +0.31% | -0.30% | +0.50% | -0.19% |
+
+**Registered outcome.** 1.12% and 1.27%, both above 0.7%: the spread of the whole bunch comes mostly from above the central region.
+
+Found after the data, not registered:
+- Spread depends on start phase. Within 30 deg of the crest, median rms before the slit is 0.33% from 0.0587 MeV/u and 0.10% from 1.196 MeV/u, on the `energy` tables. The whole bunch stays near 1.3% in both. So the central region sets the core's spread, and off-crest particles set the bunch's. 37% of extracted particles are outside 30 deg.
+- The low-energy candidate of the verdict is refuted. Lost at the z aperture or map edge: 828 from 0.0587 MeV/u, 786 from 1.196 MeV/u, with median final energies of 0.13 and 0.06 MeV total after starting at 24 MeV. Their first phase is a median 115 deg from the crest. They decelerate to the centre. This follows from T0's start phases, not the start energy.
+- The registered prediction on extraction holds once the central region is gone: `mean` fails energy on 20 tunes, `energy` on 5. With the central region both fail near 15.
+- Of the 21, `energy` from 1.196 MeV/u passes 6 coach tunes and 1 MOBO tune. By slit: 6 of 11 below 0.5%, 1 of 10 at or above. T0's spread never exceeds 0.098%, so optimisers that left the slit open see no need to close it, and LIONS fails 9 of those 10 on spread.
+- Coach tune 1 has 88 particles at extraction and zero current in both 1.196 MeV/u runs. T0's slit keeps particles near the mean of all energies, and off-crest outliers move that mean out of the core. A closed-form artefact, not physics.
+- Published values, not used in any gate: CIME's longitudinal emittance is 0.15% x 10 deg rms (entry C13), and a semi-interceptive radial probe removes unwanted phases (Lieuvin 2001). NEON's 0.1% spread spec is tighter than that 0.15%. T0's cos rule stands in for a phase selection it does not model.
