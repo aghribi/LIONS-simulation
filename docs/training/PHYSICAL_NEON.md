@@ -347,3 +347,38 @@ With fewer than 10 tunes truly in spec, the fraction is reported and no outcome 
 **Also reported.** Measured, true and held counts per method against case T3. Median |phase| of the tunes. Failing terms. Model failures and elapsed times.
 
 **Doubts stated before running.** The model failed its energy line. No radial motion, so the model's low spread off crest favours tunes LIONS may reject. Current stays labelled, yet it is in the score and the stop, so it steers methods. The coach's rules were written for T0, and it reads the true beam in part. Differences of 1 or 2 of 20 mean nothing.
+
+**Results.** CRIANN jobs 3318461 (tests, 201 passed), 3318462 (methods), 3318463 (PPO), 3318464 (LIONS check), all at a7ae905. `benchmarks/runs/case_n/` and `case_n_verdict/` stay on CRIANN. 55 core-h reserved, against about 15 to 20 announced: constrained BO and MOBO ran slower than in case T3, medians 2549 s against 329 s and 3124 s against 739 s, not explained. No failed GP fit. All stored states reproduce their true reads.
+
+**Registered outcome: the tunes hold.** Of 16 tunes truly in spec on the reduced model, 13 are in spec in LIONS without the current terms: 81%, against the 80% line and T0's 57%. All 13 also pass with current. One tune fewer would give 75%, partial. The model failed its energy line, a miss the user accepted for this test.
+
+| Method | Truly in spec on the model | In spec in LIONS, no current |
+|---|---|---|
+| Coach | 12 | 12 |
+| MOBO | 2 | 1 |
+| Constrained BO | 1 | 0 |
+| TuRBO | 1 | 0 |
+
+The outcome rests on the coach: 12 of 12, against 1 of 4 for the other methods.
+
+Out of 20, measured in spec / truly in spec / held for all 50 passes:
+
+| Method | Reduced model | T0, case T3 |
+|---|---|---|
+| Coach | 12 / 12 / 11 | 12 / 12 / 12 |
+| MOBO | 6 / 2 / 2 | 8 / 5 / 4 |
+| Constrained BO | 5 / 1 / 0 | 4 / 4 / 2 |
+| TuRBO | 1 / 1 / 0 | 1 / 0 / 0 |
+| Nelder-Mead, random, Bayesian, NSGA-II, CMA-ES | 0 | 0 |
+| PPO, each of 5 seeds | 0 | 0 |
+
+Found after the data, not registered:
+- The tunes moved to the crest: median |phase| 3.8 deg, largest 42 deg. On T0, tunes reached 90 deg.
+- The 3 failures in LIONS are all on spread alone, at 1.14 to 1.36 of the limit, with |phase| near 40 deg on the two checked here. The model has no radial motion, the candidate named before running.
+- All 8 tunes that read in spec and are truly out fail on energy. The reading noise of 0.5% is above the 0.3% tolerance, so a method can stop on a lucky read. Same effect as on QUAL.
+- One MOBO tune truly out on the model passes in LIONS. So LIONS passes 14 of 24 in all.
+- Medians over the 16: LIONS energy error -0.07%, model -0.11%. Transmission 0.60 against 0.66. Spread after the slit 0.082% against 0.083%.
+- The coach's in-spec conditions differ from T3's in part: 10000, 10005, 10009 are new, 10010, 10012, 10013 are gone. The same count of 12 does not mean the same runs.
+- PPO reaches a median best score of 0.87 and no run in spec. Training took 0.93 to 1.23 h per seed.
+
+Limits: single passes per method and condition, 16 tunes, one tune from another outcome. The coach's rules were written for T0 and it reads the true beam in part. Current is in the score and is labelled. Synthetic machine, no central region, cosine field. Nothing here is true of CIME until a CIME map is used.
