@@ -255,7 +255,7 @@ def analyse(outdir, mp, reference):
     def w_of(r, s):
         return (
             np.sqrt(1 + (s * np.interp(r, r_grid, grid)) ** 2) - 1
-        ) * case_v.REST_MEV  # noqa: E731
+        ) * case_v.REST_MEV
 
     tunes = {
         r['tune']: r

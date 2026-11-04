@@ -1239,7 +1239,7 @@ class Arcade(QWidget):
                 y
                 + height
                 * (1 - (min(max(v, bottom), top) - bottom) / (top - bottom)),
-            )  # noqa: E731
+            )
 
         path, started = QPainterPath(), False
         for i, (u, v) in enumerate(zip(xs, ys)):
@@ -1819,7 +1819,10 @@ class Arcade(QWidget):
             f'{s.w:.0f} MEV',
         )
         x0, x1, y, top = 330, 680, 600, 1.3
-        at = lambda q: x0 + (x1 - x0) * min(q, top) / top  # noqa: E731
+
+        def at(q):
+            return x0 + (x1 - x0) * min(q, top) / top
+
         self.p.fillRect(
             QRectF(
                 at(s.p['band_low']),

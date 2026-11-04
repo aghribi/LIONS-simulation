@@ -291,7 +291,10 @@ def write_machine(outdir, field):
     outdir.mkdir(parents=True, exist_ok=True)
     rmax = MACHINE.radius * 1.15
     with contextlib.chdir(outdir):
-        nodes = lambda i: lambda r, t: field.nodes(r, t)[i]  # noqa: E731
+
+        def nodes(i):
+            return lambda r, t: field.nodes(r, t)[i]
+
         syn.write_bmap(
             'bmap.dat',
             nodes(0),

@@ -402,7 +402,7 @@ def lions_option(outdir):
                 *fieldmodels.node_arrays(grids, attrs, every)
             )
 
-            def lions(t, p, n):
+            def lions_tracker(t, p, n):
                 w = (np.sqrt(1 + p**2) - 1) * rest_mev / species[1]
                 return orbits.LionsTracker(
                     work,
@@ -424,7 +424,7 @@ def lions_option(outdir):
                     [[t['r_theta0_m'], p * t['pr_over_p_theta0'], 0.0, 0.0]]
                 )
                 a, b = (
-                    orbits.one_turn(lions(t, p, 360), start),
+                    orbits.one_turn(lions_tracker(t, p, 360), start),
                     orbits.one_turn(harness(t, p, 360), start),
                 )
                 diff = float(
@@ -456,7 +456,9 @@ def lions_option(outdir):
                     )
             for n in (1440, 2880):
                 for label, t, p, q_ref in cases:
-                    got = case_g1.orbit_metrics(lions(t, p, n), t, p, q_ref)
+                    got = case_g1.orbit_metrics(
+                        lions_tracker(t, p, n), t, p, q_ref
+                    )
                     ref = case_g1.orbit_metrics(harness(t, p, n), t, p, q_ref)
                     for key, (v, u) in got.items():
                         records.append(

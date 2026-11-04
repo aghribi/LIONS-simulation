@@ -340,7 +340,10 @@ class Pass:
         self.w_end[live] = w[live]
         r = np.hypot(b.x, b.y)
         line = np.radians(DEFLECTOR_DEG)
-        side = lambda x, y: y * np.cos(line) - x * np.sin(line)  # noqa: E731
+
+        def side(x, y):
+            return y * np.cos(line) - x * np.sin(line)
+
         at = (
             live
             & (side(xp, yp) < 0)
@@ -718,7 +721,10 @@ def check(outdir, mp):
     field = case_p.load_field(mp.dir)
     scaled = mp.workdir(outdir / 'check' / 'scaled')
     (scaled / 'bmap.dat').unlink()
-    nodes = lambda i: lambda r, th: s * field.nodes(r, th)[i]  # noqa: E731
+
+    def nodes(i):
+        return lambda r, th: s * field.nodes(r, th)[i]
+
     with contextlib.chdir(scaled):
         syn.write_bmap(
             'bmap.dat',

@@ -202,7 +202,10 @@ class Mission(Stage):
             self.machine, self.ion, self.knobs, self.errors, self.draws
         )
         self.after_beam()
-        noise = lambda v: v * (1 + self.noise_rng.normal(0, self.p['noise']))  # noqa: E731
+
+        def noise(v):
+            return v * (1 + self.noise_rng.normal(0, self.p['noise']))
+
         b = self.beam
         self.readings = {
             'extracted_uA': noise(b.extracted_ua),

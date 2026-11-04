@@ -265,7 +265,7 @@ def check(mapdir):
                     np.interp(np.log(q), t.qz_lnp, t.qz)
                     * q
                     / t.path(np.log(q))
-                )  # noqa: E731
+                )
 
             print(
                 f'{tag} {lo} to {hi} MeV/u: '
@@ -430,7 +430,10 @@ def lines_report(rows, title):
     nothing has no energy or spread and is left out, counted. A model
     that extracts nothing where LIONS does counts as infinite error.
     """
-    a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
+
+    def a(k):
+        return np.array([r[k] for r in rows], dtype=float)
+
     beam = a('lions_extracted') > 0
     measured = {
         'energy': lambda n: np.abs(a(f'{n}_w_mev') / a('lions_w_mev') - 1),
@@ -476,7 +479,10 @@ def lines_report(rows, title):
 
 def report(rows, particles):
     """Print the pass time, transmission and per-particle fates."""
-    a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
+
+    def a(k):
+        return np.array([r[k] for r in rows], dtype=float)
+
     lines_report(rows, 'all tunes')
     lines_report([r for r in rows if r['method'] == 'coach'], 'coach')
     wall = a('wall_s')

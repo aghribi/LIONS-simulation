@@ -486,7 +486,10 @@ def case_b():
     ax.legend(fontsize=6.5)
     save(fig, 'case_b0')
     lions = b0[(b0.code == 'lions') & (b0.metric == 'r_eo')]
-    err = lambda s: abs(s.value / exact[s.energy_mev, 'r_eo'] - 1)  # noqa: E731
+
+    def err(s):
+        return abs(s.value / exact[s.energy_mev, 'r_eo'] - 1)
+
     e = {
         n: lions[lions.steps_per_turn == n].apply(err, axis=1)
         for n in (720, 1440)
@@ -602,9 +605,7 @@ def case_b():
                 & (x.steps_per_turn == 1440)
                 & (x.metric == 'qr')
             ]
-            .set_index(  # noqa: E731
-                'energy_mev'
-            )
+            .set_index('energy_mev')
             .value.pipe(lambda q: 4 * np.sin(np.pi * q) ** 2)
         )
 
@@ -626,9 +627,7 @@ def case_b():
     def spread(x):
         return (
             x[(x.metric == 'r_eo') & x.code.isin(['lions', 'opal'])]
-            .groupby(  # noqa: E731
-                ['code', 'integrator', 'energy_mev']
-            )
+            .groupby(['code', 'integrator', 'energy_mev'])
             .value.agg(np.ptp)
         )
 
@@ -867,7 +866,7 @@ def case_e2():
                 f'{best64[n] / base[n]:.3g}'
                 if n in best64.index
                 else 'no float64'
-            )  # noqa: E731
+            )
 
         rows.append(
             [
@@ -1151,7 +1150,7 @@ def g2():
             (d.energy_mev > 80)
             & (d.energy_mev < 520)
             & ~d.qr_half_integer_band
-        ]  # noqa: E731
+        ]
 
     rows = []
     e3 = sorted(s3[s3.code == 'opal'].energy_mev.unique())
@@ -1186,16 +1185,19 @@ def g2():
     num('GTwoPrMradMin', 100 * bad.min())
     num('GTwoPrMradMax', 100 * bad.max(), 3)
     write_table('g2', ['Code', r'$r_{eo}$ rel.', r'$Q_r$', r'$Q_z$'], rows)
-    q = lambda d, code: interior(d[d.code == code]).pipe(  # noqa: E731
-        lambda x: (
-            x[
-                (x.metric == 'qr_error')
-                & x.energy_mev.round(3).isin(np.round(e3, 3))
-            ]
-            .value.abs()
-            .median()
+
+    def q(d, code):
+        return interior(d[d.code == code]).pipe(
+            lambda x: (
+                x[
+                    (x.metric == 'qr_error')
+                    & x.energy_mev.round(3).isin(np.round(e3, 3))
+                ]
+                .value.abs()
+                .median()
+            )
         )
-    )
+
     num('GPsiLionsOverOpal', q(s2, 'lions') / q(s3, 'opal'))
     lions = interior(s2[s2.code == 'lions'])
     num(
@@ -1218,7 +1220,7 @@ def g2():
                 d[
                     (d.code == code)
                     & (d.energy_mev == e)
-                    & (d.metric == 'det_r_block')  # noqa: E731
+                    & (d.metric == 'det_r_block')
                     & (d.jacobian_step_m == 1e-6)
                 ].value.iloc[0]
             )  # stored as det - 1
@@ -1232,7 +1234,10 @@ def g2():
                 cell(b, 'spline'),
             ]
         )
-    det = lambda d, code: d[(d.code == code) & (d.metric == 'det_r_block')]  # noqa: E731
+
+    def det(d, code):
+        return d[(d.code == code) & (d.metric == 'det_r_block')]
+
     lb = det(b, 'lions')
     var = lb.groupby('energy_mev').value.agg(
         lambda v: np.ptp(v) / v.abs().max()
