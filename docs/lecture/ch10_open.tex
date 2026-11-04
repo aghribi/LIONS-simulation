@@ -14,9 +14,16 @@ compare between LIONS, Xsuite and Cheetah yet.
 
 \section{Untested hypotheses}
 \begin{itemize}
-\item \textbf{Kink noise on the bilinear path.}
-The bilinear one-turn map is only piecewise smooth, and probes that straddle a cell edge mix two slopes.
-Test: a Jacobian step scan with the closed orbit moved across a cell edge.
+\item \textbf{The step phase on the bilinear path.}
+That each step phase has its own fixed point and Jacobian is inferred (\cref{sec:caseG3}).
+Test: the fixed point and $\det M_r$ against the launch step phase, on one orbit.
+\item \textbf{LIONS against OPALX.}
+LIONS $\det M_r$ is near the inverse of the OPALX one on the same field; not explained.
+\item \textbf{Beam size on the bilinear path.}
+A launch on the closed orbit reaches up to \GThreePeakMax{}~m in 100 coasting turns at \GThreePeakN{} of 24 energies; with Hermite, at most \GThreeHermPeakMax{}~m.
+Why those energies is not known.
+Beam size and emittance over longer runs, on a bunch and with acceleration have not been measured.
+This comes before any surrogate is trained on LIONS bilinear data.
 \item \textbf{Residual on RF-Track with the bilinear field.}
 RF-Track on the bilinear PSI field still leaves $|\det M_r - 1|$ up to \GTwoCRfMax{} (\cref{tab:G2det}).
 Adaptive Runge--Kutta also loses order at gradient jumps, and the section crossing adds its own error.
@@ -51,8 +58,10 @@ On the bilinear maps of case H, neither Boris nor RK4 meets the $10^{-4}$ target
 A $C^1$ interpolation at \HCostHerm{} times the cost lowers $|\det M-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times.
 \item Count nodes per harmonic period, not degrees.
 \item On bilinear fields, the one-turn maps of fixed-step integrators (Boris and RK4) are far from area-preserving,
-orders of magnitude more than on smooth fields; integration across the gradient jumps is the explanation consistent with
-the evidence, not yet tested directly.
+orders of magnitude more than on smooth fields, in LIONS and in OPALX.
+The map depends on the step phase (a proposal, \cref{sec:caseG3}).
+\item A one-turn Jacobian on a piecewise-smooth map is a local object.
+Check any tune from it against tracking: on the PSI map the error against the reference is more than ten times larger from the Jacobian than from tracking.
 \item Every convention (units, signs, direction, reference azimuth) should be settled by a two-reading run.
 \item A criterion built by the analysis that it judges can be tautological.
 Write the triangle inequality down before using one.

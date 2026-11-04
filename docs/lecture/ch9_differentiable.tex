@@ -66,6 +66,8 @@ A finite difference with a step larger than the spacing of these jumps averages 
 For an optimiser this means the local gradient and the gradient over a finite parameter change differ: after ten turns,
 by up to \ESweepLargeH{} for a relative change of $10^{-4}$ of the map scale $s$.
 A $C^1$ field (F1) removes the jumps; whether it closes the gap for gradients has not been measured.
+Case G3 adds a warning: on the bilinear field the one-turn derivative belongs to one step phase and does not describe later turns (\cref{sec:caseG3}), so gradients over many turns may be just as local.
+This has not been tested on the port.
 \end{reading}
 
 \paragraph{Memory and time.}

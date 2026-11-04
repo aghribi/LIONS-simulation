@@ -68,7 +68,7 @@ for anything else.
 When a result is unexpected, the rival explanations are written down with the observation that would separate them,
 and a discriminating run is registered.
 \Cref{tab:evidence} shows the evidence matrix that built up for the excess errors of one-turn maps on bilinear fields,
-across cases B, G1, G2 and H.
+across cases B, G1, G2, G3 and H.
 Tunes and $\det M$ are separated, because they answer different questions: the exact flow on a continuous field
 preserves area (\cref{ch:integrators}), so a field model alone can shift tunes but cannot make $\det M_r\ne1$; a
 $\det$ excess must come from the discretisation.
@@ -98,13 +98,18 @@ G2 2c: adaptive RF-Track on the bilinear field, $|\det-1|$ \GTwoCRatioMin{} to \
 G2 2c, tunes: adaptive RF-Track on the bilinear field within \GTwoCQrRfMax{} of the spline tracker in $\Qr$ & $+$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 H: fixed-step RK4 on F0 keeps $|\det-1|$ at \HFzeroRkDetMin{} to \HFzeroRkDetMax{} (1440 steps) & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
 H: F1 (C$^1$) lowers $|\det-1|$ by \HDetRatioMin{} to \HDetRatioMax{} times at 1440 steps & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G3: OPALX Boris, an independent code, median $|\det M_r-1|$ \GThreeBorisDet{} & $\cdot$ & $+$ & $-$ & $\cdot$ & $\cdot$\\
+G3: fixed-step DOP853 worse than RK4 at 1440 steps, no order visible & $\cdot$ & $+$ & $\cdot$ & $\cdot$ & $\cdot$\\
+G3 2b: $M$ predicts the first return from independent launches, within \GThreeFirstMicMax{} at \SI{1e-6}{m} and \GThreeFirstHunMax{} at \SI{1e-4}{m} & $\cdot$ & $\cdot$ & $\cdot$ & $-$ & $\cdot$\\
+G3 2c: on a commensurate turn the orbit follows $M^n$ for launches of $10^{-7}$ and \SI{1e-6}{m}; registered threshold missed & $\cdot$ & $+/-$ & $\cdot$ & $-$ & $\cdot$\\
+G3 2d: LIONS $\det M_r$ near the inverse of the OPALX one, not explained & $\cdot$ & ? & $\cdot$ & $\cdot$ & $\cdot$\\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The current best explanation has two parts.
 The $\det$ excess comes from fixed-step integration across the gradient jumps (H1b): it appears with Boris and with RK4,
-it decreases slowly with the step count in cases G1 and H (case B shows no trend over 360 to 1440 steps), and it is
+its worst value over orbits decreases slowly with the step count in cases G1 and H (case B shows no trend over 360 to 1440 steps; at a single energy, G3 shows values that are not monotonic and change sign), and it is
 much smaller with an adaptive integrator or a $C^1$ field.
 This explanation is consistent with the evidence; it is not proven.
 The tune excess has both contributions.
@@ -116,8 +121,8 @@ azimuthal step left the scatter unchanged (ratio \BHalfDegQrRatioMin{} to \BHalf
 predicts 0.25.
 The registered reading threshold of G2 2c ($|\det-1|<10^{-3}$ with RF-Track) was met at one energy of three, so the
 adaptive run supports H1b without closing the case.
-The step-insensitivity of $\det$ in G2 2b is a weak argument against H3: on a piecewise-smooth discrete map a central
-difference can mix two slopes at any $h$ (\cref{ch:orbits}).
+H3 is not supported: $M$ predicts the first return of launches other than its own probes (\cref{sec:caseG3}); automatic differentiation, the direct test, has not been run.
+The mechanism behind H1b has a sharper form, hypothesis S: the one-turn map on a bilinear field depends on the step phase at the section.
+\Cref{sec:caseG3} gives the runs, including a threshold that S missed.
 Three direct tests have not been run: the Jacobian from automatic differentiation of the existing PyTorch bilinear
-port (no finite differences at all), the convergence order of $\det M_r - 1$ with the step count, and a Jacobian step
-scan with the closed orbit moved across a cell edge.
+port (no finite differences at all), the convergence order of $\det M_r - 1$ with the step count, and the fixed point and $\det M_r$ against the launch step phase.

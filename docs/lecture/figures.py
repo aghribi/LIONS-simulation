@@ -65,13 +65,15 @@ def psi_band():
     return float(e.min()), float(e.max())
 
 
+def source(path):
+    """Record the sha256 of an input file for the provenance appendix; returns the path."""
+    SOURCES[str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return path
+
+
 def table(path):
     """Read a Parquet table under RUNS; record its sha256 in SOURCES."""
-    path = RUNS / path
-    SOURCES[str(path.relative_to(ROOT))] = hashlib.sha256(
-        path.read_bytes()
-    ).hexdigest()
-    return pd.read_parquet(path)
+    return pd.read_parquet(source(RUNS / path))
 
 
 def num(name, value, digits=2):
@@ -1506,24 +1508,164 @@ def case_h():
     )
 
 
+def g3():
+    a = table('case_g3/step1a/case_g3_a.parquet')
+    b = table('case_g3/step1b/case_g3_b.parquet')
+    w = table('case_g3/step2/case_g3_2.parquet')
+    lin = table('case_g3/step2b/case_g3_2b.parquet')
+    com = table('case_g3/step2c/case_g3_2c.parquet')
+    s2 = table('case_g2/step2/case_g2_step2.parquet')
+    s3 = table('case_g2/step3/case_g2_step3.parquet')
+    x = table('case_g3/step2d/case_g3_2d.parquet')
+    interior = lambda e: (e > 80) & (e < 500) & ~((e >= 386) & (e <= 430))  # noqa: E731   the energies of tab_g2, without 512 MeV
+    pivot = lambda d: d.pivot_table(index='energy_mev', columns='metric', values='value')  # noqa: E731
+    fold = lambda q: np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi)  # noqa: E731
+    opal = pivot(s3[s3.code == 'opal'])
+    opal = opal[(opal.index.to_series().round() != 512).values]   # OPAL returned a non-solution there
+    lions = pivot(s2[s2.code == 'lions'])
+    rows, det, opal_qr = [], {}, []
+    for name, label in (('BORIS', 'Boris'), ('RK4', 'RK4'), ('DOP853', 'DOP853')):
+        d = pivot(a[a.integrator == name])
+        i = d[interior(d.index)]
+        rows.append([label, *(f'{sci(i[m].abs().median())} / {sci(i[m].abs().max())}'
+                              for m in ('r_eo_rel_error', 'qr_error', 'qz_error', 'det_r_error'))])
+        det[name] = i.det_r_error.abs().median()
+        j = i.join(opal, rsuffix='_o', how='inner')
+        opal_qr.append((j.qr - fold(j.qr_o)).abs().median())
+    write_table('g3', ['Integrator', r'$r_{eo}$ rel.', r'$Q_r$', r'$Q_z$', r'$\det M_r - 1$'], rows)
+    num('GThreeBorisDet', det['BORIS'])
+    num('GThreeRkDet', det['RK4'])
+    num('GThreeDopDet', det['DOP853'])
+    num('GThreeBorisOverRk', det['BORIS'] / det['RK4'], 1)
+    num('GThreeDopOverRk', det['DOP853'] / det['RK4'])
+    num('GThreeOpalQrMin', min(opal_qr))
+    num('GThreeOpalQrMax', max(opal_qr))
+    bd = b[b.metric == 'det_r_error']
+    fd = bd[(bd.integrator == 'BORIS') & (bd.steps_per_turn == 1440)].groupby('energy_mev').value.agg(lambda v: np.ptp(v) / v.abs().max())
+    num('GThreeFdVar', 100 * fd.max())
+    rows = []
+    for name, label in (('BORIS', 'Boris'), ('RK4', 'RK4'), ('DOP853', 'DOP853')):
+        for n in (720, 1440, 2880):
+            d = bd[(bd.integrator == name) & (bd.steps_per_turn == n) & (bd.fdstep == 1e-6)].sort_values('energy_mev')
+            rows.append([label, str(n), *(rf'\num{{{v:+.1e}}}' for v in d.value)])
+    write_table('g3_det', ['Integrator', 'Steps', r'\SI{152}{MeV}', r'\SI{292}{MeV}', r'\SI{452}{MeV}'], rows)
+    sp = pd.read_csv(source(RUNS / 'case_g3/step1s/tunes-tunes.csv'))
+    ref = np.loadtxt(source(ROOT / 'benchmarks/external/psi_ring_github_io_7ed8895/refsol.dat'))
+    at = [int(np.argmin(abs(ref[:, 0] - e))) for e in sp.energy_MeV]
+    scale = (1440 * 100 / 50 - 1) * 50 / 1440 / 100    # sampled span over 100 nominal turns
+    dr, dz = sp.nu_r / scale - ref[at, 1], sp.nu_y / scale - ref[at, 2]
+    num('GThreeSpecQrMed', dr.abs().median())
+    num('GThreeSpecQrMax', dr.abs().max())
+    raw('GThreeSpecQzN', str(int((dz.abs() <= 5e-3).sum())))
+    raw('GThreeSpecN', str(len(sp)))
+    w = w[w.metric != 'failed']
+    grid = w[~w.qr_half_integer_band].pivot_table(index=['code', 'amplitude_m', 'energy_mev'], columns='metric', values='value')
+    cell = lambda c, a: grid.loc[(c, a)]  # noqa: E731
+    rows = []
+    for mm, am in ((0.01, 1e-5), (0.1, 1e-4), (1, 1e-3), (5, 5e-3)):
+        row = [f'{mm:g}']
+        for c in ('lions', 'lions_hermite', 'spline'):
+            q = cell(c, am).qr_error.abs()
+            row.append(f'{sci(q.median())} / {sci(q.max())}')
+        ratio = cell('lions', am).amp_ratio_r
+        row.append(f'{ratio.min():.2f} to {ratio.max():.1f}')
+        rows.append(row)
+    write_table('g3_amp', [r'$a$ [mm]', 'LIONS default', 'LIONS Hermite', 'spline', 'LIONS radial amplitude ratio'], rows)
+    tail = lambda c, a: (cell(c, a).qr - cell('spline', a).qr).abs()  # noqa: E731
+    num('GThreeFiveSplMax', tail('lions', 5e-3).max())
+    num('GThreeOneSplMax', tail('lions', 1e-3).max())
+    num('GThreeTenthSplMax', tail('lions', 1e-4).max())
+    num('GThreeFiveFixMax', cell('lions', 5e-3).qr_error.abs().max())
+    num('GThreeTenthFixMed', cell('lions', 1e-4).qr_error.abs().median())
+    raw('GThreeSmallOff', str(int((tail('lions', 1e-5) > 0.1).sum())))
+    raw('GThreeSmallN', str(len(tail('lions', 1e-5))))
+    num('GThreeHermQrMed', cell('lions_hermite', 1e-5).qr_error.abs().median())
+    num('GThreeHermQzMed', cell('lions_hermite', 1e-5).qz_error.abs().median())
+    num('GThreeSplQzMed', cell('spline', 1e-5).qz_error.abs().median())
+    num('GThreeLionsQzMed', cell('lions', 1e-5).qz_error.abs().median())
+    ar = lambda c, am: cell(c, am).amp_ratio_r  # noqa: E731
+    small = pd.concat([ar('lions', 1e-4), ar('lions', 1e-3)])
+    num('GThreeArMin', small.min())
+    num('GThreeArMax', small.max())
+    base = pd.concat([ar(c, am) for c in ('spline', 'lions_hermite') for am in (1e-5, 1e-4, 1e-3, 5e-3)])
+    num('GThreeArBaseMin', base.min())
+    num('GThreeArBaseMax', base.max())
+    signed = lambda c: x[(x.code == c) & (x.metric == 'det_r_error')].set_index('energy_mev').value.sort_index()  # noqa: E731
+    pred = (1 + signed('lions').loc[cell('lions', 1e-5).index])**45
+    worst = pred.idxmax()
+    num('GThreeSmallPred', pred.max())
+    num('GThreeSmallArThere', ar('lions', 1e-5).loc[worst])
+    raw('GThreeSmallEnergy', f'{worst:.0f}')
+    opx = pivot(a[a.integrator == 'BORIS']).det_r_error.sort_index()
+    li = signed('lions')
+    num('GThreeSignedCorr', np.corrcoef(li, opx)[0, 1])
+    raw('GThreeOppSign', str(int((np.sign(li) != np.sign(opx)).sum())))
+    inverse = 1 / (1 + opx) - 1
+    num('GThreeInvCorr', np.corrcoef(li, inverse)[0, 1])
+    num('GThreeInvMed', (li - inverse).abs().median())
+    pk = x[x.metric == 'peak_m'].pivot_table(index=['code', 'offset_m', 'energy_mev'], values='value').value
+    zero = pk.loc[('lions', 0.0)]
+    num('GThreePeakMed', zero.median())
+    num('GThreePeakMax', zero.max())
+    raw('GThreePeakN', str(int((zero > 1e-3).sum())))
+    raw('GThreePeakEnergies', ', '.join(f'{e:.0f}' for e in zero.index[zero > 1e-3]))
+    num('GThreeHermPeakMax', pk.loc[('lions_hermite', 0.0)].max())
+    num('GThreeOneMmPeak', pk.loc[('lions', 1e-3)].max())
+    num('GThreeOneMmPeakHerm', pk.loc[('lions_hermite', 1e-3)].max())
+    ttl = lions.loc[[e for e in lions.index if min(abs(e - x) for x in (151.999, 291.997, 451.994)) < 1e-3], 'turn_time_rel_error'].abs() * 1440
+    num('GThreeSlipMin', ttl.min())
+    num('GThreeSlipMax', ttl.max())
+    g = lin.pivot_table(index=['energy_mev', 'amplitude_m', 'turn'], columns='metric', values='value')
+    c = com[com.metric != 'det_r_error'].pivot_table(index=['energy_mev', 'amplitude_m', 'turn'], columns='metric', values='value')
+    for name, am in (('Mic', 1e-6), ('Ten', 1e-5), ('Hun', 1e-4)):
+        first = g.xs(am, level='amplitude_m').xs(1, level='turn').deviation
+        num(f'GThreeFirst{name}Min', first.min())
+        num(f'GThreeFirst{name}Max', first.max())
+    e152, e292 = 151.999, 291.997
+    num('GThreeJitterA', g.loc[(e152, 1e-7, 5), 'growth'] * 1e-7)
+    num('GThreeJitterB', g.loc[(e152, 1e-6, 5), 'growth'] * 1e-6)
+    ctiny = c.xs(1e-7, level='amplitude_m')
+    num('GThreeComTwoMin', ctiny.xs(2, level='turn').deviation.min())
+    num('GThreeComTwoMax', ctiny.xs(2, level='turn').deviation.max())
+    num('GThreeComTenMin', ctiny.xs(10, level='turn').deviation.min())
+    num('GThreeComTenMax', ctiny.xs(10, level='turn').deviation.max())
+    num('GThreeComTwentyMin', ctiny.xs(20, level='turn').deviation.min())
+    num('GThreeComTwentyMax', ctiny.xs(20, level='turn').deviation.max())
+    num('GThreeComGrow', c.loc[(e292, 1e-7, 20), 'growth'])
+    num('GThreeComGrowPred', c.loc[(e292, 1e-7, 20), 'growth_predicted'])
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.9))
+    ax = axes[0]
+    jac = s2[(s2.code == 'lions') & (s2.metric == 'qr_error')].sort_values('energy_mev')
+    jac = jac[jac.energy_mev.round(3).isin(sorted(w.energy_mev.round(3).unique()))]
+    ax.semilogy(jac.energy_mev, jac.value.abs(), 's-', color='0.5', lw=0.7, ms=2.5, label='LIONS default, one-turn Jacobian')
+    for code, am, color, label in (('lions', 5e-3, COLORS['lions'], 'LIONS default, tracked, 5 mm'),
+                                   ('lions', 1e-3, '#6aa6d6', 'LIONS default, tracked, 1 mm'),
+                                   ('lions_hermite', 1e-3, COLORS['spline'], 'LIONS Hermite, tracked, 1 mm')):
+        s = w[(w.code == code) & (w.amplitude_m == am) & (w.metric == 'qr_error')].sort_values('energy_mev')
+        ax.semilogy(s.energy_mev, s.value.abs().clip(lower=1e-6), 'o-', color=color, lw=0.7, ms=2.5, label=label)
+    ax.axvspan(*psi_band(), color='0.85', zorder=0)
+    ax.set_xlabel('kinetic energy [MeV]')
+    ax.set_ylabel(r'$|Q_r - Q_r^{\rm FIXPO}|$')
+    ax.set_ylim(1e-6, 3)
+    ax.legend(fontsize=5.5, loc='upper center', ncol=2)
+    ax = axes[1]
+    for src, am, style, label in ((g, 1e-7, 'o-', r'nominal step, $a=10^{-7}$ m'), (g, 1e-6, 's-', r'nominal step, $a=10^{-6}$ m'),
+                                  (c, 1e-7, 'o--', r'commensurate, $a=10^{-7}$ m'), (c, 1e-6, 's--', r'commensurate, $a=10^{-6}$ m')):
+        d = src.loc[(e292, am)]
+        ax.semilogy(d.index, d.growth, style, lw=0.8, ms=3, label=label)
+    d = c.loc[(e292, 1e-7)]
+    ax.semilogy(d.index, d.growth_predicted, 'k:', lw=1, label=r'$\|M^n u_0\|/a$')
+    ax.set_xlabel('turn $n$')
+    ax.set_ylabel(r'$\|u_n\|/a$')
+    ax.legend(fontsize=5.5, loc='lower right')
+    save(fig, 'g3_phase')
+
+
 def main():
     """Write every figure, table and the .tex number files in GEN."""
     GEN.mkdir(exist_ok=True)
-    for f in (
-        boris_polygon,
-        azimuth_error,
-        interpolation_orders,
-        field_maps,
-        interpolation_kinks,
-        case_a,
-        case_b,
-        case_d,
-        case_e,
-        case_e2,
-        g1,
-        g2,
-        case_h,
-    ):
+    for f in (boris_polygon, azimuth_error, interpolation_orders, field_maps, interpolation_kinks, case_a, case_b, case_d, case_e,
+              case_e2, g1, g2, g3, case_h):
         f()
     lines = [
         rf'\newcommand{{\{k}}}{{{v}}}' for k, v in sorted(NUMBERS.items())
