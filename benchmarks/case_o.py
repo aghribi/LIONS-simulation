@@ -55,7 +55,7 @@ class Recorded(case_v.Pass):
         super().__init__(*args, **kwargs)
 
     def step(self, d):
-        """Advance one step and remember the longitudinal positions."""
+        """After each step, keep the vertical positions."""
         carry_on = super().step(d)
         self.z_prev = d.bunch.z.copy()
         return carry_on

@@ -91,7 +91,9 @@ def metrics(xy, p_first, p_last, rho):
 
 
 def run_lions(n, rho):
-    """Track one turn in LIONS with n steps; return the metrics."""
+    """Track n - 1 steps in LIONS, (n - 1) / n of a turn; return the
+    metrics.
+    """
     rows = []
 
     def record(d):

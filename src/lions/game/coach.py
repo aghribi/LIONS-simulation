@@ -212,8 +212,9 @@ class Coach:
         return self.turn('quad', self.quad_sign, text, why)
 
     def advise(self):
-        """The next advice: hold when in spec, else the RF steps, then
-        those of the mission.
+        """The next advice: keep holding if already holding and in spec;
+        else the RF steps when not in spec, then those of the mission,
+        or the lost-beam advice without beam.
         """
         ready = self.m.ready()
         if (
@@ -508,7 +509,7 @@ class StageCoach:
         return getattr(self, self.s.key)()
 
     def larmor(self):
-        """Advice for the Larmor stage: field, energy, then fire."""
+        """Advice for the Larmor stage: energy, field, then fire."""
         s = self.s
         if s.flight is not None:
             return Advice(
@@ -553,7 +554,7 @@ class StageCoach:
 
     def dee_beat(self):
         """Advice for the dee beat stage: move the RF toward the
-        revolution frequency.
+        revolution frequency corrected for the phase.
         """
         s = self.s
         f_rev = physics.revolution_frequency(s.w, s.p['b'])

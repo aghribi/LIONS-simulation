@@ -298,8 +298,8 @@ ENDTRACK;''',
 
 
 def amplitude_run(args):
-    """All codes at one energy: tunes and amplitude ratios against the
-    launch amplitude.
+    """LIONS, LIONS Hermite and the spline tracker at one energy: tunes
+    and amplitude ratios against the launch amplitude.
     """
     row, outdir = args
     grids, attrs, species, mass_kg, spline = SHARED

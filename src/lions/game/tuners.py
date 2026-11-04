@@ -37,7 +37,9 @@ class Run:
     """
 
     class Done(Exception):  # noqa: N818 (control flow, not an error)
-        """Raised when the run is in spec or out of budget."""
+        """Raised when the stop test passes, the budget is out or the
+        user stops.
+        """
 
         pass
 
@@ -179,7 +181,7 @@ def nelder_mead(run, rng):
 
 
 def random_search(run, rng):
-    """Random settings in the unit box until the budget is gone."""
+    """Random settings in the unit box until the run ends."""
     while True:
         run(rng.uniform(0, 1, len(run.start)))
 

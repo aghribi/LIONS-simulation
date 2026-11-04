@@ -361,7 +361,10 @@ class Pass:
         return bool(b.alive.any()) and k < self.limit * case_p.STEPS
 
     def state(self, r):
-        """Copy of the per-particle arrays at radius r [m]."""
+        """Snapshot at one step: copies of the per-particle arrays and
+        of the radii r [m], and counts and phase_sum summed over the
+        first axis.
+        """
         return {
             'fate': self.fate.copy(),
             'w_end': self.w_end.copy(),

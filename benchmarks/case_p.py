@@ -172,7 +172,9 @@ def closed_orbit(field, w, guess):
 
 
 def isochronise(energies, iterations=8, tol=2e-6):
-    """Iterate the field until max |f / F0 - 1| is below tol."""
+    """Iterate the field until max |f / F0 - 1| is below tol, at most
+    iterations times; no error if tol is not reached.
+    """
     field = Field()
     for it in range(iterations):
         rows = []

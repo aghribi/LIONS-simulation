@@ -73,7 +73,7 @@ class MissionEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         """Draw the conditions of the episode, reset the mission and
-        return the first observation.
+        return the first observation with {'condition': drawn}.
         """
         super().reset(seed=seed)
         drawn = (

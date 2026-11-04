@@ -149,8 +149,8 @@ def fft_tunes(track, s):
 
 
 def main(outdir):
-    """Run case B0 and B for all codes and energies; write
-    case_b.parquet.
+    """Run cases B0 and B; write case_b.parquet. RF-Track runs on B0
+    only, OPAL on the first map only.
     """
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {

@@ -317,7 +317,8 @@ class Mission(Stage):
 
     def advance(self, action, dt):
         """Turn the selected knob, drift the field, refresh the model on
-        schedule and apply the beam, heat and time limit.
+        schedule and apply the beam and heat limits and, outside the
+        tutorial, the time limit.
         """
         p = self.p
         if self.y_edge:

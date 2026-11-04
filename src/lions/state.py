@@ -65,7 +65,7 @@ class Files:
 
 @dataclass
 class RF:
-    """RF and dee parameters, with the field harmonics."""
+    """RF and dee parameters, with the RF harmonic number."""
 
     frequency: float = 0.0  # Hz
     omega: float = 0.0  # rad/s

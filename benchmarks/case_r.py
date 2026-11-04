@@ -61,7 +61,9 @@ def orbit_job(job):
 
 
 def tables(mapdir, workers):
-    """Write the scenario table from LIONS closed orbits, no RF."""
+    """Write the scenario table: closed orbits from LIONS, no RF, and
+    gains per kV from case_p_gain.parquet.
+    """
     mp = case_v.Map(mapdir, START_MEV, EXTRACTION)
     rec = [
         r

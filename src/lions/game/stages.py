@@ -225,7 +225,9 @@ class Larmor(Stage):
         self.after_shot()
 
     def after_shot(self):
-        """Finish when all targets are hit or the shots are used up."""
+        """Finish when all targets are hit or, outside the tutorial, the
+        shots are used up.
+        """
         if self.hits >= self.p['targets']:
             self.finish(True, 'ALL RINGS LOCKED')
         elif self.shots >= self.p['shots'] and not self.tutorial:
@@ -296,8 +298,8 @@ class GapStage(Stage):
         self.arcs.append(self.arc(self.arcs[-1][1]))
 
     def advance_gap(self, dt):
-        """Advance the crossings by dt; finish on target energy or time
-        limit.
+        """Advance the crossings by dt; finish on target energy or,
+        outside the tutorial, at the time limit.
         """
         self.frac += dt / self.p['crossing_time']
         while self.frac >= 1 and not self.done:
