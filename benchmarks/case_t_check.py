@@ -27,6 +27,7 @@ FRESH = list(range(20000, 20020))
 
 
 def verdict(m):
+    """Hold the knobs HOLD passes, then read the truth without noise."""
     held = 0
     for _ in range(HOLD):
         m.wait(STEP_S)
@@ -40,6 +41,7 @@ def verdict(m):
 
 
 def classical(job):
+    """Tune with a classical method, then run the verdict."""
     mission, method, seed = job
     m = mission_by_id(mission)
     m.reset(seed)
@@ -61,6 +63,7 @@ def classical(job):
 
 
 def rl(job):
+    """Tune with a trained policy, run the verdict, replay blind."""
     mission, seed, conditions, outdir = job
     model = t.load_policy(outdir / f'{mission}_ppo_{seed}.zip')
     rows, replay = [], None

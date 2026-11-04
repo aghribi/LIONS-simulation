@@ -1,5 +1,5 @@
-"""The job image installs environment/requirements.gpu.txt: it must be the
-uv export of uv.lock.
+"""The job image installs environment/requirements.gpu.txt: it must be
+the uv export of uv.lock.
 """
 
 import shutil
@@ -32,6 +32,7 @@ def test_gpu_requirements_match_lock():
     assert (
         export == (ROOT / 'environment' / 'requirements.gpu.txt').read_text()
     ), (
-        'regenerate: uv export --frozen --no-default-groups --group gpu --no-emit-project --no-header '
+        'regenerate: uv export --frozen --no-default-groups --group gpu '
+        '--no-emit-project --no-header '
         '-o environment/requirements.gpu.txt'
     )

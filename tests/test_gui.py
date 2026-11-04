@@ -1,4 +1,5 @@
-"""Headless GUI: main window, deck round trip through the form, worker run."""
+"""Headless GUI: main window, deck round trip through the form, worker
+run."""
 
 import os
 from pathlib import Path
@@ -41,8 +42,8 @@ def test_deck_round_trip(app, tmp_path):
 
 
 def normalise(params):
-    """Free-text fields compared by value: '6990000' and '6.99d+06' are the
-    same number.
+    """Free-text fields compared by value: '6990000' and '6.99d+06' are
+    the same number.
     """
 
     def value(v):
@@ -160,8 +161,8 @@ def test_form_keeps_every_deck_entry(app, tmp_path):
 
 
 def test_form_keeps_deck_options(app, tmp_path):
-    """interpolation shows in the form; azimuth, without a widget, is kept
-    from the loaded deck.
+    """interpolation shows in the form; azimuth, without a widget, is
+    kept from the loaded deck.
     """
     from lions.deck import read_deck, write_deck
     from lions.gui.input_form import InputFormPanel

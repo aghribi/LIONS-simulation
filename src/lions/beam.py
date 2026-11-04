@@ -1,5 +1,5 @@
-"""Initial 6D distribution and phase-space coordinates relative to particle
-0.
+"""Initial 6D distribution and phase-space coordinates relative to
+particle 0.
 """
 
 import numpy as np
@@ -160,8 +160,8 @@ def phase_space_coords(bunch):
 
 
 def project_on_radial_line(bunch, rf, run):
-    """Project each particle on the radial line through particle 0 of its
-    family. Returns the curvature radii of the last family.
+    """Project each particle on the radial line through particle 0 of
+    its family. Returns the curvature radii of the last family.
     """
     vec = np.zeros(bunch.n_particles)
     vec1 = np.zeros(bunch.n_particles)
@@ -244,8 +244,8 @@ def project_on_radial_line(bunch, rf, run):
 
 
 def projected_phase_space(bunch, rf, run):
-    """Phase-space coordinates on the radial line through particle 0, for
-    the correlations.
+    """Phase-space coordinates on the radial line through particle 0,
+    for the correlations.
     """
     nbr = bunch.families[0].size
     vec = project_on_radial_line(bunch, rf, run)

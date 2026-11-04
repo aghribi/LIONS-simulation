@@ -1,5 +1,5 @@
-"""Case B discriminating runs (DESIGN.md section 14): B-smooth (RF-Track,
-no map) and B-gradient.
+"""Case B discriminating runs (DESIGN.md section 14): B-smooth
+(RF-Track, no map) and B-gradient.
 
 usage: uv run --group bench python benchmarks/case_b2.py [outdir] Writes
 case_b2.parquet. OPAL runs in Docker; outdir must be visible to Docker.
@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 import lions  # noqa: E402
 import lions.apertures  # noqa: E402
 import lions.fields  # noqa: E402
-import RF_Track as rft  # noqa: N813 (external name)
+import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
 import synthetic as syn  # noqa: E402
 from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
@@ -40,8 +40,8 @@ RUNS = {
 
 
 def fields(k):
-    """Bz, dBz/dx, dBz/dy as functions of (r, theta) for B0 g(r) f(theta)
-    (DESIGN.md section 14).
+    """Bz, dBz/dx, dBz/dy as functions of (r, theta) for B0 g(r)
+    f(theta) (DESIGN.md section 14).
     """
 
     def g(r):
@@ -81,12 +81,13 @@ def closed_form(k):
 
 
 def check_parity(b, k, points=200, z_max=5e-3, seed=0):
-    """Closed form against LIONS compute_bfield at the map nodes in theta.
-    Raises on failure.
+    """Closed form against LIONS compute_bfield at the map nodes in
+    theta. Raises on failure.
 
     Bz is exact there. Bx, By carry the linear interpolation in r of
     g(r) / r, at most
-    |z| dr^2 / 8 * 8 eps |B0| (1 + k r0) / r_i^3, r_i the inner node of the cell.
+    |z| dr^2 / 8 * 8 eps |B0| (1 + k r0) / r_i^3, r_i the inner node of
+    the cell.
     """
     rng = np.random.default_rng(seed)
     d = lions_state(1.0, STEPS[0], nbrion=points)
@@ -112,7 +113,8 @@ def check_parity(b, k, points=200, z_max=5e-3, seed=0):
     )
     if np.max(dz) > 1e-13 or np.any(dxy > bound):
         raise RuntimeError(
-            f'closed form differs from LIONS at the map nodes: Bz {np.max(dz)} T, '
+            'closed form differs from LIONS at the map nodes: '
+            f'Bz {np.max(dz)} T, '
             f'Bx, By {np.max(dxy / bound)} of the bound'
         )
     return {
@@ -123,6 +125,7 @@ def check_parity(b, k, points=200, z_max=5e-3, seed=0):
 
 
 def main(outdir):
+    """Run cases B-smooth and B-gradient; write case_b2.parquet."""
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {
         'lions': importlib.metadata.version('lions'),
@@ -204,9 +207,12 @@ def main(outdir):
 
     table = pa.Table.from_pylist(records).replace_schema_metadata(
         {
-            'case': f'Bz = {B0} (1 - k (r - {R0})) (1 + {EPS} cos 4 theta) T, protons, theta = 0 section; '
-            f'B-smooth k = 0 (RF-Track, closed form), B-gradient k = {K_GRADIENT} /m',
-            'map': f"r = {MAP['rmin']} to {MAP['rmax']} m, {MAP['nr']} rows, {NTHETA} columns over 360 deg",
+            'case': f'Bz = {B0} (1 - k (r - {R0})) '
+            f'(1 + {EPS} cos 4 theta) T, protons, theta = 0 section; '
+            'B-smooth k = 0 (RF-Track, closed form), '
+            f'B-gradient k = {K_GRADIENT} /m',
+            'map': f"r = {MAP['rmin']} to {MAP['rmax']} m, "
+            f"{MAP['nr']} rows, {NTHETA} columns over 360 deg",
             'rf_track_tolerance': str(TOL),
             **provenance(),
             'machine': platform.platform(),

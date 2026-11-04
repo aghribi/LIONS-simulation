@@ -1,6 +1,6 @@
-"""Mission tuning, third amendment of docs/training/RL_RUNS.md: score and
-stop on the readings, box from the tunes of the coach and PPO, BoTorch
-baselines, stay-in-spec.
+"""Mission tuning, third amendment of docs/training/RL_RUNS.md: score
+and stop on the readings, box from the tunes of the coach and PPO,
+BoTorch baselines, stay-in-spec.
 
 usage: uv run --extra game --extra rl --extra bo --group bench python
 benchmarks/case_t3.py STEP ... tunes MISSION --policies DIR: coach and
@@ -52,6 +52,7 @@ NO_BOX = ('coach',)  # the box does not bind these methods
 
 
 def write(records, path, step):
+    """Write records to parquet with provenance metadata."""
     path.parent.mkdir(parents=True, exist_ok=True)
     meta = {
         'case': f'mission tuning, third amendment, {step}',
@@ -68,12 +69,13 @@ def write(records, path, step):
 
 
 def floats(terms):
+    """Return the terms as floats, or None when empty."""
     return {k: float(v) for k, v in terms.items()} if terms else None
 
 
 def row(mission, method, box, training_seed, condition, m, run, elapsed):
-    """The run has stopped: the first measured read in spec, or the budget.
-    Then the knobs stay and the machine drifts.
+    """The run has stopped: the first measured read in spec, or the
+    budget. Then the knobs stay and the machine drifts.
     """
     in_spec = run.reached is not None
     true_at_stop = bool(m.ready())
@@ -121,6 +123,7 @@ def load_box(outdir, mission):
 
 
 def classical_job(job):
+    """Tune one (mission, method, box, seed) and return its row."""
     mission, method, box_name, box, seed = job
     import torch
 
@@ -132,7 +135,8 @@ def classical_job(job):
     elapsed = time.perf_counter() - t0
     out = row(mission, method, box_name, -1, seed, m, run, elapsed)
     print(
-        f'{mission} {method} {box_name} {seed}: {run.reached} evals {run.evals} {elapsed:.0f} s',
+        f'{mission} {method} {box_name} {seed}: {run.reached} '
+        f'evals {run.evals} {elapsed:.0f} s',
         file=sys.stderr,
         flush=True,
     )
@@ -140,6 +144,7 @@ def classical_job(job):
 
 
 def tune_old_rule(mission, method, seed, **options):
+    """Tune with the stop rule m.ready, return machine, start, run."""
     m = mission_by_id(mission)
     m.reset(seed)
     start = dict(m.knobs)
@@ -240,10 +245,12 @@ def box(outdir):
 
 
 def classical(mission, method, box_name, outdir, workers):
+    """Run a classical method on all held-out conditions."""
     chosen = load_box(outdir, mission) if box_name == 'widened' else None
     if box_name == 'widened' and (not chosen or method in NO_BOX):
         print(
-            f'{mission} {method}: the box does not change, widened rows repeat the original ones',
+            f'{mission} {method}: the box does not change, '
+            'widened rows repeat the original ones',
             flush=True,
         )
         return
@@ -260,6 +267,7 @@ def classical(mission, method, box_name, outdir, workers):
 
 
 def rl(mission, seed, outdir):
+    """Train one PPO policy and tune the held-out conditions."""
     t0 = time.perf_counter()
     model = t.train_policy(
         mission, 'ppo', seed, outdir / 'policies' / f'{mission}_ppo_{seed}'
@@ -287,7 +295,9 @@ def rl(mission, seed, outdir):
             }
         )
     print(
-        f'{mission} ppo {seed}: {sum(r["in_spec_measured"] for r in records)}/20, train {train_s:.0f} s',
+        f'{mission} ppo {seed}: '
+        f'{sum(r["in_spec_measured"] for r in records)}/20, '
+        f'train {train_s:.0f} s',
         flush=True,
     )
     write(
@@ -296,6 +306,7 @@ def rl(mission, seed, outdir):
 
 
 def timing():
+    """Print the time per pass of each mission at its start."""
     for mission in MISSIONS:
         m = mission_by_id(mission)
         m.reset(t.HELD_OUT[0])
@@ -304,12 +315,14 @@ def timing():
             m.refresh()
         print(
             mission,
-            f'{(time.perf_counter() - t0) / 20 * 1e3:.1f} ms per pass at the start',
+            f'{(time.perf_counter() - t0) / 20 * 1e3:.1f} ms '
+            'per pass at the start',
             flush=True,
         )
 
 
 def collect(outdir):
+    """Merge the per-run parquet files of classical and rl."""
     for sub in ('classical', 'rl'):
         if (outdir / sub).exists():
             table = pq.read_table(outdir / sub)

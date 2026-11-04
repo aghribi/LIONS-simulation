@@ -37,6 +37,7 @@ WORKERS = 6
 
 
 def row(mission, method, training_seed, condition, run):
+    """Return the result record of one tuning run."""
     return {
         'mission': mission,
         'method': method,
@@ -50,6 +51,7 @@ def row(mission, method, training_seed, condition, run):
 
 
 def classical(job):
+    """Tune one (mission, method, seed) with a classical method."""
     mission, method, seed = job
     m = mission_by_id(mission)
     m.reset(seed)
@@ -63,6 +65,7 @@ def classical(job):
 
 
 def rl(job):
+    """Train one policy and tune the held-out conditions with it."""
     mission, algo, seed, outdir = job
     model = t.train_policy(
         mission, algo, seed, outdir / f'{mission}_{algo}_{seed}'
@@ -81,7 +84,8 @@ def rl(job):
             )
         )
     print(
-        f'{mission} {algo} {seed}: {sum(r["in_spec"] for r in rows)}/{len(rows)}',
+        f'{mission} {algo} {seed}: '
+        f'{sum(r["in_spec"] for r in rows)}/{len(rows)}',
         file=sys.stderr,
         flush=True,
     )
@@ -89,6 +93,7 @@ def rl(job):
 
 
 def write(records, path, step):
+    """Write records to parquet with provenance metadata."""
     meta = {
         'case': f'mission tuning, {step}',
         'registration': 'docs/training/RL_RUNS.md',

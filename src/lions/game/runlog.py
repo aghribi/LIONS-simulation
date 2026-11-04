@@ -29,7 +29,8 @@ UNITS = {
 
 
 def units_of(name):
-    """Unit of a logged column, from its suffix; the longest suffix wins."""
+    """Unit of a logged column, from its suffix; the longest suffix
+    wins."""
     return next(
         (
             UNITS[s]
@@ -41,6 +42,8 @@ def units_of(name):
 
 
 def code_version():
+    """Git description of the code, or the installed version of
+    lions."""
     try:
         return subprocess.run(
             [
@@ -60,12 +63,17 @@ def code_version():
 
 
 class Store:
+    """Local high scores and anonymous run logs under home."""
+
     def __init__(self, home=HOME):
         self.home = Path(home)
         self.home.mkdir(parents=True, exist_ok=True)
         self.new_player(False)
 
     def new_player(self, consent):
+        """Start a new player, with or without consent, and a new
+        session id.
+        """
         self.consent, self.session = consent, uuid.uuid4().hex
 
     def _read(self, name, default):
@@ -76,15 +84,19 @@ class Store:
         (self.home / name).write_text(json.dumps(value, indent=1))
 
     def scores(self):
+        """High-score table, best first."""
         return self._read('scores.json', [])
 
     def qualifies(self, points):
+        """True when points enter the table."""
         table = self.scores()
         return points > 0 and (
             len(table) < TABLE_SIZE or points > table[-1]['points']
         )
 
     def add_score(self, initials, points):
+        """Insert initials and points in the table, cut at
+        TABLE_SIZE."""
         table = sorted(
             [*self.scores(), {'initials': initials, 'points': points}],
             key=lambda r: -r['points'],

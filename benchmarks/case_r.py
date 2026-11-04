@@ -55,11 +55,13 @@ START_MEV, EXTRACTION, PHASE_RMS_DEG = (
 
 
 def orbit_job(job):
+    """Return the LIONS closed-orbit check of (workdir, w, guess)."""
     workdir, w, guess = job
     return case_p.lions_check((workdir, w, guess))
 
 
 def tables(mapdir, workers):
+    """Write the scenario table from LIONS closed orbits, no RF."""
     mp = case_v.Map(mapdir, START_MEV, EXTRACTION)
     rec = [
         r
@@ -112,12 +114,20 @@ def tables(mapdir, workers):
             flush=True,
         )
     meta = {
-        'case': f'synthetic {case_p.MISSION}, closed orbits of LIONS Hermite, no RF',
+        'case': (
+            f'synthetic {case_p.MISSION}, '
+            'closed orbits of LIONS Hermite, no RF'
+        ),
         'label': 'SYNTHETIC',
         'registration': case_p.REGISTRATION,
         **provenance(*mp.inputs),
         'machine': platform.platform(),
-        'units': 'w_mev MeV, p beta gamma, path_m m, f_hz Hz, r_section_m m at theta = 0, gain_mev_per_kv MeV/kV peak per turn; below w_start the gain is held, not measured',
+        'units': (
+            'w_mev MeV, p beta gamma, path_m m, f_hz Hz, '
+            'r_section_m m at theta = 0, '
+            'gain_mev_per_kv MeV/kV peak per turn; '
+            'below w_start the gain is held, not measured'
+        ),
         'rest_mev': str(case_v.REST_MEV),
         'w_start_mev': str(mp.w0 * case_p.A),
         'crest_deg': str(mp.crest_deg),
@@ -135,14 +145,18 @@ def tables(mapdir, workers):
 
 
 class Scaled:
+    """A field multiplied by the constant s."""
+
     def __init__(self, field, s):
         self.field, self.s = field, s
 
     def __call__(self, x, y, z):
+        """Return s times the field components at (x, y, z)."""
         return tuple(self.s * c for c in self.field(x, y, z))
 
 
 def check(mapdir):
+    """Check each rule of the reduced model against its reference."""
     t = reduced.Tables(TABLE)
     data = pq.read_table(TABLE).to_pydict()
     # Interpolation of the path length: drop every other energy, predict
@@ -177,7 +191,9 @@ def check(mapdir):
             g = 1 + w * case_p.A / case_v.REST_MEV
             predicted = (p / g) * syn.C / t.path(np.log(p / s))
             print(
-                f'scale {s}, w {w} MeV: f_rev Boris {f:.1f} Hz, rule {predicted:.1f} Hz, relative {predicted / f - 1:+.2e}',
+                f'scale {s}, w {w} MeV: f_rev Boris {f:.1f} Hz, '
+                f'rule {predicted:.1f} Hz, '
+                f'relative {predicted / f - 1:+.2e}',
                 flush=True,
             )
     # Gain linear in the dee voltage: LIONS, one turn on the crest.
@@ -210,7 +226,9 @@ def check(mapdir):
                 )
             )
         print(
-            f"gain at {g['w_mev']:.3f} MeV: 40 kV {out[0]:.5f}, 60 kV {out[1]:.5f} MeV; ratio {out[1] / out[0]:.4f} against 1.5",
+            f"gain at {g['w_mev']:.3f} MeV: 40 kV {out[0]:.5f}, "
+            f'60 kV {out[1]:.5f} MeV; '
+            f'ratio {out[1] / out[0]:.4f} against 1.5',
             flush=True,
         )
     case_p.DEE_KV = keep
@@ -250,12 +268,15 @@ def check(mapdir):
                 )  # noqa: E731
 
             print(
-                f'{tag} {lo} to {hi} MeV/u: envelope of |z| {z[on].max():.3f} mm, action rule {z0 * np.sqrt(j(p0) / j(p)):.3f} mm',
+                f'{tag} {lo} to {hi} MeV/u: '
+                f'envelope of |z| {z[on].max():.3f} mm, '
+                f'action rule {z0 * np.sqrt(j(p0) / j(p)):.3f} mm',
                 flush=True,
             )
 
 
 def errors_of(curves_lions, phase_model, probe):
+    """Return the count-weighted rms phase error, deg, against LIONS."""
     counts, phase = np.array(curves_lions[0]), np.array(curves_lions[1])
     on = (counts > 0) & (probe > 0)
     return float(
@@ -266,6 +287,7 @@ def errors_of(curves_lions, phase_model, probe):
 
 
 def compare(verdict, outdir):
+    """Run reduced model and T0 on the verdict tunes, against LIONS."""
     model = reduced.Reduced(TABLE, PHASE_RMS_DEG)
     rows = pq.read_table(verdict / 'case_v_tunes.parquet').to_pylist()
     parts = pq.read_table(verdict / 'case_v_particles.parquet').to_pylist()
@@ -342,19 +364,30 @@ def compare(verdict, outdir):
         print(
             row['tune'],
             row['method'],
-            f"extracted LIONS {rec['lions_extracted']} reduced {rec['reduced_extracted']} T0 {rec['t0_extracted']}; spread {rec['lions_spread']:.4f} {rec['reduced_spread']:.4f} {rec['t0_spread']:.4f}; phase rms {rec['reduced_phase_rms_deg']:.1f} {rec['t0_phase_rms_deg']:.1f}; {wall * 1e3:.0f} ms",
+            f"extracted LIONS {rec['lions_extracted']} "
+            f"reduced {rec['reduced_extracted']} "
+            f"T0 {rec['t0_extracted']}; "
+            f"spread {rec['lions_spread']:.4f} "
+            f"{rec['reduced_spread']:.4f} {rec['t0_spread']:.4f}; "
+            f"phase rms {rec['reduced_phase_rms_deg']:.1f} "
+            f"{rec['t0_phase_rms_deg']:.1f}; {wall * 1e3:.0f} ms",
             flush=True,
         )
         by_particle += particle_rows(model, m, lions, row)
     meta = {
-        'case': f'synthetic {case_p.MISSION}, reduced model against LIONS and T0',
+        'case': (
+            f'synthetic {case_p.MISSION}, reduced model against LIONS and T0'
+        ),
         'label': 'SYNTHETIC',
         'registration': case_p.REGISTRATION,
         'start_phase_law': str(PHASE_RMS_DEG),
         'extraction': EXTRACTION,
         **provenance(TABLE),
         'machine': platform.platform(),
-        'units': 'transmission 1, before the septum; w_mev MeV; spread 1; phase_rms_deg deg; wall_s s, one core',
+        'units': (
+            'transmission 1, before the septum; w_mev MeV; spread 1; '
+            'phase_rms_deg deg; wall_s s, one core'
+        ),
     }
     outdir.mkdir(parents=True, exist_ok=True)
     pq.write_table(
@@ -393,9 +426,9 @@ def particle_rows(model, m, lions, row):
 
 
 def lines_report(rows, title):
-    """Median absolute error per line. A tune where LIONS extracts nothing
-    has no energy or spread and is left out, counted. A model that
-    extracts nothing where LIONS does counts as infinite error.
+    """Median absolute error per line. A tune where LIONS extracts
+    nothing has no energy or spread and is left out, counted. A model
+    that extracts nothing where LIONS does counts as infinite error.
     """
     a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
     beam = a('lions_extracted') > 0
@@ -420,7 +453,8 @@ def lines_report(rows, title):
         )[beam],
     }
     print(
-        f'{title}: {len(rows)} tunes, {int((~beam).sum())} with no LIONS beam, left out of energy, spread and phase'
+        f'{title}: {len(rows)} tunes, {int((~beam).sum())} with no '
+        'LIONS beam, left out of energy, spread and phase'
     )
     outcome = []
     for key, f in lines.items():
@@ -430,18 +464,27 @@ def lines_report(rows, title):
         ) and np.median(red) < np.median(t0)
         outcome.append(passed)
         print(
-            f'  {key}: threshold {THRESHOLD[key]:.4g}; reduced median {np.median(red):.4g} [{red.min():.4g}, {red.max():.4g}]; T0 median {np.median(t0):.4g} [{t0.min():.4g}, {t0.max():.4g}]: {"PASS" if passed else "FAIL"}'
+            f'  {key}: threshold {THRESHOLD[key]:.4g}; '
+            f'reduced median {np.median(red):.4g} '
+            f'[{red.min():.4g}, {red.max():.4g}]; '
+            f'T0 median {np.median(t0):.4g} '
+            f'[{t0.min():.4g}, {t0.max():.4g}]: '
+            f'{"PASS" if passed else "FAIL"}'
         )
     print(f'  {sum(outcome)} of {len(outcome)} lines pass')
 
 
 def report(rows, particles):
+    """Print the pass time, transmission and per-particle fates."""
     a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
     lines_report(rows, 'all tunes')
     lines_report([r for r in rows if r['method'] == 'coach'], 'coach')
     wall = a('wall_s')
     print(
-        f"pass time: median {np.median(wall) * 1e3:.1f} ms, max {wall.max() * 1e3:.1f} ms; T0 median {np.median(a('wall_t0_s')) * 1e3:.1f} ms: {'PASS' if wall.max() < THRESHOLD['pass_s'] else 'FAIL'}"
+        f"pass time: median {np.median(wall) * 1e3:.1f} ms, "
+        f"max {wall.max() * 1e3:.1f} ms; "
+        f"T0 median {np.median(a('wall_t0_s')) * 1e3:.1f} ms: "
+        f"{'PASS' if wall.max() < THRESHOLD['pass_s'] else 'FAIL'}"
     )
     for q, label in (
         ('lions_transmission', 'LIONS'),
@@ -449,7 +492,10 @@ def report(rows, particles):
         ('t0_transmission', 'T0'),
     ):
         print(
-            f'{label} transmission median {np.median(a(q)):.3f} [{a(q).min():.3f}, {a(q).max():.3f}]; energy {np.nanmedian(a(q.split("_")[0] + "_w_mev")):.3f}; spread {np.nanmedian(a(q.split("_")[0] + "_spread")):.4f}'
+            f'{label} transmission median {np.median(a(q)):.3f} '
+            f'[{a(q).min():.3f}, {a(q).max():.3f}]; '
+            f'energy {np.nanmedian(a(q.split("_")[0] + "_w_mev")):.3f}; '
+            f'spread {np.nanmedian(a(q.split("_")[0] + "_spread")):.4f}'
         )
     print(
         'turn limit, extracted summed over tunes: 1x',
@@ -498,13 +544,16 @@ def report(rows, particles):
         on = (phi >= lo) & (phi < hi)
         if on.any():
             print(
-                f'  start phase {lo} to {hi}: n {int(on.sum())}, extracted LIONS {fate[on, 0].mean():.2f}, reduced {fate[on, 1].mean():.2f}'
+                f'  start phase {lo} to {hi}: n {int(on.sum())}, '
+                f'extracted LIONS {fate[on, 0].mean():.2f}, '
+                f'reduced {fate[on, 1].mean():.2f}'
             )
     both = fate[:, 0] & fate[:, 1]
     crest = both & (np.abs(phi) < 30)
     dt = np.array([p['reduced_turns'] - p['lions_turns'] for p in particles])
     print(
-        'turns, reduced minus LIONS, extracted in both, |phi start| < 30: median',
+        'turns, reduced minus LIONS, extracted in both, '
+        '|phi start| < 30: median',
         float(np.median(dt[crest])),
         'range',
         int(dt[crest].min()),

@@ -12,6 +12,7 @@ PROTON_MEV = PROTON_KG * C**2 / E_CHARGE / 1e6
 
 
 def gamma(w_mev):
+    """Lorentz factor of a proton of kinetic energy w_mev [MeV]."""
     return 1 + w_mev / PROTON_MEV
 
 
@@ -39,7 +40,8 @@ def rotation(b_tesla):
 
 
 def isochronous_index(w_mev):
-    """Field index k = (r / B) dB/dr of the isochronous field B = gamma B0."""
+    """Field index k = (r / B) dB/dr of the isochronous field B = gamma
+    B0."""
     return gamma(w_mev) ** 2 - 1
 
 
@@ -53,8 +55,8 @@ def qz_squared(k, n_sectors, flutter, spiral_rad):
 
 
 def qr_squared(k, n_sectors, flutter, spiral_rad):
-    """Smooth approximation: Qr^2 = 1 + k + 3 N^2 / ((N^2 - 1)(N^2 - 4)) F
-    (1 + tan^2 xi).
+    """Smooth approximation: Qr^2 = 1 + k + 3 N^2 / ((N^2 - 1)(N^2 - 4))
+    F (1 + tan^2 xi).
     """
     n2 = n_sectors**2
     return (
@@ -86,16 +88,21 @@ def proton_range(w_mev):
 
 
 def energy_at_range(range_cm):
+    """Proton energy [MeV] for a range in water range_cm [cm]; inverse
+    of proton_range.
+    """
     return (range_cm / BRAGG_ALPHA) ** (1 / BRAGG_P)
 
 
 def straggling(range_cm):
+    """Range straggling sigma [cm] for a range in water range_cm
+    [cm]."""
     return STRAGGLING_A * range_cm**STRAGGLING_B
 
 
 def scattering_angle(w_mev, thickness_cm):
-    """Highland: rms projected angle [rad] of a proton through water, with
-    the energy at the entrance.
+    """Highland: rms projected angle [rad] of a proton through water,
+    with the energy at the entrance.
     """
     if thickness_cm <= 0:
         return 0.0

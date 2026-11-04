@@ -363,8 +363,8 @@ def test_f18_saturates_at_the_sourced_yield(monkeypatch):
 
 
 def deliver_all(s, dt=0.05):
-    """Beam on at the tuned setting, off at the prescription for a therapy
-    mission.
+    """Beam on at the tuned setting, off at the prescription for a
+    therapy mission.
     """
     t = 0.0
     while not s.done and t < s.p['time_limit']:
@@ -450,7 +450,8 @@ def test_coach_reads_no_hidden_state():
 
 
 def test_no_beam_reads_no_position_and_scores_on_the_probe_only():
-    """Gaming check: losing the beam cannot read as a clean, centred beam."""
+    """Gaming check: losing the beam cannot read as a clean, centred
+    beam."""
     s = MISSIONS['EYE']
     s.reset(1)
     s.knobs['rf_mhz'] = 104.0
@@ -464,7 +465,8 @@ def test_no_beam_reads_no_position_and_scores_on_the_probe_only():
 
 @pytest.mark.parametrize('name', sorted(MISSIONS))
 def test_parking_on_the_knob_edges_scores_low(name):
-    """Gaming check: every knob at a limit of its range gains nothing."""
+    """Gaming check: every knob at a limit of its range gains
+    nothing."""
     s = MISSIONS[name]
     s.reset(1)
     for side in ('min', 'max'):
@@ -475,8 +477,8 @@ def test_parking_on_the_knob_edges_scores_low(name):
 
 
 def test_saturating_a_limit_does_not_read_as_success():
-    """Gaming check: more current than the target takes is out of spec, not
-    a high score.
+    """Gaming check: more current than the target takes is out of spec,
+    not a high score.
     """
     s = MISSIONS['F18']
     assert tuned(s, 1, source_ua=400.0).ready() is False
@@ -602,8 +604,8 @@ def test_tutorial_for_each_challenge_with_real_keys(tmp_path):
 
 @pytest.mark.parametrize('name', sorted(MISSIONS))
 def test_walkthrough_covers_every_knob_and_the_helper(name):
-    """Each challenge has its own steps, naming every knob it offers; the
-    helper's advice always maps to one.
+    """Each challenge has its own steps, naming every knob it offers;
+    the helper's advice always maps to one.
     """
     from lions.game.coach import Coach
 
@@ -739,8 +741,8 @@ def arcade_window(tmp_path, monkeypatch):
 def test_each_challenge_runs_a_method_with_real_keys(
     tmp_path, monkeypatch, name
 ):
-    """Down to the line, O, choose, ENTER: passes on the screen, in the end
-    the real machine agrees. No points, no life, no log.
+    """Down to the line, O, choose, ENTER: passes on the screen, in the
+    end the real machine agrees. No points, no life, no log.
     """
     from PyQt5.QtCore import Qt
     from PyQt5.QtTest import QTest
@@ -849,8 +851,8 @@ def test_behind_window_opens_on_b_and_says_what_runs(tmp_path, monkeypatch):
 
 
 def test_the_game_imports_no_tracking_code():
-    """The Behind window says LIONS and OPAL do not run. If a level starts
-    to call them, this fails: update the window.
+    """The Behind window says LIONS and OPAL do not run. If a level
+    starts to call them, this fails: update the window.
     """
     import ast
     from pathlib import Path
@@ -876,7 +878,7 @@ def test_the_game_imports_no_tracking_code():
                 ), f'{path.name} imports {name}'
 
 
-def test_train_saves_a_policy_with_its_held_out_result_and_ppo_runs_with_real_keys(
+def test_train_saves_a_policy_with_held_out_result_with_real_keys(
     tmp_path, monkeypatch
 ):
     pytest.importorskip('stable_baselines3')
@@ -1096,7 +1098,7 @@ def test_the_screen_says_when_only_the_readings_are_in_spec(
     w.close()
 
 
-def test_the_model_slot_holds_t0_in_the_game_and_the_table_model_in_a_benchmark(
+def test_model_slot_holds_t0_in_game_and_table_in_benchmark(
     monkeypatch,
 ):
     from lions.game import machine as mc

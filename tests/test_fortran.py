@@ -61,7 +61,8 @@ def orbit(**kwargs):
 
 
 def bunch(r0):
-    """Deterministic 20-particle bunch around (r0, 0, 0), moving along +y."""
+    """Deterministic 20-particle bunch around (r0, 0, 0), moving along
+    +y."""
     p0 = np.sqrt(syn.proton_gamma(W0)[0] ** 2 - 1.0)
     u = np.linspace(-1.0, 1.0, N_BUNCH)
     v = np.roll(u, 7)
@@ -113,8 +114,8 @@ def case_eighth_map(bunch_file):
 
 
 def case_central(bunch_file):
-    """Whole orbit in the central region: pot1 and its d2pot (Ez) on a 3 mm
-    grid.
+    """Whole orbit in the central region: pot1 and its d2pot (Ez) on a 3
+    mm grid.
 
     The grid must cover r < rmax1: neither code checks the grid bounds
     there.
@@ -138,12 +139,13 @@ def case_central(bunch_file):
 
 
 def case_extraction(bunch_file):
-    """Electrostatic deflector (30-90 deg), magnetic dipole (120-180 deg),
-    grids at 200 and 250 deg.
+    """Electrostatic deflector (30-90 deg), magnetic dipole (120-180
+    deg), grids at 200 and 250 deg.
     """
     syn.write_bmap('bmap.dat', B0)
     grids = [
-        f'{a} {1000 * np.cos(np.radians(a)):.12g} {1000 * np.sin(np.radians(a)):.12g} 0 0'
+        f'{a} {1000 * np.cos(np.radians(a)):.12g}'
+        f' {1000 * np.sin(np.radians(a)):.12g} 0 0'
         for a in (200, 250)
     ]
     extraction = [

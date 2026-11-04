@@ -1,4 +1,5 @@
-"""Viewer for GANIL bidim files (.bid), standalone or inside the LIONS GUI."""
+"""Viewer for GANIL bidim files (.bid), standalone or inside the LIONS
+GUI."""
 
 import struct
 import numpy as np
@@ -191,6 +192,7 @@ class BidimViewerWidget(QWidget):
         layout.addWidget(splitter)
 
     def open_files(self):
+        """Ask for bidim files, read them and select the first."""
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Open bidim file(s)", "", "Bidim (*.bid);;All (*)"
         )
@@ -221,10 +223,12 @@ class BidimViewerWidget(QWidget):
             self.file_list.setCurrentRow(0)
 
     def on_selection_changed(self, row):
+        """Replot when a file is selected in the list."""
         if row >= 0:
             self.replot()
 
     def replot(self):
+        """Plot the selected bidim file."""
         item = self.file_list.currentItem()
         if not item:
             return

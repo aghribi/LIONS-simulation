@@ -34,8 +34,8 @@ class BidimWriter:
     def open(
         self, count, first, x_bits, y_bits, titles, x_labels, y_labels, bounds
     ):
-        """Create files <first>.bid ... <first+count-1>.bid and write their
-        headers. Returns 0 or an error code.
+        """Create files <first>.bid ... <first+count-1>.bid and write
+        their headers. Returns 0 or an error code.
         """
         self.n_open = 0
         date = [0, 0, 0]
@@ -61,7 +61,8 @@ class BidimWriter:
             mx = 2 ** x_bits[i] - 1
             if mx > 8191:
                 print(
-                    f'bidim open: bidim {i + 1}, wrong number of x bits: {x_bits[i]}'
+                    f'bidim open: bidim {i + 1}, '
+                    f'wrong number of x bits: {x_bits[i]}'
                 )
                 return 3
             self.x_bits[i] = x_bits[i]
@@ -69,7 +70,8 @@ class BidimWriter:
             my = 2 ** y_bits[i] - 1
             if my > 8191:
                 print(
-                    f'bidim open: bidim {i + 1}, wrong number of y bits: {y_bits[i]}'
+                    f'bidim open: bidim {i + 1}, '
+                    f'wrong number of y bits: {y_bits[i]}'
                 )
                 return 4
             self.y_bits[i] = y_bits[i]
@@ -117,14 +119,14 @@ class BidimWriter:
         return 0
 
     def add(self, n, ix, iy):
-        """Add one event (ix, iy) to bidim number n. Returns 0 or 1 if n is
-        out of range.
+        """Add one event (ix, iy) to bidim number n. Returns 0 or 1 if n
+        is out of range.
         """
         return self.add_many(n, [ix], [iy])
 
     def add_many(self, n, ix, iy):
-        """Add events (ix[i], iy[i]) in order to bidim number n. Returns 0
-        or 1 if n is out of range.
+        """Add events (ix[i], iy[i]) in order to bidim number n. Returns
+        0 or 1 if n is out of range.
         """
         if len(ix) == 0:
             return 0
@@ -151,8 +153,8 @@ class BidimWriter:
         return 0
 
     def close(self):
-        """Flush the buffers, with a 9999/9999 end marker after a partial
-        block, and close the files.
+        """Flush the buffers, with a 9999/9999 end marker after a
+        partial block, and close the files.
         """
         for num in range(self.n_open):
             if self.fill[num] == 4097:

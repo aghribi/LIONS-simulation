@@ -39,12 +39,15 @@ STEPS = 1440
 RFT_SAMPLES, RFT_TOL = 2880, 1e-12  # as G1 step 1
 PAD = 5
 FLOAT = re.compile(r'[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?')
-TC1 = 'tc1: TRIMCOIL, TYPE="PSI-BFIELD-MIRRORED", RMIN=4350.0, RMAX=4470.0, BMAX=1.4e-3, SLPTC=0.6;'
+TC1 = (
+    'tc1: TRIMCOIL, TYPE="PSI-BFIELD-MIRRORED", RMIN=4350.0, '
+    'RMAX=4470.0, BMAX=1.4e-3, SLPTC=0.6;'
+)
 
 
 def read_ring(path):
-    """RING map as OPAL reads it (getFieldFromFile_Ring): r [m], theta step
-    [deg], Bz and three theta derivatives.
+    """RING map as OPAL reads it (getFieldFromFile_Ring): r [m], theta
+    step [deg], Bz and three theta derivatives.
 
     Arrays (nrad, ntet) in file units (kG, per file azimuth unit); the
     first data record is skipped as in OPAL.
@@ -133,13 +136,14 @@ def ring_field(r, dt_deg, bz_kg, direction):
 
 
 def ic_rows():
+    """Return the ic.dat row nearest each energy in ENERGIES."""
     rows = np.loadtxt(PSI / 'ic.dat')
     return {e_: rows[np.argmin(np.abs(rows[:, 0] - e_))] for e_ in ENERGIES}
 
 
 def opal_closed_orbit(work, energy_mev, r_mm, pr_ic, trim):
-    """OPAL 2024.1 closed-orbit finder (tune mode) at one energy: (r [m],
-    pr [beta gamma], Qr, Qz).
+    """OPAL 2024.1 closed-orbit finder (tune mode) at one energy: (r
+    [m], pr [beta gamma], Qr, Qz).
     """
     work.mkdir(parents=True, exist_ok=True)
     (work / 'data').mkdir(exist_ok=True)
@@ -152,15 +156,24 @@ OPTION, VERSION=20240;
 OPTION, CLOTUNEONLY=TRUE;
 TITLE, STRING="PSI Ring closed orbit";
 {TC1 if trim else ''}
-psiring: CYCLOTRON, TYPE="RING", CYHARMON={HARMONIC}, PHIINIT=0.0, PRINIT={pr_ic / 1000:.17g}, RINIT={r_mm:.17g},
-    SYMMETRY={SYMMETRY}.0, RFFREQ={F_RF / 1e6:.17g}, FMAPFN="bfield.dat", FMLOWE={gev:.17g}, FMHIGHE={gev + 0.002:.17g}
+psiring: CYCLOTRON, TYPE="RING", CYHARMON={HARMONIC},\
+ PHIINIT=0.0,\
+ PRINIT={pr_ic / 1000:.17g},\
+ RINIT={r_mm:.17g},
+    SYMMETRY={SYMMETRY}.0, RFFREQ={F_RF / 1e6:.17g},\
+ FMAPFN="bfield.dat", FMLOWE={gev:.17g},\
+ FMHIGHE={gev + 0.002:.17g}
     {', TRIMCOIL=tc1' if trim else ''};
 l1: LINE=(psiring);
-dist: DISTRIBUTION, TYPE=GAUSSMATCHED, LINE=l1, NSTEPS={STEPS}, DENERGY=0.002, MAXSTEPSCO=100, NSECTORS={SYMMETRY},
+dist: DISTRIBUTION, TYPE=GAUSSMATCHED, LINE=l1, NSTEPS={STEPS}, DENERGY=0.002,\
+ MAXSTEPSCO=100, NSECTORS={SYMMETRY},
     SECTOR=FALSE;
-fs: FIELDSOLVER, FSTYPE=NONE, MX=8, MY=8, MT=8, PARFFTX=true, PARFFTY=true, PARFFTT=false,
+fs: FIELDSOLVER, FSTYPE=NONE, MX=8, MY=8, MT=8, PARFFTX=true,\
+ PARFFTY=true, PARFFTT=false,
     BCFFTX=open, BCFFTY=open, BCFFTT=open;
-beam1: BEAM, PARTICLE=PROTON, PC={np.sqrt((gev + MP_MEV / 1000) ** 2 - (MP_MEV / 1000) ** 2):.17g}, NPART=1,
+beam1: BEAM, PARTICLE=PROTON,\
+ PC={np.sqrt((gev + MP_MEV / 1000) ** 2 - (MP_MEV / 1000) ** 2):.17g},\
+ NPART=1,
     BCURRENT=1.0E-6, CHARGE=1.0, BFREQ={F_RF / 1e6:.17g};
 TRACK, LINE=l1, BEAM=beam1, MAXSTEPS=720, STEPSPERTURN=720;
 RUN, METHOD="CYCLOTRON-T", BEAM=beam1, FIELDSOLVER=fs, DISTRIBUTION=dist;
@@ -191,6 +204,7 @@ STOP;
 
 
 def step1(outdir):
+    """Step 1: file conventions (1a units, 1b Boris orbits, 1c OPAL)."""
     r, dt_deg, (bz, dbt, _, _) = read_ring(PSI / 'bfield.dat')
     records = []
 
@@ -209,7 +223,9 @@ def step1(outdir):
                 }
             )
         print(
-            f'1a {unit}: max {diff.max():.3e}, median {np.median(diff):.3e} (|dBz/dtheta| max {np.abs(dbt).max():.3e})',
+            f'1a {unit}: max {diff.max():.3e}, '
+            f'median {np.median(diff):.3e} '
+            f'(|dBz/dtheta| max {np.abs(dbt).max():.3e})',
             file=sys.stderr,
         )
 
@@ -320,8 +336,8 @@ def step1(outdir):
 
 
 def g1_grids(r, dt_deg, bz, dbt):
-    """The map in the case_g1 grids/attrs form (T, T/m, T/rad; sign of the
-    file), dBz/dr by OPAL's 5-point scheme.
+    """The map in the case_g1 grids/attrs form (T, T/m, T/rad; sign of
+    the file), dBz/dr by OPAL's 5-point scheme.
     """
     n = len(r)
     h = r[1] - r[0]
@@ -347,12 +363,13 @@ def g1_grids(r, dt_deg, bz, dbt):
 
 
 def fold(q):
+    """Fold a tune into [0, 0.5] by 1/(2 pi) arccos(cos(2 pi q))."""
     return np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi)
 
 
 def setup():
-    """Map in the G1 form, LIONS species and its mass, the quintic spline
-    field, FIXPO rows (E, r, pr, Qr, Qz).
+    """Map in the G1 form, LIONS species and its mass, the quintic
+    spline field, FIXPO rows (E, r, pr, Qr, Qz).
     """
     r, dt_deg, (bz, dbt, _, _) = read_ring(PSI / 'bfield.dat')
     grids, attrs = g1_grids(r, dt_deg, bz, dbt)
@@ -372,7 +389,8 @@ def setup():
 
 
 def reference(energy, r_ic, pr_ic, qr_ref, qz_ref):
-    """p, the orbit_metrics reference dict and the folded FIXPO tunes."""
+    """p, the orbit_metrics reference dict and the folded FIXPO
+    tunes."""
     p = np.sqrt((1 + energy / MP_MEV) ** 2 - 1)
     return (
         p,
@@ -386,6 +404,7 @@ def reference(energy, r_ic, pr_ic, qr_ref, qz_ref):
 
 
 def step2(outdir):
+    """Step 2: LIONS and the spline tracker on the map, no trim coil."""
     grids, attrs, species, mass_kg, spline, fixpo = setup()
     f_rev = F_RF / HARMONIC
     work = outdir / 'lions_map'
@@ -436,7 +455,8 @@ def step2(outdir):
                 file=sys.stderr,
             )
     meta = {
-        'case': 'G2 step 2: LIONS and the spline tracker on the PSI Ring map, no trim coil',
+        'case': 'G2 step 2: LIONS and the spline tracker on the PSI '
+        'Ring map, no trim coil',
         'proton_mass_mev': repr(MP_MEV),
         'species': repr(species),
         'rf_hz': repr(F_RF),
@@ -457,8 +477,8 @@ def step2(outdir):
 
 
 def block_determinants(outdir, name, case, make_trackers):
-    """det - 1 of the r block, z block and M, and the tunes, at 152, 292,
-    452 MeV for each tracker.
+    """det - 1 of the r block, z block and M, and the tunes, at 152,
+    292, 452 MeV for each tracker.
 
     make_trackers(energy, p, grids, attrs, species, mass_kg, spline,
     work) -> {code: (track, jacobian steps)}.
@@ -576,8 +596,8 @@ def step2c(outdir):
 
 
 def step3(outdir):
-    """OPAL closed-orbit finder (RING reader, no trim coil) and RF-Track on
-    the spline, every 20 MeV and 530 MeV.
+    """OPAL closed-orbit finder (RING reader, no trim coil) and RF-Track
+    on the spline, every 20 MeV and 530 MeV.
     """
     _, attrs, _, mass_kg, spline, fixpo = setup()
     r_max = attrs['ri_m'] + attrs['rstep_m'] * (attrs['nrad'] - 1)
@@ -642,7 +662,8 @@ def step3(outdir):
                 file=sys.stderr,
             )
     meta = {
-        'case': 'G2 step 3: OPAL (RING reader, closed-orbit finder) and RF-Track (spline) on the PSI Ring map',
+        'case': 'G2 step 3: OPAL (RING reader, closed-orbit finder) and '
+        'RF-Track (spline) on the PSI Ring map',
         'proton_mass_mev': repr(MP_MEV),
         'rf_hz': repr(F_RF),
         'harmonic': str(HARMONIC),

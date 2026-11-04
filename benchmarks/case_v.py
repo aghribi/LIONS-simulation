@@ -1,6 +1,6 @@
-"""Case V: LIONS judges the tunes of a mission, docs/training/PHYSICAL.md
-(F18) and PHYSICAL_NEON.md (NEON). Synthetic map: says nothing about a
-real machine.
+"""Case V: LIONS judges the tunes of a mission,
+docs/training/PHYSICAL.md (F18) and PHYSICAL_NEON.md (NEON). Synthetic
+map: says nothing about a real machine.
 
 usage: CASE_P_MISSION=NEON uv run --extra game --extra rl --extra bo
 --group bench --group dev python benchmarks/case_v.py
@@ -67,8 +67,8 @@ REST_MEV = case_p.MASS_KG * syn.C**2 / syn.MEV
 DEFLECTOR_DEG, DEFLECTOR_R = (
     250.0,
     1.513,
-    # entry of the Mo deck: another ion on another map, a labelled reading,
-    # decides nothing
+    # entry of the Mo deck: another ion on another map, a labelled
+    # reading, decides nothing
 )
 EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT = (
     'extracted',
@@ -90,6 +90,7 @@ BEAM_FIELDS = (
 
 
 def wrap(phi):
+    """Wrap phi [rad] into [-pi, pi)."""
     return np.remainder(phi + np.pi, 2 * np.pi) - np.pi
 
 
@@ -106,8 +107,8 @@ def t0_phase(omega_t, crest_deg):
 
 
 class Map:
-    """What the verdict takes from case P: start orbit, crest, extraction
-    radius.
+    """What the verdict takes from case P: start orbit, crest,
+    extraction radius.
     """
 
     def __init__(self, mapdir, start_mev=None, extraction='mean'):
@@ -157,6 +158,7 @@ class Map:
         ]
 
     def workdir(self, path):
+        """Make path hold symlinks to the map files; return it."""
         path.mkdir(parents=True, exist_ok=True)
         for name in MAP_FILES:
             if not (path / name).exists():
@@ -165,6 +167,7 @@ class Map:
 
 
 def load(deck_args):
+    """Write deck.dat from deck_args and case P settings; load it."""
     syn.write_deck(
         'deck.dat',
         npaspt=case_p.STEPS,
@@ -180,8 +183,8 @@ def load(deck_args):
 
 
 def reference_orbit(workdir, mp):
-    """Closed orbit at the start energy, no RF: x, y, z, px, py, pz at each
-    step over one turn, in LIONS' staggered convention.
+    """Closed orbit at the start energy, no RF: x, y, z, px, py, pz at
+    each step over one turn, in LIONS' staggered convention.
     """
     rows = []
 
@@ -322,6 +325,7 @@ class Pass:
             self.snaps.setdefault(f, self.state(np.hypot(b.x, b.y)))
 
     def step(self, d):
+        """Per-step hook: release, crossings, fates. True to go on."""
         k, b = d.run.step, d.bunch
         if k == 0:
             return True
@@ -354,6 +358,7 @@ class Pass:
         return bool(b.alive.any()) and k < self.limit * case_p.STEPS
 
     def state(self, r):
+        """Copy of the per-particle arrays at radius r [m]."""
         return {
             'fate': self.fate.copy(),
             'w_end': self.w_end.copy(),
@@ -366,6 +371,7 @@ class Pass:
         }
 
     def crossing(self, c, d, xp, yp, gp, tp):
+        """Update particles c that crossed y = 0, interpolated."""
         b, ion = d.bunch, case_p.ION
         f = -yp[c] / (b.y[c] - yp[c])
         when = tp + f * (d.run.t - tp)
@@ -395,8 +401,8 @@ class Pass:
         b.alive[done] = False
 
     def beam(self, behind_rule=False):
-        """Beam through the closed forms of machine.extract. behind_rule:
-        T0's loss rule applied on top of the dynamics.
+        """Beam through the closed forms of machine.extract.
+        behind_rule: T0's loss rule applied on top of the dynamics.
         """
         out = self.fate == EXTRACTED
         if behind_rule:
@@ -463,6 +469,7 @@ def judged(condition, knobs, field, beam=None):
 
 
 def row_of(prefix, m):
+    """Beam fields and spec terms of mission m, keys prefixed."""
     b = m.beam
     return {
         **{f'{prefix}_{k}': float(getattr(b, k)) for k in BEAM_FIELDS},
@@ -472,6 +479,7 @@ def row_of(prefix, m):
 
 
 def write(records, path, what, mp, units, phase_rms_deg=None):
+    """Write records to Parquet at path, with map metadata."""
     meta = {
         'case': f'synthetic {MISSION}, {what}',
         'registration': case_p.REGISTRATION,
@@ -498,8 +506,8 @@ def write(records, path, what, mp, units, phase_rms_deg=None):
 
 
 def tune_job(job):
-    """One tune of case T3, regenerated: the Parquet holds no field error.
-    torch on one thread, as there.
+    """One tune of case T3, regenerated: the Parquet holds no field
+    error. torch on one thread, as there.
     """
     import torch
 
@@ -536,6 +544,7 @@ def tune_job(job):
 
 
 def harmonic_of(knobs, errors):
+    """RF harmonic number at injection for the knobs and field error."""
     w_inj = case_p.MACHINE.w_injection * case_p.ION.mass_number
     return max(
         round(
@@ -572,15 +581,18 @@ def tunes(outdir, reference, mp, workers):
     )
     wrong = sum(not d[0] for d in done)
     print(
-        f'{len(rows)} tunes; true at stop {sum(r["t0_true_at_stop"] for r in rows)}; harmonics {sorted({r["harmonic"] for r in rows})}; {wrong} differ from case T3'
+        f'{len(rows)} tunes; true at stop '
+        f'{sum(r["t0_true_at_stop"] for r in rows)}; harmonics '
+        f'{sorted({r["harmonic"] for r in rows})}; '
+        f'{wrong} differ from case T3'
     )
     return wrong
 
 
 def tunes_from_table(outdir, reference, mp):
-    """Tunes read in spec on the tuning model, from their table: PPO seed 0
-    and the other methods. The stored state must give the stored true
-    read, or the run stops.
+    """Tunes read in spec on the tuning model, from their table: PPO
+    seed 0 and the other methods. The stored state must give the stored
+    true read, or the run stops.
     """
     runs = [
         r
@@ -617,18 +629,23 @@ def tunes_from_table(outdir, reference, mp):
         'field_error 1, knobs as the scenario',
     )
     print(
-        f'{len(rows)} tunes; true at stop {sum(r["t0_true_at_stop"] for r in rows)}; harmonics {sorted({r["harmonic"] for r in rows})}; {wrong} differ from the table'
+        f'{len(rows)} tunes; true at stop '
+        f'{sum(r["t0_true_at_stop"] for r in rows)}; harmonics '
+        f'{sorted({r["harmonic"] for r in rows})}; '
+        f'{wrong} differ from the table'
     )
     return wrong
 
 
 def of_tune(row):
+    """Mission in the state of a tune row."""
     return judged(
         row['condition'], json.loads(row['knobs']), row['field_error']
     )
 
 
 def check(outdir, mp):
+    """Time one pass and check the phase and field-scale conversions."""
     work = mp.workdir(outdir / 'check' / 'base')
     ref = reference_orbit(work, mp)
     print(
@@ -652,7 +669,8 @@ def check(outdir, mp):
     began = time.perf_counter()
     p = Pass(work, mp, ref, m.knobs, m.errors, m.draws)
     print(
-        f'pass: {time.perf_counter() - began:.1f} s wall, limit {p.limit} turns, longest {p.turn_max}, fates',
+        f'pass: {time.perf_counter() - began:.1f} s wall, '
+        f'limit {p.limit} turns, longest {p.turn_max}, fates',
         dict(zip(*np.unique(p.fate.astype(str), return_counts=True))),
     )
     print(
@@ -690,7 +708,9 @@ def check(outdir, mp):
             / 2
         )
         print(
-            f'{name}: mean phase over {turns} turns moves {slip[1] - slip[0]:+.3f} deg, T0 update predicts {predicted:+.3f} deg'
+            f'{name}: mean phase over {turns} turns moves '
+            f'{slip[1] - slip[0]:+.3f} deg, '
+            f'T0 update predicts {predicted:+.3f} deg'
         )
     # boris_b_coef against a map rewritten with the same scale.
     s = 1.002
@@ -733,6 +753,7 @@ def check(outdir, mp):
 
 
 def one(job):
+    """Run one tune through LIONS; keep its rows in parts/."""
     row, mapdir, parts, start_mev, extraction, phase_rms_deg = job
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
@@ -833,6 +854,7 @@ def one(job):
 
 
 def classes(s, fate):
+    """Count, summed and median end energy [MeV] of a fate class."""
     w = s['w_end'][s['fate'] == fate]
     return {
         f'n_{fate}': len(w),
@@ -844,6 +866,7 @@ def classes(s, fate):
 
 
 def limit_one(job):
+    """Run one tune to the longest turn limit; keep rows in parts/."""
     row, mapdir, parts = job
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
@@ -929,6 +952,7 @@ def limit_one(job):
 
 
 def limit_study(outdir, mp, workers, reference):
+    """Run the turn-limit study over all tunes; write and print it."""
     rows = pq.read_table(outdir / 'case_v_tunes.parquet').to_pylist()
     parts = outdir / 'parts'
     parts.mkdir(parents=True, exist_ok=True)
@@ -941,7 +965,11 @@ def limit_study(outdir, mp, workers, reference):
         for r in rows
     ]
     v = [r for d in done for r in d[0]]
-    units = 'lost_kw kW, w_mean w_* MeV, w_spread 1, extracted_ua uA, limit_turns turns, r_end_m m, phi_start_deg deg, z0_m m. turn_limit is a particle still circulating'
+    units = (
+        'lost_kw kW, w_mean w_* MeV, w_spread 1, extracted_ua uA, '
+        'limit_turns turns, r_end_m m, phi_start_deg deg, z0_m m. '
+        'turn_limit is a particle still circulating'
+    )
     write(
         v,
         outdir / 'case_v_limit_verdict.parquet',
@@ -1038,6 +1066,7 @@ def limit_study(outdir, mp, workers, reference):
 
 
 def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
+    """Run every tune of the harmonic through LIONS; write tables."""
     rows = [
         r
         for r in pq.read_table(
@@ -1066,7 +1095,9 @@ def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
         outdir / 'case_v_verdict.parquet',
         'verdict per tune',
         mp,
-        'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, wall_s s',
+        'transmission 1, extracted_ua uA, w_mean MeV, w_spread 1, '
+        'lost_kw kW, x y mm, rf_mhz MHz, b0_t T, dee_kv kV, '
+        'phase_deg deg, wall_s s',
         phase_rms_deg,
     )
     write(
@@ -1074,7 +1105,11 @@ def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
         outdir / 'case_v_particles.parquet',
         'one row per particle',
         mp,
-        'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, phi_start_deg deg, phi_first_deg deg (phase at the first theta = 0 crossing), z0_m m, w_final_mev MeV, w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of machine.run',
+        'rf_mhz MHz, b0_t T, dee_kv kV, phase_deg deg, '
+        'phi_start_deg deg, phi_first_deg deg (phase at the first '
+        'theta = 0 crossing), z0_m m, w_final_mev MeV, '
+        'w_extraction_mev MeV, phase_by_bin_deg deg per radial bin of '
+        'machine.run',
         phase_rms_deg,
     )
     write(

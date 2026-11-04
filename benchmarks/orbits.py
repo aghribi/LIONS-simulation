@@ -42,8 +42,8 @@ def lagrange4(t, f, t0):
 
 
 def crossings(t, pos, mom):
-    """Section states (r, pr, z, pz) and times at each upward crossing of y
-    = 0 with x > 0.
+    """Section states (r, pr, z, pz) and times at each upward crossing
+    of y = 0 with x > 0.
     """
     y = pos[:, 1]
     idx = np.nonzero((y[:-1] < 0) & (y[1:] >= 0) & (pos[:-1, 0] > 0))[0]
@@ -94,8 +94,8 @@ def deck_tail(options):
 
 
 class LionsTracker:
-    """LIONS in a working directory holding bmap.dat, pot1.bin, pot2.dat.
-    Many particles per run.
+    """LIONS in a working directory holding bmap.dat, pot1.bin,
+    pot2.dat. Many particles per run.
 
     w_mev: kinetic energy per nucleon; fhf_hz: RF frequency at harmonic
     1 (one turn = steps_per_turn steps); species: (atomic mass in u,
@@ -242,6 +242,7 @@ class OpalTracker:
         )
 
     def track_one(self, state, turns, tag='run'):
+        """Run OPAL in Docker on one start state; return t, pos, mom."""
         r, pr, z, pz = state
         p = self.p
         stem = f'{tag}_{self.integrator}_{self.n}'
@@ -250,16 +251,21 @@ OPTION, PSDUMPFREQ=100000000;
 OPTION, SPTDUMPFREQ=1;
 OPTION, VERSION=20240;
 Title, string="LIONS benchmark";
-cyc: CYCLOTRON, TYPE=CARBONCYCL, CYHARMON=1, PHIINIT=0.0, PRINIT={pr:.17g}, RINIT={r * 1e3:.17g},
-     ZINIT={z * 1e3:.17g}, PZINIT={pz:.17g}, SYMMETRY=1.0, RFFREQ={self.f_rev_mhz:.17g},
+cyc: CYCLOTRON, TYPE=CARBONCYCL, CYHARMON=1, PHIINIT=0.0,\
+ PRINIT={pr:.17g}, RINIT={r * 1e3:.17g},
+     ZINIT={z * 1e3:.17g}, PZINIT={pz:.17g}, SYMMETRY=1.0,\
+ RFFREQ={self.f_rev_mhz:.17g},
      FMAPFN="bmap_carbon.dat", MINZ=-1000, MAXZ=1000, MINR=0, MAXR=10000;
 l1: LINE=(cyc);
 dist: DISTRIBUTION, TYPE=FROMFILE, FNAME="part.dat";
-fs: FIELDSOLVER, FSTYPE=NONE, MX=8, MY=8, MT=8, PARFFTX=true, PARFFTY=true, PARFFTT=false,
+fs: FIELDSOLVER, FSTYPE=NONE, MX=8, MY=8, MT=8, PARFFTX=true,\
+ PARFFTY=true, PARFFTT=false,
     BCFFTX=open, BCFFTY=open, BCFFTT=open;
-beam1: BEAM, MASS={self.mass_gev:.17g}, CHARGE=1.0, PC={p * self.mass_gev:.17g}, NPART=1,
+beam1: BEAM, MASS={self.mass_gev:.17g}, CHARGE=1.0,\
+ PC={p * self.mass_gev:.17g}, NPART=1,
        BCURRENT=0, BFREQ={self.f_rev_mhz:.17g};
-TRACK, LINE=l1, BEAM=beam1, MAXSTEPS={int(turns * self.n)}, STEPSPERTURN={self.n},
+TRACK, LINE=l1, BEAM=beam1, MAXSTEPS={int(turns * self.n)},\
+ STEPSPERTURN={self.n},
        TIMEINTEGRATOR="{self.integrator}";
 RUN, METHOD="CYCLOTRON-T", BEAM=beam1, FIELDSOLVER=fs, DISTRIBUTION=dist;
 ENDTRACK;
@@ -286,6 +292,7 @@ STOP;
         return t, pos, mom
 
     def track(self, states, turns):
+        """Run track_one for each state in parallel; stack the runs."""
         with concurrent.futures.ThreadPoolExecutor(self.workers) as pool:
             out = list(
                 pool.map(
@@ -297,8 +304,8 @@ STOP;
 
 
 class _UserField(rft.UserField):
-    """RF-Track field from b(x, y, z) -> (Bx, By, Bz) in T, LIONS frame and
-    metres.
+    """RF-Track field from b(x, y, z) -> (Bx, By, Bz) in T, LIONS frame
+    and metres.
 
     RF-Track calls get_field in the element frame, z from 0 at the
     entrance; the element is centred on Z = 0.
@@ -342,6 +349,7 @@ class RFTrackTracker:
         self.volume.add(_UserField(2 * half_size, b), 0.0, 0.0, -half_size)
 
     def track_one(self, state, turns):
+        """Track one start state in RF-Track; return t, pos, mom."""
         pos, mom = initial_vectors(state, self.p)
         opt = rft.TrackingOptions()
         opt.dt_mm = opt.tt_dt_mm = self.dt_mm
@@ -364,6 +372,7 @@ class RFTrackTracker:
         return tt[:, 0] * 1e-3 / syn.C, pos, mom
 
     def track(self, states, turns):
+        """Run track_one for each state; stack the runs."""
         return stack_runs(
             [self.track_one(s, turns) for s in np.atleast_2d(states)]
         )
@@ -386,8 +395,8 @@ class BorisTracker:
         self.c_dt = syn.C * self.dt
 
     def kick(self, pos, mom, fraction):
-        """Boris rotation of mom over fraction x dt with the field at pos
-        (LIONS boris_push with E = 0).
+        """Boris rotation of mom over fraction x dt with the field at
+        pos (LIONS boris_push with E = 0).
         """
         bx, by, bz = self.field(*pos.T)
         gamma = np.sqrt(1 + (mom**2).sum(axis=1))
@@ -416,6 +425,7 @@ class BorisTracker:
         )
 
     def track(self, states, turns):
+        """Boris-step the states over the turns; return t, pos, mom."""
         pos, mom = initial_vectors(states, self.p)
         half = self.kick(pos, mom, -0.5)
         steps = int(np.ceil(turns)) * self.n
@@ -438,7 +448,8 @@ class BorisTracker:
 
 
 class RK4Tracker:
-    """Classical RK4, fixed step, on dx/dt = c p / gamma and dp/dt = (q /
+    """Classical RK4, fixed step, on dx/dt = c p / gamma and dp/dt = (q
+    /
     m) (p / gamma) x B, p in beta gamma.
 
     Same field call, time step and full-step recording as BorisTracker.
@@ -450,11 +461,13 @@ class RK4Tracker:
         self.qm = charge_c / mass_kg
 
     def rate(self, pos, mom):
+        """Return d(pos)/dt and d(mom)/dt for the RK4 step."""
         gamma = np.sqrt(1 + (mom**2).sum(axis=1))[:, None]
         b = np.column_stack(self.field(*pos.T))
         return syn.C * mom / gamma, self.qm * np.cross(mom, b) / gamma
 
     def track(self, states, turns):
+        """RK4-step the states over the turns; return t, pos, mom."""
         pos, mom = initial_vectors(states, self.p)
         steps = int(np.ceil(turns)) * self.n
         h = self.dt
@@ -495,22 +508,23 @@ def section_series(t, pos, mom):
 
 
 def one_turn(track, states):
-    """Map section states (n, 4) through one turn. track(states, turns) ->
-    (t, pos, mom).
+    """Map section states (n, 4) through one turn. track(states, turns)
+    -> (t, pos, mom).
     """
     t, pos, mom = track(states, 1.2)
     series = section_series(t, pos, mom)
     lost = [i for i, s in enumerate(series) if len(s) == 0]
     if lost:
         raise RuntimeError(
-            f'particles {lost} never crossed the section (lost from the map or invalid start)'
+            f'particles {lost} never crossed the section '
+            '(lost from the map or invalid start)'
         )
     return np.array([s[0, 1:] for s in series])
 
 
 def closed_orbit(track, guess, iters=8, h=1e-7):
-    """Newton on (r, pr) at z = pz = 0, finite-difference Jacobian. Returns
-    state and residual.
+    """Newton on (r, pr) at z = pz = 0, finite-difference Jacobian.
+    Returns state and residual.
     """
     s = np.array([guess[0], guess[1], 0.0, 0.0])
     for _ in range(iters):

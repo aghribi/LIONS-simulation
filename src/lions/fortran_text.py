@@ -1,5 +1,5 @@
-"""Fortran list-directed text reading (``read(unit, *)``): numbers with d
-exponents, quoted strings.
+"""Fortran list-directed text reading (``read(unit, *)``): numbers with
+d exponents, quoted strings.
 """
 
 
@@ -38,7 +38,8 @@ class FortranFile:
 
     @staticmethod
     def _tokenize(line):
-        """Split a line on blanks and commas, keeping quoted strings whole."""
+        """Split a line on blanks and commas, keeping quoted strings
+        whole."""
         tokens = []
         i = 0
         while i < len(line):
@@ -71,8 +72,8 @@ class FortranFile:
                 return line
 
     def read_tokens(self, n):
-        """Exactly n tokens, read across lines if needed; fewer only at end
-        of file.
+        """Exactly n tokens, read across lines if needed; fewer only at
+        end of file.
         """
         result = list(self._buffer)
         self._buffer = []

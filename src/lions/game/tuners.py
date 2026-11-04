@@ -1,5 +1,5 @@
-"""Tuning methods on a mission: one pass of the machine is one evaluation.
-The arcade and benchmarks/case_t.py run this same code.
+"""Tuning methods on a mission: one pass of the machine is one
+evaluation. The arcade and benchmarks/case_t.py run this same code.
 
 Registered comparison in docs/training/RL_RUNS.md. Each method sees
 control-room readings or the score built from them, never the hidden
@@ -32,11 +32,13 @@ ACQ_RESTARTS, ACQ_RAW_SAMPLES = 4, 256
 
 
 class Run:
-    """The budget and the search box. A method calls it once per pass; it
-    raises Done when in spec or out of budget.
+    """The budget and the search box. A method calls it once per pass;
+    it raises Done when in spec or out of budget.
     """
 
     class Done(Exception):  # noqa: N818 (control flow, not an error)
+        """Raised when the run is in spec or out of budget."""
+
         pass
 
     def __init__(self, m, budget=BUDGET, on_pass=None, box=None, stop=None):
@@ -92,6 +94,9 @@ class Run:
             raise Run.Done
 
     def set(self, u):
+        """Set the knobs from u in the unit box, clipped, and run one
+        pass.
+        """
         u = np.clip(u, 0, 1)
         self.m.knobs.update(
             zip(self.keys, (self.lo + (self.hi - self.lo) * u).tolist())
@@ -99,12 +104,13 @@ class Run:
         self.passed()
 
     def __call__(self, u):
+        """Set u, run one pass and return minus the score."""
         self.set(u)
         return -self.score
 
     def terms(self, u):
-        """One objective per term of the client's spec. Without beam every
-        term is worse than with beam, closer on the radial probe.
+        """One objective per term of the client's spec. Without beam
+        every term is worse than with beam, closer on the radial probe.
         """
         self.set(u)
         m = self.m
@@ -130,8 +136,8 @@ class Run:
 
 
 def coach(run, rng):
-    """The rules of lions.game.coach: one knob per pass, its fine step at
-    0.1.
+    """The rules of lions.game.coach: one knob per pass, its fine step
+    at 0.1.
     """
     rules = Coach(run.m)
     while True:
@@ -151,6 +157,7 @@ def coach(run, rng):
 
 
 def nelder_mead(run, rng):
+    """Nelder-Mead simplex on the score, restarted at random points."""
     from scipy.optimize import minimize
 
     n = len(run.start)
@@ -172,11 +179,13 @@ def nelder_mead(run, rng):
 
 
 def random_search(run, rng):
+    """Random settings in the unit box until the budget is gone."""
     while True:
         run(rng.uniform(0, 1, len(run.start)))
 
 
 def bayesian(run, rng):
+    """Gaussian process with expected improvement on the score."""
     from scipy.stats import norm
     from sklearn.gaussian_process import GaussianProcessRegressor
     from sklearn.gaussian_process.kernels import (
@@ -207,8 +216,8 @@ def bayesian(run, rng):
 
 
 def nsga2(run, rng):
-    """Multi-objective genetic algorithm: the spec terms are kept apart, no
-    weights between them.
+    """Multi-objective genetic algorithm: the spec terms are kept
+    apart, no weights between them.
     """
     from pymoo.algorithms.moo.nsga2 import NSGA2
     from pymoo.core.problem import Problem
@@ -363,8 +372,8 @@ def mobo(run, rng):
 
 
 def turbo(run, rng):
-    """TuRBO-1 on the score: Thompson sampling in a trust region around the
-    best point, restarted on collapse.
+    """TuRBO-1 on the score: Thompson sampling in a trust region
+    around the best point, restarted on collapse.
     """
     import torch
     from botorch.exceptions.errors import ModelFittingError
@@ -438,8 +447,8 @@ def turbo(run, rng):
 
 
 def policy(run, rng, model):
-    """A trained policy, deterministic: one action per pass, every knob at
-    once.
+    """A trained policy, deterministic: one action per pass, every
+    knob at once.
     """
     from lions.game.env import MissionEnv
 
@@ -473,12 +482,13 @@ def tune(
 
 
 def policy_path(mission_id, algo='ppo', seed=0):
+    """The file of the policy for a mission, algorithm and seed."""
     return POLICIES / f'{mission_id}_{algo}_{seed}.zip'
 
 
 def train_policy(mission_id, algo, seed, path, steps=None, progress=None):
-    """SB3 defaults, MlpPolicy, training conditions apart from the held-out
-    ones. Saves to path.
+    """SB3 defaults, MlpPolicy, training conditions apart from the
+    held-out ones. Saves to path.
     """
     import torch
     from stable_baselines3 import PPO, SAC
@@ -508,6 +518,7 @@ def train_policy(mission_id, algo, seed, path, steps=None, progress=None):
 
 
 def load_policy(path):
+    """Load a saved policy: SAC if the file name says so, else PPO."""
     from stable_baselines3 import PPO, SAC
 
     return (SAC if '_sac_' in Path(path).name else PPO).load(
@@ -516,12 +527,16 @@ def load_policy(path):
 
 
 def policy_report(mission_id):
-    """Held-out result saved beside a policy by lions.game.train, or None."""
+    """Held-out result of a policy, from lions.game.train, or None."""
     path = policy_path(mission_id).with_suffix('.json')
     return json.loads(path.read_text()) if path.exists() else None
 
 
 class Method:
+    """A tuning method: name, function, required modules and
+    description.
+    """
+
     def __init__(self, name, fn, needs, what, extra='rl'):
         self.name, self.fn, self.needs, self.what, self.extra = (
             name,
@@ -532,6 +547,7 @@ class Method:
         )
 
     def missing(self):
+        """The required modules that are not installed."""
         return [module for module in self.needs if find_spec(module) is None]
 
 
@@ -540,58 +556,85 @@ METHODS = [
         'COACH',
         coach,
         (),
-        'Written rules, one knob per pass, from the probes and readings. Not the CIME operator procedure.',
+        (
+            'Written rules, one knob per pass, from the probes and '
+            'readings. Not the CIME operator procedure.'
+        ),
     ),
     Method(
         'NELDER-MEAD',
         nelder_mead,
         ('scipy',),
-        'Simplex on the score, no model, no gradient. Restarts from a random point when it stalls.',
+        (
+            'Simplex on the score, no model, no gradient. Restarts from a '
+            'random point when it stalls.'
+        ),
     ),
     Method(
         'BAYESIAN OPT.',
         bayesian,
         ('scipy', 'sklearn'),
-        'Gaussian process on the score, expected improvement. Random points first, then the most promising.',
+        (
+            'Gaussian process on the score, expected improvement. Random '
+            'points first, then the most promising.'
+        ),
     ),
     Method(
         'TURBO',
         turbo,
         ('botorch',),
-        'Gaussian process on the score, in a trust region around the best point, restarted when it collapses. Takes minutes.',
+        (
+            'Gaussian process on the score, in a trust region around the '
+            'best point, restarted when it collapses. Takes minutes.'
+        ),
         'bo',
     ),
     Method(
         'CONSTRAINED BO',
         constrained_bo,
         ('botorch',),
-        'One Gaussian process per term of the spec: the point most likely to meet them all. Takes minutes.',
+        (
+            'One Gaussian process per term of the spec: the point most '
+            'likely to meet them all. Takes minutes.'
+        ),
         'bo',
     ),
     Method(
         'MOBO',
         mobo,
         ('botorch',),
-        'One Gaussian process per term of the spec, kept apart, hypervolume improvement from the spec limits. Takes minutes.',
+        (
+            'One Gaussian process per term of the spec, kept apart, '
+            'hypervolume improvement from the spec limits. Takes minutes.'
+        ),
         'bo',
     ),
     Method(
         'NSGA-II (MOGA)',
         nsga2,
         ('pymoo',),
-        'Genetic algorithm on each term of the spec, kept apart: no weights between them.',
+        (
+            'Genetic algorithm on each term of the spec, kept apart: no '
+            'weights between them.'
+        ),
     ),
     Method(
         'CMA-ES',
         cma_es,
         ('cma',),
-        'Evolution strategy on the score: learns which knobs move together, no model of the machine.',
+        (
+            'Evolution strategy on the score: learns which knobs move '
+            'together, no model of the machine.'
+        ),
     ),
     Method(
         'PPO (RL)',
         policy,
         ('stable_baselines3',),
-        'A policy trained on other conditions, 100k passes. Reads the control room, moves every knob at once.',
+        (
+            'A policy trained on other conditions, 100k passes. Reads the '
+            'control room, moves every knob at once.'
+        ),
     ),
     Method(
         'RANDOM',
@@ -603,8 +646,8 @@ METHODS = [
 
 
 class Tuning:
-    """A method on a private copy of the mission, in a thread owned by the
-    caller. The screen replays the passes as they come.
+    """A method on a private copy of the mission, in a thread owned by
+    the caller. The screen replays the passes as they come.
     """
 
     def __init__(self, stage, method, seed):
@@ -615,6 +658,9 @@ class Tuning:
         self.thread.start()
 
     def work(self):
+        """Run the method in the thread. An error is kept for the
+        screen.
+        """
         options = {}
         try:
             if self.method.fn is policy:
@@ -632,6 +678,9 @@ class Tuning:
             self.error = f'{type(error).__name__}: {error}'
 
     def record(self, run):
+        """Store the knobs, field error and scores of a pass. Stop if
+        asked.
+        """
         if self.stopping:
             raise Run.Done
         self.passes.append(
@@ -644,8 +693,10 @@ class Tuning:
         )
 
     def finished(self):
+        """True once the thread has ended."""
         return not self.thread.is_alive()
 
     def stop(self):
+        """Ask the thread to stop and wait up to 5 s for it."""
         self.stopping = True
         self.thread.join(timeout=5)

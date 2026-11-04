@@ -1,5 +1,5 @@
-"""QThread that runs the LIONS engine and routes input() and print() to the
-GUI.
+"""QThread that runs the LIONS engine and routes input() and print() to
+the GUI.
 """
 
 import sys
@@ -33,6 +33,9 @@ class InputQueue:
         self.response_queue = queue.Queue()
 
     def __call__(self, prompt=''):
+        """Return the next preloaded answer, else ask the GUI through
+        fallback_signal.
+        """
         try:
             answer = self.q.get_nowait()
             return answer
@@ -47,8 +50,8 @@ class InputQueue:
 
 
 class OutputInterceptor(io.TextIOBase):
-    """Replaces sys.stdout: emits each write as a Qt signal and echoes it
-    to the terminal.
+    """Replaces sys.stdout: emits each write as a Qt signal and echoes
+    it to the terminal.
     """
 
     def __init__(self, signal):
@@ -57,6 +60,9 @@ class OutputInterceptor(io.TextIOBase):
         self._original = sys.__stdout__
 
     def write(self, text):
+        """Emit the text as a signal, echo it to the original stream,
+        return its length.
+        """
         if text:
             self.signal.emit(text)
             if self._original:
@@ -64,6 +70,7 @@ class OutputInterceptor(io.TextIOBase):
         return len(text) if text else 0
 
     def flush(self):
+        """Flush the original stream if there is one."""
         if self._original:
             self._original.flush()
 
@@ -91,6 +98,9 @@ class SimulationWorker(QThread):
             self._input_queue.response_queue.put(answer)
 
     def run(self):
+        """Run the simulation in the thread, with input() and stdout
+        routed to the GUI.
+        """
         original_input = builtins.input
         original_stdout = sys.stdout
         original_dir = os.getcwd()
@@ -157,8 +167,8 @@ class SimulationWorker(QThread):
         return True
 
     def _emit_data(self, d):
-        """Emit one plot-data dict per family: reference particle plus all
-        live particles.
+        """Emit one plot-data dict per family: reference particle plus
+        all live particles.
         """
         try:
             nbrfam = len(d.bunch.families)

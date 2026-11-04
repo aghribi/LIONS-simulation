@@ -14,7 +14,8 @@ from .apertures import (
 def add_harmonics(
     rmin, rmax, nr, ntheta, bz, d2bz, dbzdx, dbzdy, n_coef, coef, phase_deg
 ):
-    """Add first and second field harmonics to the map arrays, in place."""
+    """Add first and second field harmonics to the map arrays, in
+    place."""
     pi = np.pi
     dr = (rmax - rmin) / (nr - 1.0)
     dtheta = 360.0 / (ntheta - 1.0) * pi / 180.0
@@ -122,10 +123,10 @@ def prepare_hermite(field, ntheta_all):
 
 
 def atan2_azimuth(x, y):
-    """Azimuth in [0, 2 pi) from atan2: uniform precision. arccos(x / r),
-    the Fortran formula, loses precision near theta = 0 and pi (rounding
-    over sin theta), which puts non-smooth noise of order 1e-12 m per
-    kick into the one-turn map at r of a few metres.
+    """Azimuth in [0, 2 pi) from atan2: uniform precision. arccos(x /
+    r), the Fortran formula, loses precision near theta = 0 and pi
+    (rounding over sin theta), which puts non-smooth noise of order
+    1e-12 m per kick into the one-turn map at r of a few metres.
     """
     theta = np.arctan2(y, x) % (2.0 * np.pi)
     theta[theta >= 2.0 * np.pi] = 0.0
@@ -133,8 +134,8 @@ def atan2_azimuth(x, y):
 
 
 def hermite_bz(field, ivec, veca, x, y, r):
-    """Bicubic Hermite Bz in the radial cell ivec at offset veca, and its
-    Cartesian gradient.
+    """Bicubic Hermite Bz in the radial cell ivec at offset veca, and
+    its Cartesian gradient.
 
     Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells. The
     azimuth is always atan2_azimuth.
@@ -190,7 +191,8 @@ def hermite_bz(field, ivec, veca, x, y, r):
 
 
 def compute_fields(d):
-    """Magnetic and electric fields at all particles for the current time."""
+    """Magnetic and electric fields at all particles for the current
+    time."""
     hrhtetm1 = 1.0 / (d.field.dr * d.field.dtheta)
     hrm1 = 1.0 / d.field.dr
     htetm1 = 1.0 / d.field.dtheta
@@ -697,8 +699,10 @@ def add_extraction_fields(bunch, extraction, outputs, run):
                         if f'grid{kg}' in outputs.open:
                             outputs.open[f'grid{kg}'].write(
                                 f' {i + 1:5d} {run.step:6d}'
-                                f' {bunch.x[i]:15.8e} {bunch.y[i]:15.8e} {bunch.z[i]:15.8e}'
-                                f' {bunch.px[i]:15.8e} {bunch.py[i]:15.8e} {bunch.pz[i]:15.8e}'
+                                f' {bunch.x[i]:15.8e} {bunch.y[i]:15.8e}'
+                                f' {bunch.z[i]:15.8e}'
+                                f' {bunch.px[i]:15.8e} {bunch.py[i]:15.8e}'
+                                f' {bunch.pz[i]:15.8e}'
                                 f' {bunch.bz[i]:8.5f}\n'
                             )
 

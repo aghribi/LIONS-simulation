@@ -1,5 +1,5 @@
-"""Case H: field-model and integrator options for LIONS (DESIGN.md section
-23), phase 1 in the harness.
+"""Case H: field-model and integrator options for LIONS (DESIGN.md
+section 23), phase 1 in the harness.
 
 usage: uv run --group bench python benchmarks/case_h.py
 {validate,matrix,cost} [--outroot DIR] validate: F1 node reproduction
@@ -57,8 +57,8 @@ COST_PARTICLES = (1000, 100000)
 
 
 def g1_map(name):
-    """grids, attrs, cases [(label, t, p, q_ref)], mass_kg, charge_c for a
-    G1 master.
+    """grids, attrs, cases [(label, t, p, q_ref)], mass_kg, charge_c for
+    a G1 master.
     """
     master, step1 = G1_MAPS[name]
     grids, attrs = case_g1.load_master(master / 'master.h5')
@@ -84,8 +84,8 @@ def g1_map(name):
 
 
 def psi_map():
-    """As g1_map for the PSI Ring; references from RF-Track on the quintic
-    spline (G2 step 3).
+    """As g1_map for the PSI Ring; references from RF-Track on the
+    quintic spline (G2 step 3).
     """
     grids, attrs, _, mass_kg, _, fixpo = case_g2.setup()
     rft = {
@@ -112,10 +112,12 @@ def psi_map():
 
 
 def load_map(name):
+    """Return the PSI map or the named G1 map with its test cases."""
     return psi_map() if name == 'psi' else g1_map(name)
 
 
 def field_models(grids, attrs, every):
+    """Return the four field models F0 to F3 for one map spacing."""
     return {
         'F0_bilinear': case_g1.bilinear_field(grids, attrs, every),
         'F1_hermite': fieldmodels.hermite_field(
@@ -127,6 +129,7 @@ def field_models(grids, attrs, every):
 
 
 def write(records, outdir, name, case, *inputs):
+    """Write records to case_h_<name>.parquet with provenance."""
     outdir.mkdir(parents=True, exist_ok=True)
     meta = {
         'case': case,
@@ -141,6 +144,7 @@ def write(records, outdir, name, case, *inputs):
 
 
 def validate(outdir):
+    """Check F1 node reproduction, C1 continuity and RK4 order."""
     records = []
     # F1 on the PSI map (steepest gradients): node reproduction and C1
     # continuity across cell edges
@@ -214,6 +218,7 @@ def validate(outdir):
 
 
 def matrix(outdir):
+    """Run every map, field model, integrator and step count."""
     for name in ('3-sector', '10-sector', 'psi'):
         grids, attrs, cases, mass_kg, charge_c = load_map(name)
         records = []
@@ -269,7 +274,9 @@ def matrix(outdir):
                                     }
                                 )
                             print(
-                                f'{name} {spacing} {model} {integrator} {n} {label} {time.time() - t0:.0f} s '
+                                f'{name} {spacing} {model} {integrator} '
+                                f'{n} {label} '
+                                f'{time.time() - t0:.0f} s '
                                 + ' '.join(
                                     f'{k}={v[0]:+.1e}'
                                     for k, v in values.items()
@@ -331,7 +338,8 @@ def cost(outdir):
                     }
                 )
                 print(
-                    f'{model} {integrator} {n_part}: {np.median(samples):.2e} s/particle-step',
+                    f'{model} {integrator} {n_part}: '
+                    f'{np.median(samples):.2e} s/particle-step',
                     file=sys.stderr,
                 )
         records.append(
@@ -437,12 +445,14 @@ def lions_option(outdir):
                     }
                 )
                 print(
-                    f'{name} {spacing} {label}: LIONS hermite vs harness F1, one turn: {diff:.2e}',
+                    f'{name} {spacing} {label}: LIONS hermite vs harness F1, '
+                    f'one turn: {diff:.2e}',
                     file=sys.stderr,
                 )
                 if diff > 1e-12:
                     raise RuntimeError(
-                        f'{name}: LIONS hermite differs from the harness by {diff:.2e}'
+                        f'{name}: LIONS hermite differs from the harness '
+                        f'by {diff:.2e}'
                     )
             for n in (1440, 2880):
                 for label, t, p, q_ref in cases:
@@ -467,7 +477,8 @@ def lions_option(outdir):
                         if m != 'residual'
                     )
                     print(
-                        f'{name} {spacing} {label} {n}: max |LIONS - harness| {worst:.1e}',
+                        f'{name} {spacing} {label} {n}: '
+                        f'max |LIONS - harness| {worst:.1e}',
                         file=sys.stderr,
                     )
     # cost: LIONS default and LIONS with the option, PSI map
@@ -504,7 +515,8 @@ def lions_option(outdir):
                 }
             )
             print(
-                f'LIONS {interpolation} {n_part}: {np.median(samples):.2e} s/particle-step',
+                f'LIONS {interpolation} {n_part}: '
+                f'{np.median(samples):.2e} s/particle-step',
                 file=sys.stderr,
             )
     write(
@@ -522,8 +534,8 @@ AZIMUTH_CASES = {
 
 
 def azimuth(outdir):
-    """Phase 2b: LIONS bilinear with azimuth arccos and atan2 against the
-    numpy bilinear tracker (atan2).
+    """Phase 2b: LIONS bilinear with azimuth arccos and atan2 against
+    the numpy bilinear tracker (atan2).
     """
     records = []
     for name, (every, k, n) in AZIMUTH_CASES.items():

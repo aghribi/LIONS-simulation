@@ -4,8 +4,8 @@
 #                 "optimparallel==0.1.2", "h5py==3.12.1",
 #                 "pyarrow==18.1.0"]
 # ///
-"""Case G1 inputs: exact field map and references from a FROM_ORBIT example
-(DESIGN.md section 21).
+"""Case G1 inputs: exact field map and references from a FROM_ORBIT
+example (DESIGN.md section 21).
 
 usage: MPLBACKEND=Agg uv run --script benchmarks/g1_maps.py EXAMPLE
 OUTDIR [--ri --rstep --nrad --ntheta] EXAMPLE: 3-sector
@@ -72,6 +72,7 @@ def run_example(name):
 
 
 def main():
+    """Build the exact field map and references; write OUTDIR files."""
     parser = argparse.ArgumentParser()
     parser.add_argument('example', choices=EXAMPLES)
     parser.add_argument('outdir', type=Path)
@@ -90,7 +91,8 @@ def main():
         type=int,
         nargs='+',
         default=[1, 2, 3],
-        help='indices into the example orbit grid (0 is the centre; the last bounds the field)',
+        help='indices into the example orbit grid '
+        '(0 is the centre; the last bounds the field)',
     )
     args = parser.parse_args()
     out = args.outdir.resolve()
@@ -131,7 +133,8 @@ def main():
                 )
     issues = log.getvalue().count('possible issue')
     print(
-        f'exact map {args.nrad} x {args.ntheta} in {time.time() - t0:.0f} s, {issues} root warnings',
+        f'exact map {args.nrad} x {args.ntheta} in '
+        f'{time.time() - t0:.0f} s, {issues} root warnings',
         file=sys.stderr,
     )
     if issues:
@@ -157,7 +160,8 @@ def main():
         'r_inf_m': repr(rinf),
         'mass_ev': repr(mass_ev),
         'charge_e': repr(charge),
-        'sign': 'FROM_ORBIT convention: Bz > 0; LIONS uses -Bz for the same orbits travelled counterclockwise',
+        'sign': 'FROM_ORBIT convention: Bz > 0; LIONS uses -Bz for the '
+        'same orbits travelled counterclockwise',
     }
     with h5py.File('master.h5', 'w') as f:
         for name, data, unit in (
@@ -195,8 +199,10 @@ def main():
         r_orbit = orb['r'](a, ths) * rinf
         if r_orbit.min() < r[0] + 0.03 or r_orbit.max() > r[-1] - 0.03:
             raise RuntimeError(
-                f'orbit a = {a} reaches {r_orbit.min():.3f} to {r_orbit.max():.3f} m, map is '
-                f'{r[0]:.3f} to {r[-1]:.3f} m (LIONS needs 2 cm inside the map)'
+                f'orbit a = {a} reaches {r_orbit.min():.3f} to '
+                f'{r_orbit.max():.3f} m, map is '
+                f'{r[0]:.3f} to {r[-1]:.3f} m '
+                '(LIONS needs 2 cm inside the map)'
             )
         rows.append(
             {

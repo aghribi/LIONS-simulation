@@ -1,5 +1,5 @@
-"""Input deck: the LIONS/Fortran text format as a dataclass, one reader and
-one writer.
+"""Input deck: the LIONS/Fortran text format as a dataclass, one reader
+and one writer.
 
 Values are kept in the units of the file (m, deg, mrad, MeV/u, mm for
 grids, V, Hz). Fortran names of each field: docs/guide/02_inputs.md and
@@ -24,7 +24,8 @@ OPTIONS = {
 
 @dataclass
 class FieldHarmonic:
-    """Polynomial term added to the field map (first or second harmonic)."""
+    """Polynomial term added to the field map (first or second
+    harmonic)."""
 
     coefs: list
     phase_deg: float
@@ -32,6 +33,10 @@ class FieldHarmonic:
 
 @dataclass
 class Deflector:
+    """Electrostatic deflector of the deck: radius (m), field (V/m),
+    entrance and exit lines.
+    """
+
     r: float  # m, radius above which the first deflector catches particles
     e: float  # V/m
     in_x: float  # m, entrance line point
@@ -44,6 +49,10 @@ class Deflector:
 
 @dataclass
 class Dipole:
+    """Magnetic dipole of the deck: radius (m), gradient (T/m), centre
+    (m), entrance and exit angles (deg).
+    """
+
     r: float  # m, reference radius
     gradient: float  # T/m
     x: float  # m, centre
@@ -54,6 +63,10 @@ class Dipole:
 
 @dataclass
 class Grid:
+    """Grid of the deck: angle (deg), a point (mm) and the centre (mm)
+    of the grid line.
+    """
+
     angle_deg: float
     x_mm: float  # point on the grid line
     y_mm: float
@@ -63,6 +76,10 @@ class Grid:
 
 @dataclass
 class Family:
+    """Ion family of the deck: size, atomic mass (u), charge state and
+    initial coordinates.
+    """
+
     size: int
     atomic_mass: float  # u
     mass_number: float
@@ -78,6 +95,8 @@ class Family:
 
 @dataclass
 class Deck:
+    """Content of a LIONS input deck, in the units of the file."""
+
     title: str
     steps_per_turn: int
     design_r_final: float  # m, read and not used for tracking
@@ -139,6 +158,9 @@ class Deck:
 
     @property
     def total_particles(self):
+        """Number of particles: n_particles with several families, else
+        the size of the first family.
+        """
         return (
             self.n_particles
             if len(self.families) > 1
@@ -317,8 +339,8 @@ def _quoted(name):
 
 
 def write_deck(deck, path):
-    """Write a deck that both read_deck and the Fortran reference read back
-    unchanged.
+    """Write a deck that both read_deck and the Fortran reference read
+    back unchanged.
     """
     angle = (
         -deck.dee_half_angle_deg

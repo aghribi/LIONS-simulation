@@ -1,5 +1,5 @@
-"""Input form for the LIONS simulation: every data file parameter plus the
-runtime answers.
+"""Input form for the LIONS simulation: every data file parameter plus
+the runtime answers.
 """
 
 import json
@@ -84,6 +84,7 @@ class CollapsibleSection(QWidget):
         )
 
     def add_row(self, label, widget):
+        """Add a labelled widget to the section, return the widget."""
         self.content_layout.addRow(label, widget)
         return widget
 
@@ -389,7 +390,8 @@ class InputFormPanel(QWidget):
         ext_lay.addRow("Extraction voltage :", self.edf_spin)
         self.deflectors_text = QPlainTextEdit()
         self.deflectors_text.setPlaceholderText(
-            "1 line per deflector: rdf edf xdfi ydfi xdfo ydfo tetdfi_deg tetdfo_deg"
+            "1 line per deflector: rdf edf xdfi ydfi xdfo ydfo "
+            "tetdfi_deg tetdfo_deg"
         )
         self.deflectors_text.setMaximumHeight(80)
         ext_lay.addRow("Deflectors :", self.deflectors_text)
@@ -602,7 +604,8 @@ class InputFormPanel(QWidget):
         self.field_interp_combo.addItems(OPTIONS['interpolation'][1])
         self.field_interp_combo.setToolTip(
             "Magnetic map interpolation. bilinear: the Fortran model.\n"
-            "hermite: bicubic Hermite surface, C1 across cells, about 1.8 times the field cost\n"
+            "hermite: bicubic Hermite surface, C1 across cells, "
+            "about 1.8 times the field cost\n"
             "(benchmarks/DESIGN.md, case H)."
         )
         self.sec_field_files.add_row(
@@ -822,7 +825,8 @@ class InputFormPanel(QWidget):
         return math.sqrt(gamma**2 - 1.0)
 
     def _load_sigma_diag(self, ficsig, data_path):
-        """Load the 6 diagonal values of a sigma file into the spinboxes.
+        """Load the 6 diagonal values of a sigma file into the
+        spinboxes.
 
         The file holds sigma^2 (variance) in m^2 / (bg)^2. The GUI shows
         sigma (std dev) in mm (positions) / mrad (momenta).
@@ -941,7 +945,8 @@ class InputFormPanel(QWidget):
             self._auto_detect_bmax(path)
 
     def _auto_detect_bmax(self, filepath):
-        """Read the magnetic field map and set the B factor to its Bmax."""
+        """Read the magnetic field map and set the B factor to its
+        Bmax."""
         try:
             with open(filepath, 'r') as f:
                 f.readline()  # comment line
@@ -1372,6 +1377,7 @@ class InputFormPanel(QWidget):
     # ================================================================
 
     def save_params(self):
+        """Ask for a JSON file and save the form parameters to it."""
         path, _ = QFileDialog.getSaveFileName(
             self, "Save parameters", "", "JSON (*.json)"
         )
@@ -1382,6 +1388,7 @@ class InputFormPanel(QWidget):
             json.dump(data, f, indent=2)
 
     def load_params(self):
+        """Ask for a JSON file and apply its parameters to the form."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Load parameters", "", "JSON (*.json)"
         )

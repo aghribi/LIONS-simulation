@@ -1,5 +1,5 @@
-"""PDF of the LIONS guide: docs/guide/*.md in filename order, rendered with
-fpdf2.
+"""PDF of the LIONS guide: docs/guide/*.md in filename order, rendered
+with fpdf2.
 
 Usage: uv run --with fpdf2 python generate_pdf.py
 Output: docs/_build/pdf/LIONS.pdf
@@ -23,6 +23,7 @@ class DocPDF(FPDF):
     """PDF with page header and footer."""
 
     def header(self):
+        """Draw the running title on every page after the first."""
         if self.page_no() > 1:
             self.set_font('Helvetica', 'I', 8)
             self.set_text_color(120, 120, 120)
@@ -30,6 +31,7 @@ class DocPDF(FPDF):
             self.ln(8)
 
     def footer(self):
+        """Draw the page number and total page count."""
         self.set_y(-15)
         self.set_font('Helvetica', 'I', 8)
         self.set_text_color(120, 120, 120)
@@ -89,6 +91,7 @@ def read_guide():
 
 
 def generate_pdf():
+    """Build the technical guide PDF from the guide pages."""
     pages, lines = read_guide()
 
     pdf = DocPDF()
@@ -301,7 +304,8 @@ def generate_pdf():
     pdf.output(PDF_FILE)
     print(f'{len(pages)} guide pages -> {PDF_FILE}')
     print(
-        f'size: {os.path.getsize(PDF_FILE) / 1024:.0f} kB, pages: {pdf.page_no()}'
+        f'size: {os.path.getsize(PDF_FILE) / 1024:.0f} kB, '
+        f'pages: {pdf.page_no()}'
     )
 
 

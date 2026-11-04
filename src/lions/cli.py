@@ -13,6 +13,7 @@ from .pusher import boris_push
 
 
 def banner():
+    """Print the program banner and the byte swap prompt."""
     print('----------------------------------------------------')
     print('LIONS       : Python (converted from Fortran 90)')
     print('author      : Patrick Bertrand - GANIL')
@@ -38,8 +39,8 @@ def set_vertical_sorter(
     nuz_z_cut=0.0,
     dv=0.0,
 ):
-    """Vertical sorter: region (m, deg), drive voltage (V), gap (m), phase
-    (deg).
+    """Vertical sorter: region (m, deg), drive voltage (V), gap (m),
+    phase (deg).
 
     gap = 0: no vertical sorting. Prompt order of the Fortran: rmin rmax
     theta1 theta2, then voltage gap phase nuz nuz_z_cut dv (pot_ver
@@ -72,8 +73,8 @@ def read_vertical_sorter(d):
 
 
 def track(d, bidim=None, on_step=None):
-    """Tracking loop: initial step, then n_steps steps. Closes the output
-    files.
+    """Tracking loop: initial step, then n_steps steps. Closes the
+    output files.
 
     on_step(d) is called after each step; tracking stops if it returns
     False.
@@ -131,7 +132,8 @@ def write_trapped(bunch, traps):
         n_free = np.count_nonzero(bunch.alive)
         print(f'particles not trapped: {n_free}')
         print(
-            "write the trapped particle numbers to a file? ('o' for yes, 'n' for no)"
+            "write the trapped particle numbers to a file? "
+            "('o' for yes, 'n' for no)"
         )
         answer = input().strip()
         if answer == 'o':

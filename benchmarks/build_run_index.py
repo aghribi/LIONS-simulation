@@ -37,6 +37,7 @@ FIELDS = [
 
 
 def run_row(site, store, run):
+    """Return the index row of one run directory of a store."""
     files = [f for f in run.rglob('*') if f.is_file()]
     tables = sorted(run.glob('case_*.parquet'))
     meta = {}
@@ -71,6 +72,7 @@ def run_row(site, store, run):
 
 
 def main():
+    """Write the run index of a store (--dry-run: print the count)."""
     parser = argparse.ArgumentParser()
     parser.add_argument('store', type=Path)
     parser.add_argument('--site', default=os.environ.get('XSH_SITE', 'local'))
@@ -100,7 +102,9 @@ def main():
         }
     )
     print(
-        f'{len(rows)} runs ({sum(r["status"] == "complete" for r in rows)} complete) in {store}'
+        f'{len(rows)} runs '
+        f'({sum(r["status"] == "complete" for r in rows)} complete) '
+        f'in {store}'
     )
     if args.dry_run:
         return

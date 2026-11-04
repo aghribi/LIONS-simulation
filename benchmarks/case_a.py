@@ -1,5 +1,5 @@
-"""Case A: uniform Bz, no E, one turn of a 1 MeV proton in LIONS, OPAL-cycl
-and RF-Track.
+"""Case A: uniform Bz, no E, one turn of a 1 MeV proton in LIONS,
+OPAL-cycl and RF-Track.
 
 usage: uv run --group bench python benchmarks/case_a.py [outdir] Writes
 case_a.parquet (one row per code, integrator, resolution and metric).
@@ -46,6 +46,9 @@ def fit_circle(xy):
 
 
 def write_inputs(n):
+    """Write the potential, field map and deck files for n steps per
+    turn.
+    """
     syn.write_pot_central('pot1.bin')
     syn.write_pot_outer('pot2.dat')
     syn.write_bmap('bmap.dat', BZ)
@@ -60,6 +63,7 @@ def write_inputs(n):
 
 
 def initial_state():
+    """Load deck.dat; return state, position, momentum, mass, charge."""
     d = lions.State()
     d.run.swap_bytes = 'n'
     with contextlib.redirect_stdout(io.StringIO()):
@@ -71,7 +75,8 @@ def initial_state():
 
 
 def metrics(xy, p_first, p_last, rho):
-    """n positions one step apart: radius, |p| and phase errors over the n
+    """n positions one step apart: radius, |p| and phase errors over the
+    n
     - 1 steps.
     """
     centre, radius = fit_circle(xy)
@@ -86,6 +91,7 @@ def metrics(xy, p_first, p_last, rho):
 
 
 def run_lions(n, rho):
+    """Track one turn in LIONS with n steps; return the metrics."""
     rows = []
 
     def record(d):
@@ -121,6 +127,9 @@ def opal_version():
 
 
 def run_opal(n, d, pos, mom, mass_kg, workdir):
+    """Run OPAL with LF2 and RK4 on the same orbit; return metrics per
+    integrator.
+    """
     mass_gev = mass_kg * syn.C**2 / syn.QE / 1e9
     pc_gev = np.linalg.norm(mom[0]) * mass_gev
     f_rev_mhz = d.rf.frequency / d.rf.harmonic / 1e6
@@ -136,15 +145,19 @@ OPTION, SPTDUMPFREQ=1;
 OPTION, VERSION=20240;
 Title, string="LIONS benchmark case A";
 cyc: CYCLOTRON, TYPE=CARBONCYCL, CYHARMON=1, PHIINIT=0.0, PRINIT=0.0,
-     RINIT={np.hypot(*pos[0, :2]) * 1e3:.17g}, SYMMETRY=1.0, RFFREQ={f_rev_mhz:.17g},
+     RINIT={np.hypot(*pos[0, :2]) * 1e3:.17g}, SYMMETRY=1.0, \
+RFFREQ={f_rev_mhz:.17g},
      FMAPFN="bmap_carbon.dat", MINZ=-1000, MAXZ=1000, MINR=0, MAXR=10000;
 l1: LINE=(cyc);
 dist: DISTRIBUTION, TYPE=FROMFILE, FNAME="part.dat";
-fs: FIELDSOLVER, FSTYPE=NONE, MX=8, MY=8, MT=8, PARFFTX=true, PARFFTY=true, PARFFTT=false,
+fs: FIELDSOLVER, FSTYPE=NONE, MX=8, MY=8, MT=8, PARFFTX=true, \
+PARFFTY=true, PARFFTT=false,
     BCFFTX=open, BCFFTY=open, BCFFTT=open;
-beam1: BEAM, MASS={mass_gev:.17g}, CHARGE=1.0, PC={pc_gev:.17g}, NPART=1, BCURRENT=0,
+beam1: BEAM, MASS={mass_gev:.17g}, CHARGE=1.0, PC={pc_gev:.17g}, \
+NPART=1, BCURRENT=0,
        BFREQ={f_rev_mhz:.17g};
-TRACK, LINE=l1, BEAM=beam1, MAXSTEPS={n}, STEPSPERTURN={n}, TIMEINTEGRATOR="{integrator}";
+TRACK, LINE=l1, BEAM=beam1, MAXSTEPS={n}, STEPSPERTURN={n}, \
+TIMEINTEGRATOR="{integrator}";
 RUN, METHOD="CYCLOTRON-T", BEAM=beam1, FIELDSOLVER=fs, DISTRIBUTION=dist;
 ENDTRACK;
 STOP;
@@ -173,6 +186,9 @@ STOP;
 
 
 def run_rftrack(n, pos, mom, mass_kg):
+    """Run RF-Track (analytic, rkf45 and rk2 per tolerance); return
+    metrics.
+    """
     import RF_Track as rft  # noqa: N813 (external name)
 
     mass_mev = mass_kg * syn.C**2 / syn.QE / 1e6
@@ -219,6 +235,7 @@ def run_rftrack(n, pos, mom, mass_kg):
 
 
 def main(outdir):
+    """Run the three codes at each step count; write case_a.parquet."""
     outdir.mkdir(parents=True, exist_ok=True)
     import RF_Track as rft  # noqa: N813 (external name)
 

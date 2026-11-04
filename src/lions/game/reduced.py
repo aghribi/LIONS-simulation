@@ -105,10 +105,13 @@ class Tables:
         )
 
     def path(self, lnp):
+        """Orbit path length [m] from the table at ln p."""
         return np.exp(np.interp(lnp, self.lnp, self.lnl))
 
 
 class Reduced:
+    """Reduced model of a pass: the turn loop of T0 on LIONS tables."""
+
     def __init__(self, path, phase_rms_deg=None, no_beam_off_table=False):
         """phase_rms_deg: Gaussian start phases of this rms, in place of
         T0's buncher law. no_beam_off_table: a tuner may reach another
@@ -144,10 +147,14 @@ class Reduced:
         )
 
     def fates(self, machine, ion, knobs, errors, draws):
+        """Fate, energy [MeV] and turns of each macroparticle."""
         out = self.track(machine, ion, knobs, errors, draws)
         return out['fate'], out['w'], out['turns']
 
     def track(self, machine, ion, knobs, errors, draws, limit_factor=1):
+        """Turn loop on the tables: fates, energies, probes and phase
+        sums.
+        """
         t = self.tables
         n = mc.MACROPARTICLES
         b0 = knobs['b0'] * (1 + errors.field)
@@ -159,7 +166,8 @@ class Reduced:
         if h != t.harmonic:
             if not self.no_beam_off_table:
                 raise ValueError(
-                    f'harmonic {h}: the gain table was measured at {t.harmonic}'
+                    f'harmonic {h}: the gain table was measured '
+                    f'at {t.harmonic}'
                 )
             start = np.full(n, t.w_start)
             return {

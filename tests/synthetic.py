@@ -1,5 +1,5 @@
-"""Synthetic LIONS inputs: field maps, potentials and decks written on the
-fly.
+"""Synthetic LIONS inputs: field maps, potentials and decks written on
+the fly.
 """
 
 import contextlib
@@ -47,8 +47,8 @@ def write_bmap(
     ntet=361,
     theta_max=2 * np.pi,
 ):
-    """Field map over 0..theta_max (360 deg, or 45 deg with ntet = 91 for a
-    1/8 map).
+    """Field map over 0..theta_max (360 deg, or 45 deg with ntet = 91
+    for a 1/8 map).
 
     Each field is a constant or a function f(r, theta).
     """
@@ -66,7 +66,8 @@ def write_bmap(
 
 
 def fortran_record(payload):
-    """Fortran unformatted sequential record, little-endian 4-byte markers."""
+    """Fortran unformatted sequential record, little-endian 4-byte
+    markers."""
     return (
         struct.pack('<i', len(payload))
         + payload
@@ -121,8 +122,8 @@ def write_markers(path, traps):
 def write_pot_outer(
     path, pot=None, xmin=-1.0, xmax=1.0, ymin=-1.0, ymax=1.0, nx=41, ny=201
 ):
-    """Outer-region potential pot(x, y) in the rotated gap frame (m), and
-    d2pot = 0.
+    """Outer-region potential pot(x, y) in the rotated gap frame (m),
+    and d2pot = 0.
     """
     x = np.linspace(xmin, xmax, nx)[:, None]
     y = np.linspace(ymin, ymax, ny)[None, :]
@@ -207,8 +208,8 @@ def numeric_rows(path):
 
 
 def read_fortran_bunch(path, n=1):
-    """Bunch file written by the Fortran (two unformatted records): x,y,z
-    then px,py,pz.
+    """Bunch file written by the Fortran (two unformatted records):
+    x,y,z then px,py,pz.
     """
     raw = open(path, 'rb').read()
     out, pos = [], 0

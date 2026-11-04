@@ -8,6 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def git(*args):
+    """Return the stripped stdout of git -C ROOT with the given
+    arguments.
+    """
     return subprocess.run(
         ['git', '-C', str(ROOT), *args],
         capture_output=True,

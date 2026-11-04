@@ -1,4 +1,5 @@
-"""LIONS to OPAL-cycl and RF-Track conversions. One function per handoff.
+"""LIONS to OPAL-cycl and RF-Track conversions. One function per
+handoff.
 
 Frames. LIONS: lab frame (x, y, z), z vertical, positions in m, momenta
 p = beta gamma. OPAL-cycl: same axes, m and beta gamma
@@ -37,8 +38,8 @@ def write_opal_carbon(path, field):
 
 
 def read_opal_orbit(path):
-    """Single-particle `-trackOrbit.dat`: positions (n, 3) in m and momenta
-    (n, 3) in beta gamma.
+    """Single-particle `-trackOrbit.dat`: positions (n, 3) in m and
+    momenta (n, 3) in beta gamma.
     """
     d = np.loadtxt(path, comments='#', usecols=range(1, 7))
     return d[:, [0, 2, 4]], d[:, [1, 3, 5]]

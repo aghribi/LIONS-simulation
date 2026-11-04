@@ -25,6 +25,8 @@ MAX_BARY = 10800
 
 @dataclass
 class Run:
+    """Run counters, time step and deck settings."""
+
     title: str = ''
     deck_file: str = ''
     swap_bytes: str = ''
@@ -46,6 +48,8 @@ class Run:
 
 @dataclass
 class Files:
+    """File names of the run."""
+
     bfield: str = ''
     central_potential: str = ''
     outer_potential: str = ''
@@ -61,6 +65,8 @@ class Files:
 
 @dataclass
 class RF:
+    """RF and dee parameters, with the field harmonics."""
+
     frequency: float = 0.0  # Hz
     omega: float = 0.0  # rad/s
     omega_rev: float = 0.0  # rad/s
@@ -76,6 +82,10 @@ class RF:
 
 @dataclass
 class FieldMap:
+    """Magnetic field map on the (r, theta) grid, with its derivative
+    arrays.
+    """
+
     bz: np.ndarray = field(
         default_factory=lambda: np.zeros((MAP_NR, MAP_NTHETA))
     )
@@ -117,8 +127,8 @@ class FieldMap:
 
 @dataclass
 class Region:
-    """Potential on a Cartesian grid (m): central region, or outer region
-    in the gap frame.
+    """Potential on a Cartesian grid (m): central region, or outer
+    region in the gap frame.
     """
 
     nx: int
@@ -140,12 +150,18 @@ class Region:
 
 @dataclass
 class Box:
+    """Vertical limits zmin, zmax (m)."""
+
     zmin: float = 0.0  # m
     zmax: float = 0.0
 
 
 @dataclass
 class IonFamily:
+    """Ion family: index range in the bunch, mass, charge and initial
+    coordinates.
+    """
+
     start: int = 0  # index of the first particle
     size: int = 0
     atomic_mass: float = 0.0  # u
@@ -202,8 +218,8 @@ MASKS = (
 
 
 class Bunch:
-    """Per-particle arrays (SI, p = beta gamma), masks, families and sigma
-    matrices.
+    """Per-particle arrays (SI, p = beta gamma), masks, families and
+    sigma matrices.
     """
 
     def __init__(self, n_particles=0):
@@ -233,6 +249,10 @@ class Bunch:
 
 @dataclass
 class DeflectorElement:
+    """Deflector with SI values: radius (m), field (V/m), entrance and
+    exit lines, angles (rad).
+    """
+
     r: float  # m
     e: float  # V/m
     in_x: float
@@ -244,23 +264,31 @@ class DeflectorElement:
 
     @property
     def in_ux(self):
+        """x component of the entrance line direction."""
         return np.cos(self.in_angle)
 
     @property
     def in_uy(self):
+        """y component of the entrance line direction."""
         return np.sin(self.in_angle)
 
     @property
     def out_ux(self):
+        """x component of the exit line direction."""
         return np.cos(self.out_angle)
 
     @property
     def out_uy(self):
+        """y component of the exit line direction."""
         return np.sin(self.out_angle)
 
 
 @dataclass
 class DipoleElement:
+    """Dipole with SI values: radius (m), gradient (T/m), position and
+    angles (rad).
+    """
+
     r: float  # m
     gradient: float  # T/m
     x: float
@@ -270,23 +298,29 @@ class DipoleElement:
 
     @property
     def in_ux(self):
+        """x component of the entrance line direction."""
         return np.cos(self.in_angle)
 
     @property
     def in_uy(self):
+        """y component of the entrance line direction."""
         return np.sin(self.in_angle)
 
     @property
     def out_ux(self):
+        """x component of the exit line direction."""
         return np.cos(self.out_angle)
 
     @property
     def out_uy(self):
+        """y component of the exit line direction."""
         return np.sin(self.out_angle)
 
 
 @dataclass
 class GridElement:
+    """Grid line from (xc, yc) to (x, y) (m)."""
+
     angle_deg: float
     x: float  # m
     y: float
@@ -296,19 +330,24 @@ class GridElement:
 
     @property
     def length(self):
+        """Distance between (x, y) and (xc, yc) (m)."""
         return np.sqrt((self.x - self.xc) ** 2 + (self.y - self.yc) ** 2)
 
     @property
     def ux(self):
+        """x component of the unit vector along the grid line."""
         return (self.x - self.xc) / self.length
 
     @property
     def uy(self):
+        """y component of the unit vector along the grid line."""
         return (self.y - self.yc) / self.length
 
 
 @dataclass
 class Extraction:
+    """Extraction settings and the deflectors, dipoles and grids."""
+
     mode: float = 0.0  # deck rex: < 0 enables the elements
     cut_bunch: float = 0.0
     start_step: int = 0
@@ -323,6 +362,8 @@ class Extraction:
 
 @dataclass
 class TrapCircle:
+    """Trap circle: centre (x, y) and radius r (m)."""
+
     x: float  # m
     y: float
     r: float
@@ -330,6 +371,8 @@ class TrapCircle:
 
 @dataclass
 class Traps:
+    """Trap circles and the settings for trapped particles."""
+
     circles: list = field(default_factory=list)
     last_step: int = 0  # traps active up to this step
     follow: int = 0  # 1: trapped particles follow particle 0
@@ -337,6 +380,8 @@ class Traps:
 
 @dataclass
 class VerticalSorter:
+    """Vertical sorter settings and the vertical tune."""
+
     rmin: float = 0.0  # m
     rmax: float = 0.0
     theta1: float = 0.0  # rad
@@ -352,6 +397,8 @@ class VerticalSorter:
 
 @dataclass
 class Bidims:
+    """Bidim histogram settings and barycentre buffers."""
+
     first: int = 0  # number of the first histogram, 0 = none
     every: int = 0
     start_step: int = 0
@@ -368,6 +415,8 @@ class Bidims:
 
 @dataclass
 class Outputs:
+    """Open output files and the end-of-run values of particle 0."""
+
     open: dict = field(default_factory=dict)  # open files, closed by cli.track
     headers_written: bool = False
     nuz: float = 0.0  # vertical tune of particle 0, written in the z output

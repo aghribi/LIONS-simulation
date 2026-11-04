@@ -1,6 +1,6 @@
-"""Case P: synthetic machine for LIONS, F18 (docs/training/PHYSICAL.md) or
-NEON (docs/training/PHYSICAL_NEON.md). Synthetic: says nothing about a
-real machine.
+"""Case P: synthetic machine for LIONS, F18 (docs/training/PHYSICAL.md)
+or NEON (docs/training/PHYSICAL_NEON.md). Synthetic: says nothing about
+a real machine.
 
 usage: [CASE_P_MISSION=NEON] uv run --extra game --extra rl --group
 bench --group dev python benchmarks/case_p.py
@@ -81,16 +81,18 @@ BC = (
 
 
 def gamma(w):
+    """Return the Lorentz factor at w, MeV per nucleon."""
     return 1.0 + w * A * syn.MEV / (MASS_KG * syn.C**2)
 
 
 def momentum(w):
+    """Return p / (m c) at kinetic energy w, MeV per nucleon."""
     return np.sqrt(gamma(w) ** 2 - 1)
 
 
 class Field:
-    """B = -Bc gamma_iso(r) (1 + g(r)) (1 + eps cos N theta), LIONS sign.
-    g: corrections at r_nodes, from closed orbits.
+    """B = -Bc gamma_iso(r) (1 + g(r)) (1 + eps cos N theta), LIONS
+    sign. g: corrections at r_nodes, from closed orbits.
     """
 
     def __init__(self, r_nodes=None, g=None):
@@ -140,6 +142,7 @@ class Field:
         )
 
     def __call__(self, x, y, z):
+        """Return (Bx, By, Bz), T, at (x, y, z), m."""
         r, t = np.hypot(x, y), np.arctan2(y, x)
         bz, lap, gx, gy = self.nodes(r, t)
         return (
@@ -169,6 +172,7 @@ def closed_orbit(field, w, guess):
 
 
 def isochronise(energies, iterations=8, tol=2e-6):
+    """Iterate the field until max |f / F0 - 1| is below tol."""
     field = Field()
     for it in range(iterations):
         rows = []
@@ -195,6 +199,7 @@ def isochronise(energies, iterations=8, tol=2e-6):
 
 
 def rows_of(energies, field, rows):
+    """Return the orbit and tune record of each energy."""
     out = []
     for w, (s, f, rbar, track, p) in zip(energies, rows):
         m = orbits.jacobian(track, s, 1e-6, 1e-6 * p)
@@ -241,8 +246,8 @@ def rows_of(energies, field, rows):
 
 
 def lions_check(job):
-    """Closed orbit, frequency and tunes with LIONS Hermite on the written
-    map, no E field.
+    """Closed orbit, frequency and tunes with LIONS Hermite on the
+    written map, no E field.
     """
     workdir, w, guess = job
     track = orbits.LionsTracker(
@@ -282,6 +287,7 @@ def dee_potential(x, y):
 
 
 def write_machine(outdir, field):
+    """Write the field map and dee potentials of the machine."""
     outdir.mkdir(parents=True, exist_ok=True)
     rmax = MACHINE.radius * 1.15
     with contextlib.chdir(outdir):
@@ -314,9 +320,9 @@ def write_machine(outdir, field):
 def accelerate(
     workdir, w0, r0, pr0_mrad, phi0_deg, turns, one_turn=False, z0=0.0
 ):
-    """Design setting, one ion from (r0, theta = 0): crossings of theta = 0
-    as (t [s], energy [MeV/u], r [m], z [m]), or the total gain [MeV]
-    over one nominal turn.
+    """Design setting, one ion from (r0, theta = 0): crossings of theta
+    = 0 as (t [s], energy [MeV/u], r [m], z [m]), or the total gain
+    [MeV] over one nominal turn.
     """
     with contextlib.chdir(workdir):
         syn.write_deck(
@@ -371,6 +377,7 @@ def accelerate(
 
 
 def gain_job(job):
+    """Return the gain over one nominal turn, MeV, for one start."""
     workdir, w, r0, phi = job
     return {
         'w_mev': float(w),
@@ -382,6 +389,7 @@ def gain_job(job):
 
 
 def workdirs(outdir, n):
+    """Create n work directories linked to the written map files."""
     dirs = []
     for i in range(n):
         d = outdir / f'work{i}'
@@ -394,6 +402,7 @@ def workdirs(outdir, n):
 
 
 def write(records, path, step, *inputs):
+    """Write records to a parquet table with provenance metadata."""
     meta = {
         'case': f'synthetic {MISSION}, {step}',
         'registration': REGISTRATION,
@@ -414,6 +423,7 @@ def write(records, path, step, *inputs):
 
 
 def load_field(outdir):
+    """Read the isochronous field corrections g(r) from outdir."""
     t = pq.read_table(outdir / 'case_p_field.parquet').to_pylist()
     return Field(
         np.array([r['r_m'] for r in t]), np.array([r['g'] for r in t])
@@ -421,6 +431,7 @@ def load_field(outdir):
 
 
 def design(outdir):
+    """Build the isochronous map and write its orbits and tunes."""
     energies = np.geomspace(MACHINE.w_injection, W_EXT * 1.03, 30)
     field, rows = isochronise(energies)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -461,6 +472,7 @@ def design(outdir):
 
 
 def dees(outdir):
+    """Fit the gain per turn against the start phase at 7 energies."""
     t = {
         r['w_mev']: r['r_co_m']
         for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist()
@@ -534,12 +546,14 @@ def dees(outdir):
 
 
 def serial_gains(jobs):
+    """Return the gain of each job, run one after the other."""
     return [gain_job(j) for j in jobs]
 
 
 def slip(
     outdir, w0=None, r0=None, pr0=0.0, phi0=None, tag='injection', z0=0.0
 ):
+    """Track one ion from injection and write its RF phase slip."""
     rec = [
         r
         for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist()
@@ -588,13 +602,18 @@ def slip(
     end = np.nonzero(s[:, 1] >= W_EXT)[0]
     k = end[0] if len(end) else len(s) - 1
     print(
-        f'{tag}: {len(s)} crossings, reached r = {s[k, 2]:.4f} m at turn {k}, w = {s[k, 1]:.3f} MeV; max |slip| to there {np.max(np.abs(phase[: k + 1])):.2f} deg, end slip {phase[k]:.2f} deg',
+        f'{tag}: {len(s)} crossings, reached r = {s[k, 2]:.4f} m '
+        f'at turn {k}, w = {s[k, 1]:.3f} MeV; max |slip| to there '
+        f'{np.max(np.abs(phase[: k + 1])):.2f} deg, '
+        f'end slip {phase[k]:.2f} deg',
         flush=True,
     )
     print('w', np.round(s[: k + 1 : max(k // 12, 1), 1], 3).tolist())
     print('phase', np.round(phase[: k + 1 : max(k // 12, 1)], 1).tolist())
     print(
-        f'{tag}: max |z| at the section {1e3 * np.max(np.abs(s[: k + 1, 3])):.3f} mm, final energy {s[k, 1]:.3f} MeV'
+        f'{tag}: max |z| at the section '
+        f'{1e3 * np.max(np.abs(s[: k + 1, 3])):.3f} mm, '
+        f'final energy {s[k, 1]:.3f} MeV'
     )
     gain = np.diff(s[: k + 1, 1]) * A
     print(
@@ -608,8 +627,8 @@ def slip(
 
 
 def start_energy(gains, rec):
-    """The closed-orbit energy of the lowest gain row from which every gain
-    ratio is within 5%.
+    """The closed-orbit energy of the lowest gain row from which every
+    gain ratio is within 5%.
     """
     keep = [g['w_mev'] for g in sorted(gains, key=lambda g: g['w_mev'])]
     for g in sorted(gains, key=lambda g: -g['w_mev']):
@@ -620,8 +639,8 @@ def start_energy(gains, rec):
 
 
 def published(outdir):
-    """Registered checks against CIME's published ranges, PHYSICAL_NEON.md.
-    Qr close to 1 is read from its fractional part.
+    """Registered checks against CIME's published ranges,
+    PHYSICAL_NEON.md. Qr close to 1 is read from its fractional part.
     """
     rows = [
         r
@@ -632,13 +651,18 @@ def published(outdir):
     qr, qz = [r['qr_frac'] for r in inner], [r['qz_frac'] for r in inner]
     mean = -load_field(outdir).mean(MACHINE.radius)[0]
     print(
-        f'{len(inner)} orbits at 0.2 to 1.4 m. |Qr - 1|: max {max(qr):.4f}, limit 0.04. Qz: {min(qz):.3f} to {max(qz):.3f}, limits 0.2 and 0.45'
+        f'{len(inner)} orbits at 0.2 to 1.4 m. |Qr - 1|: max '
+        f'{max(qr):.4f}, limit 0.04. Qz: {min(qz):.3f} to '
+        f'{max(qz):.3f}, limits 0.2 and 0.45'
     )
     print(
-        f'<B> at r_ext {mean:.4f} T, range 0.75 to 1.56. B rho {mean * MACHINE.radius:.4f} T m, limit 2.344. f_rf {HARMONIC * F0 / 1e6:.4f} MHz, range 9.6 to 14.5'
+        f'<B> at r_ext {mean:.4f} T, range 0.75 to 1.56. '
+        f'B rho {mean * MACHINE.radius:.4f} T m, limit 2.344. '
+        f'f_rf {HARMONIC * F0 / 1e6:.4f} MHz, range 9.6 to 14.5'
     )
     print(
-        f'peak B {mean * (1 + EPS):.3f} T, published maximum on the hills 2.1 T'
+        f'peak B {mean * (1 + EPS):.3f} T, '
+        'published maximum on the hills 2.1 T'
     )
 
 

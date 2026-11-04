@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
 import lions.constants as lc  # noqa: E402
-import RF_Track as rft  # noqa: N813 (external name)
+import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
 import synthetic as syn  # noqa: E402
 import orbits  # noqa: E402
 from provenance import provenance  # noqa: E402
@@ -47,12 +47,15 @@ PAD = 5  # theta nodes wrapped on each side so the periodic spline has no edge
 
 
 def load_master(path):
+    """Read the master grids and attributes from an HDF5 file."""
     with h5py.File(path) as f:
         grids = {k: f[k][()] for k in ('bz', 'dbz_dr', 'dbz_dtheta')}
         attrs = dict(f.attrs)
     if not np.isclose(attrs['theta_step_rad'], np.radians(1 / 3), rtol=1e-12):
         raise ValueError(
-            f"{path}: master step {np.degrees(attrs['theta_step_rad'])} deg, the EVERY labels need 1/3 deg"
+            f"{path}: master step "
+            f"{np.degrees(attrs['theta_step_rad'])} deg, "
+            "the EVERY labels need 1/3 deg"
         )
     return grids, attrs
 
@@ -150,8 +153,8 @@ def write_lions_map(grids, attrs, every):
 
 
 def bilinear_field(grids, attrs, every):
-    """The LIONS field model on the same nodes: bilinear Bz, z x bilinear
-    dBz/dx and dBz/dy (d2Bz = 0).
+    """The LIONS field model on the same nodes: bilinear Bz, z x
+    bilinear dBz/dx and dBz/dy (d2Bz = 0).
     """
     r, th, m = lions_map_arrays(grids, attrs, every)
     dr, dth = r[1] - r[0], th[1] - th[0]
@@ -174,8 +177,8 @@ def bilinear_field(grids, attrs, every):
 
 
 def smooth_field(grids, attrs, every, k):
-    """Splines of degree k (periodic in theta) of Bz, dBz/dr, dBz/dtheta on
-    the same nodes; vectorised b(x, y, z).
+    """Splines of degree k (periodic in theta) of Bz, dBz/dr, dBz/dtheta
+    on the same nodes; vectorised b(x, y, z).
     """
     n_sec, nth = int(attrs['sector_count']), grids['bz'].shape[1]
     r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])
@@ -203,7 +206,8 @@ def smooth_field(grids, attrs, every, k):
 
 
 def lions_species(mass_ev, charge):
-    """(atomic mass, mass number, charge) whose LIONS ion mass AMU (A - m_e
+    """(atomic mass, mass number, charge) whose LIONS ion mass AMU (A -
+    m_e
     q) is mass_ev.
     """
     atomic_mass = (
@@ -214,6 +218,7 @@ def lions_species(mass_ev, charge):
 
 
 def step2(master_dir, outdir):
+    """Step 2: LIONS on the bilinear map, several azimuthal spacings."""
     grids, attrs = load_master(master_dir / 'master.h5')
     truth = pq.read_table(master_dir / 'truth.parquet').to_pylist()
     ref = pq.read_table(
@@ -351,6 +356,7 @@ def orbit_metrics(track, t, p, q_ref):
 
 
 def step3(master_dir, outdir):
+    """Step 3: LIONS Boris step on bilinear, bicubic, quintic fields."""
     grids, attrs = load_master(master_dir / 'master.h5')
     truth = pq.read_table(master_dir / 'truth.parquet').to_pylist()
     ref = pq.read_table(
@@ -472,7 +478,8 @@ def step3(master_dir, outdir):
                         file=sys.stderr,
                     )
     meta = {
-        'case': 'G1 step 3: LIONS Boris step (numpy) on bilinear, bicubic, quintic fields',
+        'case': 'G1 step 3: LIONS Boris step (numpy) on bilinear, '
+        'bicubic, quintic fields',
         'master': str(master_dir),
         'species': repr(species),
         'fd_step_m': str(H),
@@ -492,6 +499,7 @@ def step3(master_dir, outdir):
 
 
 def main(master_dir, outdir):
+    """Step 1: RF-Track on a quintic spline of the exact map."""
     outdir.mkdir(parents=True, exist_ok=True)
     grids, attrs = load_master(master_dir / 'master.h5')
     truth = pq.read_table(master_dir / 'truth.parquet').to_pylist()
@@ -566,7 +574,8 @@ def main(master_dir, outdir):
                 file=sys.stderr,
             )
     meta = {
-        'case': 'G1 step 1: RF-Track on a quintic spline of the exact FROM_ORBIT map',
+        'case': 'G1 step 1: RF-Track on a quintic spline of the exact '
+        'FROM_ORBIT map',
         'master': str(master_dir),
         **{f'master_{k}': str(v) for k, v in attrs.items()},
         'rf_track': str(rft.RF_TRACK_VERSION),

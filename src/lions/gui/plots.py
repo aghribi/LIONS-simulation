@@ -1,5 +1,5 @@
-"""Live pyqtgraph plots for LIONS, with persistent zoom/pan and a crosshair
-cursor, plus the Plotly 3D view.
+"""Live pyqtgraph plots for LIONS, with persistent zoom/pan and a
+crosshair cursor, plus the Plotly 3D view.
 """
 
 import importlib
@@ -49,6 +49,7 @@ class IntegerAxis(pg.AxisItem):
     """Axis with integer tick labels."""
 
     def tickStrings(self, values, scale, spacing):  # noqa: N802 (Qt)
+        """Tick labels as rounded integers."""
         return [f'{int(round(v))}' for v in values]
 
 
@@ -130,8 +131,8 @@ class CrosshairOverlay:
 
 
 class PlotCanvas(QWidget):
-    """pyqtgraph canvas: six plots, each with the reference particle and a
-    scatter of all particles.
+    """pyqtgraph canvas: six plots, each with the reference particle and
+    a scatter of all particles.
     """
 
     def __init__(self, parent=None):
@@ -827,7 +828,8 @@ class PlotWidget(QWidget):
         self.rmax_spin.setToolTip("0 = auto. Increase to see the extraction.")
         self.rmax_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; color: #1565C0; "
-            "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
+            "  border: 1px solid #aab5c8; border-radius: 3px; "
+            "padding: 2px 6px; "
             "  font-weight: bold; }"
             "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { "
             "  background: #e0e8f0; border: 1px solid #aab5c8; }"
@@ -859,11 +861,13 @@ class PlotWidget(QWidget):
         self.rmax_rtheta_spin.setSpecialValueText("Auto")
         self.rmax_rtheta_spin.setSingleStep(500)
         self.rmax_rtheta_spin.setToolTip(
-            "0 = auto (no filter). Hides points with R above this value on the R-\u03b8 plot."
+            "0 = auto (no filter). Hides points with R above this value "
+            "on the R-\u03b8 plot."
         )
         self.rmax_rtheta_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; color: #2e7d32; "
-            "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
+            "  border: 1px solid #aab5c8; border-radius: 3px; "
+            "padding: 2px 6px; "
             "  font-weight: bold; }"
             "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { "
             "  background: #e0e8f0; border: 1px solid #aab5c8; }"
@@ -897,11 +901,13 @@ class PlotWidget(QWidget):
         self.rmax_rdph_spin.setSpecialValueText("Auto")
         self.rmax_rdph_spin.setSingleStep(500)
         self.rmax_rdph_spin.setToolTip(
-            "0 = auto (no filter). Hides points with R above this value on the R-d\u03c6 plot."
+            "0 = auto (no filter). Hides points with R above this value "
+            "on the R-d\u03c6 plot."
         )
         self.rmax_rdph_spin.setStyleSheet(
             "QDoubleSpinBox { background: #ffffff; color: #2e7d32; "
-            "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
+            "  border: 1px solid #aab5c8; border-radius: 3px; "
+            "padding: 2px 6px; "
             "  font-weight: bold; }"
             "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { "
             "  background: #e0e8f0; border: 1px solid #aab5c8; }"
@@ -922,7 +928,8 @@ class PlotWidget(QWidget):
 
         dph_spin_style = (
             "QDoubleSpinBox { background: #ffffff; color: #7b1fa2; "
-            "  border: 1px solid #aab5c8; border-radius: 3px; padding: 2px 6px; "
+            "  border: 1px solid #aab5c8; border-radius: 3px; "
+            "padding: 2px 6px; "
             "  font-weight: bold; }"
             "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { "
             "  background: #e0e8f0; border: 1px solid #aab5c8; }"

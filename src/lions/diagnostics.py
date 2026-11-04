@@ -30,13 +30,16 @@ def write_outputs(d):
             fxy.write('LIONS program\n')
             fxy.write(f'{d.run.title}\n')
             fxy.write(
-                f' atomic mass           :    {d.bunch.families[0].atomic_mass:11.7f}\n'
+                f' atomic mass           :    '
+                f'{d.bunch.families[0].atomic_mass:11.7f}\n'
             )
             fxy.write(
-                f' A                     :          {d.bunch.families[0].mass_number:5.1f}\n'
+                f' A                     :          '
+                f'{d.bunch.families[0].mass_number:5.1f}\n'
             )
             fxy.write(
-                f' q                     :          {d.bunch.families[0].charge_state:5.1f}\n'
+                f' q                     :          '
+                f'{d.bunch.families[0].charge_state:5.1f}\n'
             )
             r0mm = d.bunch.families[0].r0 * 1000.0
             theta0_deg = d.bunch.families[0].theta0 * 180.0 / np.pi
@@ -158,7 +161,8 @@ def write_outputs(d):
             d.outputs.open['z'].write(
                 f' {d.run.step:6d}  {d.run.turn:3d}  {d.run.theta_deg:5.1f}'
                 f' {xmm:8.2f} {ymm:8.2f} {zmm:8.2f} {rmm:8.2f}'
-                f'   {d.bunch.bx[0]:7.4f} {d.bunch.by[0]:7.4f} {d.bunch.bz[0]:7.4f}'
+                f'   {d.bunch.bx[0]:7.4f} {d.bunch.by[0]:7.4f}'
+                f' {d.bunch.bz[0]:7.4f}'
                 f' {ezkvcm:7.3f}     {tpz:6.1f} {d.outputs.nuz:12.5f}'
                 f' {d.sorter.voltage_seen:12.5f}\n'
             )
@@ -168,7 +172,8 @@ def write_outputs(d):
                 f' {d.run.step:7d}  {d.run.turn:3d}  {d.run.theta_deg:5.1f}'
                 f' {xmm:7.1f} {ymm:7.1f} {xc1mm:7.1f} {yc1mm:7.1f}'
                 f'   {d.bunch.bz[0]:7.4f} {eskvcm:7.3f} {erkvcm:7.3f}'
-                f'     {rmm:7.1f}  {tpr:6.1f} {w_mev_per_u:9.5f} {phase_lag_deg:15.2f}\n'
+                f'     {rmm:7.1f}  {tpr:6.1f} {w_mev_per_u:9.5f}'
+                f' {phase_lag_deg:15.2f}\n'
             )
 
     # Correlations, skipped together with the z/xy rows (Fortran goto
@@ -408,7 +413,8 @@ def write_outputs(d):
             fxy.write('start point for reverse tracking:\n')
             fxy.write('r0 theta0 z0 pr0 pz0 w0mev phi0 :\n')
             fxy.write(
-                f'{d.outputs.end_r} {d.outputs.end_theta_deg} {d.outputs.end_z} {tprf}\n'
+                f'{d.outputs.end_r} {d.outputs.end_theta_deg}'
+                f' {d.outputs.end_z} {tprf}\n'
             )
             fxy.write(f'{tpzf} {wf} {d.outputs.end_phase_deg}\n')
             fxy.write('start point to continue tracking:\n')
@@ -417,7 +423,9 @@ def write_outputs(d):
             fxy.write('input for DEDUCE_SIGMA:\n')
             fxy.write('amat a qn w0mev : \n')
             fxy.write(
-                f'{d.bunch.families[0].atomic_mass} {d.bunch.families[0].mass_number} {d.bunch.families[0].charge_state} {wf}\n'
+                f'{d.bunch.families[0].atomic_mass}'
+                f' {d.bunch.families[0].mass_number}'
+                f' {d.bunch.families[0].charge_state} {wf}\n'
             )
             fxy.write(f'magnetic field (absolute value):\n{-d.bunch.bz[0]}\n')
             fxy.write(f'fhf harmonic:\n{d.rf.frequency} {d.rf.harmonic}\n')

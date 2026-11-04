@@ -1,5 +1,5 @@
-"""Case B0 (smooth radial gradient, exact references) and case B (4-sector
-field on the bilinear map).
+"""Case B0 (smooth radial gradient, exact references) and case B
+(4-sector field on the bilinear map).
 
 usage: uv run --group bench python benchmarks/case_b.py [outdir] Writes
 case_b.parquet. OPAL runs in Docker; outdir must be visible to Docker.
@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 import lions  # noqa: E402
 import lions.apertures  # noqa: E402
 import lions.fields  # noqa: E402
-import RF_Track as rft  # noqa: N813 (external name)
+import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
 import synthetic as syn  # noqa: E402
 from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
@@ -39,6 +39,9 @@ FFT_TURNS, FFT_OFFSET = 256, 1e-4  # LIONS second tune instrument, case B0
 
 
 def lions_state(w, n, nbrion=1):
+    """Write deck.dat for energy w with n steps per turn; return the
+    loaded state.
+    """
     d = lions.State()
     d.run.swap_bytes = 'n'
     with contextlib.redirect_stdout(io.StringIO()):
@@ -56,8 +59,8 @@ def lions_state(w, n, nbrion=1):
 
 
 def check_parity(points=200, z_max=5e-3, seed=0):
-    """RF-Track closed form against LIONS compute_bfield (DESIGN.md section
-    12). Raises on failure.
+    """RF-Track closed form against LIONS compute_bfield (DESIGN.md
+    section 12). Raises on failure.
     """
     rng = np.random.default_rng(seed)
     d = lions_state(1.0, STEPS[0], nbrion=points)
@@ -79,7 +82,8 @@ def check_parity(points=200, z_max=5e-3, seed=0):
         and np.all(np.abs(b.by - by) <= chord + 1e-13)
     ):
         raise RuntimeError(
-            'case B0: RF-Track field differs from LIONS beyond the section 12 bounds'
+            'case B0: RF-Track field differs from LIONS beyond the '
+            'section 12 bounds'
         )
     return {
         'parity_bz_max_abs': (np.max(np.abs(b.bz - bz)), 'T'),
@@ -145,6 +149,9 @@ def fft_tunes(track, s):
 
 
 def main(outdir):
+    """Run case B0 and B for all codes and energies; write
+    case_b.parquet.
+    """
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {
         'lions': importlib.metadata.version('lions'),
@@ -261,9 +268,11 @@ def main(outdir):
 
     table = pa.Table.from_pylist(records).replace_schema_metadata(
         {
-            'case': f'B0: Bz = {B0} (1 - {K} (r - {R0})) T; B: Bz = {B0} (1 + {EPS} cos 4 theta) T; '
+            'case': f'B0: Bz = {B0} (1 - {K} (r - {R0})) T; '
+            f'B: Bz = {B0} (1 + {EPS} cos 4 theta) T; '
             'protons, theta = 0 section',
-            'map': f"r = {MAP['rmin']} to {MAP['rmax']} m, {MAP['nr']} rows, 0 to 360 deg",
+            'map': f"r = {MAP['rmin']} to {MAP['rmax']} m, "
+            f"{MAP['nr']} rows, 0 to 360 deg",
             'fd_step_m': str(H),
             'fft_turns': str(FFT_TURNS),
             'fft_offset_m': str(FFT_OFFSET),

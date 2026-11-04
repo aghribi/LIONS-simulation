@@ -1,5 +1,5 @@
-"""The tutorial helper: one next step, from what the control room reads. It
-never looks at the hidden errors.
+"""The tutorial helper: one next step, from what the control room reads.
+It never looks at the hidden errors.
 
 These rules are also the scripted baseline of the Lab track. They are
 one reasonable procedure written for this model, not the CIME operator
@@ -14,24 +14,53 @@ import numpy as np
 from lions.game import physics
 
 KNOB_HELP = {
-    'rf_mhz': 'RF: the kick rhythm. A whole multiple of the turn rate, or the phase slips.',
-    'b0': 'FIELD: sets the energy at extraction and the turn rate. The RF must follow.',
-    'trim': 'TRIM: how fast the field grows with gamma. Right: same turn time at all radii.',
-    'dee_kv': 'DEE VOLTAGE: gain per turn. More gain: last turns apart, less on the septum.',
+    'rf_mhz': (
+        'RF: the kick rhythm. A whole multiple of the turn rate, or the '
+        'phase slips.'
+    ),
+    'b0': (
+        'FIELD: sets the energy at extraction and the turn rate. The RF '
+        'must follow.'
+    ),
+    'trim': (
+        'TRIM: how fast the field grows with gamma. Right: same turn time '
+        'at all radii.'
+    ),
+    'dee_kv': (
+        'DEE VOLTAGE: gain per turn. More gain: last turns apart, less on '
+        'the septum.'
+    ),
     'phase_deg': 'PHASE: when the bunch arrives. On the crest it gains most.',
-    'buncher': 'BUNCHER: packs the beam into the RF acceptance. Too strong overbunches.',
-    'source_ua': 'SOURCE: current in. Current out, losses and power all scale with it.',
-    'deflector_kv': 'DEFLECTOR: pulls the last turn out. It must match the beam rigidity.',
+    'buncher': (
+        'BUNCHER: packs the beam into the RF acceptance. Too strong '
+        'overbunches.'
+    ),
+    'source_ua': (
+        'SOURCE: current in. Current out, losses and power all scale with it.'
+    ),
+    'deflector_kv': (
+        'DEFLECTOR: pulls the last turn out. It must match the beam rigidity.'
+    ),
     'steer_x': 'STEER X: moves the beam sideways on the target.',
     'steer_y': 'STEER Y: moves the beam up and down on the target.',
-    'quad': 'QUADRUPOLE: focuses. Smallest spot at the best value, wider on either side.',
+    'quad': (
+        'QUADRUPOLE: focuses. Smallest spot at the best value, wider on '
+        'either side.'
+    ),
     'slit': 'ENERGY SLIT: cuts the energy tails. Less spread, less current.',
-    'degrader_cm': 'DEGRADER: more material, lower energy, more scattering, fewer protons.',
+    'degrader_cm': (
+        'DEGRADER: more material, lower energy, more scattering, fewer '
+        'protons.'
+    ),
 }
 
 
 @dataclass
 class Advice:
+    """One step of advice: text, reason, and the knob or the keys it
+    points to.
+    """
+
     text: str
     why: str
     knob: str = ''  # key of the knob to turn; empty: nothing to turn
@@ -44,15 +73,21 @@ class Advice:
 
 
 class Coach:
+    """The helper of a mission: the next step from the control-room
+    readings.
+    """
+
     def __init__(self, mission):
         self.m = mission
         self.keys = {s['key']: s for s in mission.specs}
         self.quad_sign, self.last_spot, self.holding = 1, None, False
 
     def turn(self, key, direction, text, why, fine=False):
+        """Advice to turn a knob in a direction."""
         return Advice(text, why, key, direction, fine)
 
     def phase_profile(self):
+        """The phase probe at the radii with beam, or two zeros."""
         b = self.m.beam
         seen = np.flatnonzero(b.probe > 0)
         return b.phase[seen] if len(seen) > 1 else np.zeros(2)
@@ -76,7 +111,10 @@ class Coach:
                 'trim',
                 1 if slope_out > slope_in else -1,
                 'TURN TRIM',
-                'The phase bends with radius: the field does not follow gamma.',
+                (
+                    'The phase bends with radius: the field does not '
+                    'follow gamma.'
+                ),
                 fine=abs(slope_out - slope_in) < 30,
             )
         if abs(drift) > (10 if extracted else 15):
@@ -84,7 +122,11 @@ class Coach:
                 'rf_mhz',
                 -1 if drift > 0 else 1,
                 'LOWER THE RF' if drift > 0 else 'RAISE THE RF',
-                f'The phase {"climbs" if drift > 0 else "falls"} with radius: the RF is too {"high" if drift > 0 else "low"} for this field.',
+                (
+                    f'The phase {"climbs" if drift > 0 else "falls"} with '
+                    'radius: the RF is too '
+                    f'{"high" if drift > 0 else "low"} for this field.'
+                ),
                 fine=abs(drift) < 40,
             )
         mean = float(phase.mean())
@@ -93,12 +135,18 @@ class Coach:
                 'phase_deg',
                 -1 if mean > 0 else 1,
                 'TURN THE INJECTION PHASE',
-                'Flat phase, but off the crest: the beam gains less and is more easily lost.',
+                (
+                    'Flat phase, but off the crest: the beam gains less '
+                    'and is more easily lost.'
+                ),
                 fine=abs(mean) < 20,
             )
         return None
 
     def energy_step(self, wanted, tolerance):
+        """Advice on the field when the mean energy is off wanted by
+        more than tolerance, relative.
+        """
         w = self.m.beam.w_mean
         if w > 0 and abs(w / wanted - 1) > tolerance:
             up = w < wanted
@@ -106,12 +154,18 @@ class Coach:
                 'b0',
                 1 if up else -1,
                 'RAISE THE FIELD' if up else 'LOWER THE FIELD',
-                'The radius is fixed, so the field sets the energy. The RF must follow it.',
+                (
+                    'The radius is fixed, so the field sets the energy. '
+                    'The RF must follow it.'
+                ),
                 fine=abs(w / wanted - 1) < 3 * tolerance,
             )
         return None
 
     def axis_steps(self, limit):
+        """Advice to steer, or to fix the deflector, when the beam is
+        off axis, else None.
+        """
         r = self.m.readings
         if not self.m.has_beam():
             return None
@@ -129,7 +183,10 @@ class Coach:
                         'deflector_kv',
                         -1 if reading > 0 else 1,
                         'TURN THE DEFLECTOR',
-                        'The beam leaves far off axis: the deflector does not match its rigidity.',
+                        (
+                            'The beam leaves far off axis: the deflector '
+                            'does not match its rigidity.'
+                        ),
                     )
                 return self.turn(
                     key,
@@ -155,6 +212,9 @@ class Coach:
         return self.turn('quad', self.quad_sign, text, why)
 
     def advise(self):
+        """The next advice: hold when in spec, else the RF steps, then
+        those of the mission.
+        """
         ready = self.m.ready()
         if (
             self.holding
@@ -174,6 +234,9 @@ class Coach:
         return step
 
     def lost_beam(self):
+        """Advice when no beam is extracted: buncher near 1, field, or
+        watch the probe.
+        """
         reach = self.m.reach()
         if 'buncher' in self.keys and abs(self.m.knobs['buncher'] - 1) > 0.2:
             return self.turn(
@@ -194,6 +257,9 @@ class Coach:
         )
 
     def loss_steps(self):
+        """Advice to raise the dee voltage or lower the source when
+        losses are high, else None.
+        """
         m = self.m
         if m.beam.lost_kw > 0.8 * m.machine.max_lost_kw:
             if (
@@ -204,7 +270,10 @@ class Coach:
                     'dee_kv',
                     1,
                     'RAISE THE DEE VOLTAGE',
-                    'More gain per turn separates the last turns: less beam on the septum.',
+                    (
+                        'More gain per turn separates the last turns: '
+                        'less beam on the septum.'
+                    ),
                 )
             if 'source_ua' in self.keys:
                 return self.turn(
@@ -222,16 +291,21 @@ class Coach:
         return self.m.beam.lost_kw < 0.65 * self.m.machine.max_lost_kw
 
     def mission_steps(self):
+        """Advice on the buncher, else the steps of the mission."""
         if 'buncher' in self.keys and abs(self.m.knobs['buncher'] - 1) > 0.2:
             return self.turn(
                 'buncher',
                 1 if self.m.knobs['buncher'] < 1 else -1,
                 'SET THE BUNCHER NEAR 1',
-                'A bunched beam fits the RF acceptance: more current for the same source.',
+                (
+                    'A bunched beam fits the RF acceptance: more current '
+                    'for the same source.'
+                ),
             )
         return getattr(self, f'steps_{self.m.key}')()
 
     def steps_therapy(self):
+        """Advice for the therapy mission: peak depth, axis, release."""
         m, p = self.m, self.m.p
         error = m.peak - p['depth_cm']
         if abs(error) > 0.5 * p['half_width_cm']:
@@ -239,7 +313,10 @@ class Coach:
                 'degrader_cm',
                 1 if error > 0 else -1,
                 'MORE DEGRADER' if error > 0 else 'LESS DEGRADER',
-                f'The Bragg peak is at {m.peak:.1f} cm, the tumour at {p["depth_cm"]:.1f} cm.',
+                (
+                    f'The Bragg peak is at {m.peak:.1f} cm, the tumour at '
+                    f'{p["depth_cm"]:.1f} cm.'
+                ),
                 fine=abs(error) < 1.5,
             )
         step = self.axis_steps(p['lateral_mm'])
@@ -254,6 +331,9 @@ class Coach:
         )
 
     def steps_isotope(self):
+        """Advice for the isotope mission: energy, losses, source
+        current, axis.
+        """
         m, p = self.m, self.m.p
         step = (
             self.energy_step(p['w_ref'], 0.5 * p['w_tolerance'])
@@ -289,6 +369,9 @@ class Coach:
         )
 
     def steps_experiment(self):
+        """Advice for the experiment mission: energy, spread, current,
+        position, spot.
+        """
         m, p, b = self.m, self.m.p, self.m.beam
         step = self.energy_step(p['w_target'], 0.5 * p['w_tolerance'])
         if step:
@@ -331,6 +414,9 @@ class Coach:
         )
 
     def steps_isol(self):
+        """Advice for the isol mission: losses, power density, power,
+        position.
+        """
         m, p = self.m, self.m.p
         step = self.loss_steps()
         if step:
@@ -363,6 +449,9 @@ class Coach:
         )
 
     def steps_qualification(self):
+        """Advice for the qualification mission: energy, position,
+        uniformity, flux.
+        """
         m, p = self.m, self.m.p
         w = m.w_sample()
         if abs(w / p['w_sample'] - 1) > 0.5 * p['w_sample_tolerance']:
@@ -407,22 +496,27 @@ class Coach:
 
 
 class StageCoach:
-    """The helper of the level 0 stages: what the screen shows, and the key
-    to press.
+    """The helper of the level 0 stages: what the screen shows, and
+    the key to press.
     """
 
     def __init__(self, stage):
         self.s = stage
 
     def advise(self):
+        """The advice of the method named by the stage key."""
         return getattr(self, self.s.key)()
 
     def larmor(self):
+        """Advice for the Larmor stage: field, energy, then fire."""
         s = self.s
         if s.flight is not None:
             return Advice(
                 'WATCH THE ORBIT',
-                f'rho = p / (q B): this shot flies at {s.shot_radius:.2f} m, the ring is {s.target:.2f} m.',
+                (
+                    'rho = p / (q B): this shot flies at '
+                    f'{s.shot_radius:.2f} m, the ring is {s.target:.2f} m.'
+                ),
             )
         wanted = -s.target_rotation * s.p['b_max']  # rotation +1 needs Bz < 0
         needed = (
@@ -434,7 +528,10 @@ class StageCoach:
         if needed > s.p['b_max']:
             return Advice(
                 'HOLD LEFT: LESS ENERGY',
-                'This ring needs more field than the magnet has: lower the momentum.',
+                (
+                    'This ring needs more field than the magnet has: '
+                    'lower the momentum.'
+                ),
                 x=-1,
             )
         b = math.copysign(needed, wanted)
@@ -442,7 +539,10 @@ class StageCoach:
             up = b > s.b
             return Advice(
                 f"HOLD {'UP' if up else 'DOWN'}: FIELD TO {b:+.2f} T",
-                f'At {s.w:.1f} MeV this ring needs |B| = {needed:.2f} T. The arrow on the ring sets the sign.',
+                (
+                    f'At {s.w:.1f} MeV this ring needs |B| = {needed:.2f} '
+                    'T. The arrow on the ring sets the sign.'
+                ),
                 y=1 if up else -1,
             )
         return Advice(
@@ -452,6 +552,9 @@ class StageCoach:
         )
 
     def dee_beat(self):
+        """Advice for the dee beat stage: move the RF toward the
+        revolution frequency.
+        """
         s = self.s
         f_rev = physics.revolution_frequency(s.w, s.p['b'])
         wanted = f_rev * (1 - s.phi / math.pi / 4)
@@ -469,11 +572,17 @@ class StageCoach:
         )
         return Advice(
             f"HOLD {'RIGHT: MORE' if up else 'LEFT: LESS'} RF",
-            f'{way.capitalize()}. A needle that moves means f is not q B / (2 pi m).',
+            (
+                f'{way.capitalize()}. A needle that moves means f is not '
+                'q B / (2 pi m).'
+            ),
             x=1 if up else -1,
         )
 
     def trim_coils(self):
+        """Advice for the trim coils stage: move the field trim to
+        follow gamma.
+        """
         s = self.s
         wanted = s.needed_delta() + s.phi / 40
         step = s.p['delta_rate'] / 60
@@ -485,33 +594,50 @@ class StageCoach:
         up = wanted > s.delta
         return Advice(
             f"HOLD {'UP: MORE' if up else 'DOWN: LESS'} FIELD",
-            f'Gamma is {physics.gamma(s.w):.3f}: the field should be {100 * s.needed_delta():+.2f}%. The grey needle is what no trim would do.',
+            (
+                f'Gamma is {physics.gamma(s.w):.3f}: the field should be '
+                f'{100 * s.needed_delta():+.2f}%. The grey needle is what '
+                'no trim would do.'
+            ),
             y=1 if up else -1,
         )
 
     def fallout(self):
+        """Advice for the fallout stage: wait, or kick the ion back."""
         s = self.s
         rate = math.sqrt(physics.isochronous_index(s.w))
         growing = s.z + s.dz / rate  # the growing mode of z'' = k z
         if abs(growing) <= 1.0 or s.last_action.y:
             return Advice(
                 'WAIT',
-                f'Qz^2 = {-rate * rate:+.3f}: the ion drifts away from the median plane, faster and faster.',
+                (
+                    f'Qz^2 = {-rate * rate:+.3f}: the ion drifts away '
+                    'from the median plane, faster and faster.'
+                ),
             )
         up = growing < 0
         return Advice(
             f"TAP {'UP' if up else 'DOWN'}: KICK BACK",
-            'Kick early: a small kick now saves a big one later. Charges run out.',
+            (
+                'Kick early: a small kick now saves a big one later. '
+                'Charges run out.'
+            ),
             y=1 if up else -1,
         )
 
     def thomas(self):
+        """Advice for the Thomas stage: flutter and spiral to keep Qz in
+        its band.
+        """
         s = self.s
         low, high = s.p['band_low'], s.p['band_high']
         if s.qz2 < low**2 and s.flutter < s.p['f_max']:
             return Advice(
                 'HOLD UP: MORE FLUTTER',
-                'Energy raises k, so Qz falls: Qz^2 = -k + N^2/(N^2-1) F (1 + 2 tan^2 xi).',
+                (
+                    'Energy raises k, so Qz falls: Qz^2 = -k + '
+                    'N^2/(N^2-1) F (1 + 2 tan^2 xi).'
+                ),
                 y=1,
             )
         if s.qz2 < low**2:
@@ -533,4 +659,5 @@ class StageCoach:
 
 
 def coach_for(stage):
+    """The Coach for a mission, the StageCoach for a level 0 stage."""
     return Coach(stage) if hasattr(stage, 'specs') else StageCoach(stage)

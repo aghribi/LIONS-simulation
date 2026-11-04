@@ -337,7 +337,8 @@ class LionsMainWindow(QMainWindow):
             self.statusbar.showMessage(f"Plots exported: {path}")
 
     def on_view_bidims(self):
-        """Open the bidim viewer on the .bid files next to the data file."""
+        """Open the bidim viewer on the .bid files next to the data
+        file."""
         import glob
 
         ficin = self.input_panel.ficin_edit.text()
@@ -347,6 +348,9 @@ class LionsMainWindow(QMainWindow):
         dlg.show()
 
     def on_open_arcade(self):
+        """Open the arcade window, or warn when the game extra is not
+        installed.
+        """
         try:
             from lions.game.arcade import Arcade
         except ImportError as exc:
@@ -383,13 +387,16 @@ class LionsMainWindow(QMainWindow):
         dlg.show()
 
     def on_progress(self, current, total):
+        """Set the progress bar to the percentage current / total."""
         if total > 0:
             self.progress_bar.setValue(int(100 * current / total))
 
     def on_iteration_data(self, data):
+        """Buffer one plot-data dict until the next flush."""
         self._pending_data.append(data)
 
     def on_console_output(self, text):
+        """Buffer console text until the next flush."""
         self._pending_console.append(text)
 
     def _flush_all(self):
@@ -412,6 +419,7 @@ class LionsMainWindow(QMainWindow):
             self.console.moveCursor(QTextCursor.End)
 
     def on_finished(self):
+        """Stop the timer, flush the buffers and reset the buttons."""
         self._plot_timer.stop()
         self._flush_all()
         self.action_run.setEnabled(True)
@@ -420,6 +428,7 @@ class LionsMainWindow(QMainWindow):
         self.statusbar.showMessage("Simulation finished")
 
     def on_error(self, msg):
+        """Stop the plot timer, flush the buffers and show the error."""
         self._plot_timer.stop()
         self._flush_all()
         self.action_run.setEnabled(True)
@@ -428,7 +437,8 @@ class LionsMainWindow(QMainWindow):
         QMessageBox.critical(self, "Simulation error", msg)
 
     def on_input_needed(self, prompt):
-        """Ask the user for an answer the input sequence did not provide."""
+        """Ask the user for an answer the input sequence did not
+        provide."""
         text, ok = QInputDialog.getText(self, "Input required", prompt)
         if ok and self.worker:
             self.worker.provide_input(text)
@@ -436,6 +446,9 @@ class LionsMainWindow(QMainWindow):
             self.worker.provide_input("0")
 
     def closeEvent(self, event):  # noqa: N802 (Qt)
+        """Set the worker stop flag, wait up to 5 s for it and accept
+        the event.
+        """
         if self.worker and self.worker.isRunning():
             self.worker.stop_flag = True
             self.worker.wait(5000)
@@ -443,6 +456,7 @@ class LionsMainWindow(QMainWindow):
 
 
 def main():
+    """Start the Qt application with the main window."""
     app = QApplication(sys.argv)
     app.setApplicationName("LIONS Cyclotron Simulator")
     app.setStyle("Fusion")

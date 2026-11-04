@@ -49,6 +49,7 @@ OUTPUTS = ('r', 'pr', 'phase')
 
 
 def write_case(case):
+    """Write the potential and field-map files of case A, B0 or B."""
     if case == 'A':
         syn.write_pot_central('pot1.bin')
         syn.write_pot_outer('pot2.dat')
@@ -58,6 +59,9 @@ def write_case(case):
 
 
 def load(n_steps, turns=1):
+    """Write deck.dat with n_steps per turn; return the loaded LIONS
+    state.
+    """
     d = lions.State()
     d.run.swap_bytes = 'n'
     with contextlib.redirect_stdout(io.StringIO()):
@@ -75,8 +79,8 @@ def load(n_steps, turns=1):
 
 
 class Port:
-    """LIONS compute_fields (magnetic part, map region) and boris_push with
-    E = 0.
+    """LIONS compute_fields (magnetic part, map region) and boris_push
+    with E = 0.
     """
 
     def __init__(self, d):
@@ -95,6 +99,7 @@ class Port:
         )
 
     def fields(self, x, y, z, s):
+        """Return Bx, By, Bz (T) at the positions, scaled by s."""
         r = torch.sqrt(x * x + y * y)
         theta = torch.remainder(torch.atan2(y, x), 2 * math.pi)
         i = ((r - self.rmin) / self.dr).detach().long()
@@ -123,6 +128,7 @@ class Port:
         return s * bx, s * by, s * bz
 
     def step(self, x, y, z, px, py, pz, s):
+        """Advance the state by one Boris step with E = 0."""
         bx, by, bz = self.fields(x, y, z, s)
         gamma = torch.sqrt(1.0 + px**2 + py**2 + pz**2)
         vec = self.bcoef / gamma
@@ -149,6 +155,7 @@ class Port:
         return x + vec * px, y + vec * py, z + vec * pz, px, py, pz
 
     def segment(self, n, s, phase, *state):
+        """Advance n steps; return the accumulated phase and state."""
         for _ in range(n):
             new = self.step(*state, s)
             x0, y0, x1, y1 = state[0], state[1], new[0], new[1]
@@ -157,8 +164,8 @@ class Port:
         return (phase, *state)
 
     def run(self, state, s, n, segment=None):
-        """(r, pr, phase) after n steps; segment = steps per checkpointed
-        block, None = no checkpointing.
+        """(r, pr, phase) after n steps; segment = steps per
+        checkpointed block, None = no checkpointing.
         """
         phase = torch.zeros_like(state[0])
         if segment is None:
@@ -180,6 +187,9 @@ class Port:
 
 
 def initial(r0, pr0, p, n=1):
+    """Initial state of n particles at radius r0 with radial momentum
+    pr0.
+    """
     zero = torch.zeros(n)
     pr0 = pr0 + zero
     return (r0 + zero, zero, Z0 + zero, pr0, torch.sqrt(p**2 - pr0**2), zero)
@@ -262,8 +272,8 @@ def gradients(d, n):
 
 
 def cost_point(n, particles, ckpt):
-    """Forward plus backward wall time and peak RSS for one configuration
-    (run in its own process).
+    """Forward plus backward wall time and peak RSS for one
+    configuration (run in its own process).
     """
     with contextlib.chdir(ROOT / 'benchmarks' / 'runs' / 'case_e' / 'B'):
         d = load(360)
@@ -292,6 +302,7 @@ def cost_point(n, particles, ckpt):
 
 
 def main(outdir):
+    """Validate the port, write the gradient and cost tables."""
     outdir.mkdir(parents=True, exist_ok=True)
     records, cost = [], []
     for case in ('A', 'B0', 'B'):
@@ -324,7 +335,8 @@ def main(outdir):
                 ]
         print(f'case {case} done', file=sys.stderr)
     meta = {
-        'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
+        'case': 'E: PyTorch port of the LIONS Boris step, '
+        f'{W} MeV proton, z0 = {Z0} m',
         'torch': torch.__version__,
         **provenance(),
         'machine': platform.platform(),
@@ -360,7 +372,9 @@ def main(outdir):
                             'checkpoint': ckpt,
                             'wall_s': None,
                             'peak_rss_mb': None,
-                            'error': f"skipped: extrapolated {prev[-1]['peak_rss_mb'] * n / prev[-1]['steps']:.0f} MB"
+                            'error': 'skipped: extrapolated '
+                            f"{prev[-1]['peak_rss_mb'] * n / prev[-1]['steps']:.0f}"  # noqa: E501 (f-string, Python 3.10)
+                            ' MB'
                             f" > half of {ram_mb:.0f} MB RAM",
                         }
                     )

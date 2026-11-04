@@ -1,5 +1,5 @@
-"""Gymnasium environment on the missions: tune a machine from control-room
-readings until the client's spec is met.
+"""Gymnasium environment on the missions: tune a machine from
+control-room readings until the client's spec is met.
 
 Observation: knob positions and readings, never the hidden errors.
 Action: bounded increments of every knob, at most one step each, as an
@@ -20,12 +20,17 @@ SPEC_BONUS = 1.0
 
 
 def mission_by_id(mission_id):
+    """Mission of the scenario 'missions' with this id."""
     return next(
         m for m in load_scenario('missions') if m.mission_id == mission_id
     )
 
 
 class MissionEnv(gym.Env):
+    """Gymnasium environment of one mission, played through knob
+    increments.
+    """
+
     metadata = {'render_modes': []}
 
     def __init__(self, mission_id, seeds=None):
@@ -42,6 +47,9 @@ class MissionEnv(gym.Env):
         )
 
     def observe(self):
+        """Knob positions in [-1, 1] and normalised control-room
+        readings, clipped to [-10, 10].
+        """
         m, r = self.m, self.m.readings
         knobs = [
             2 * (m.knobs[s['key']] - s['min']) / (s['max'] - s['min']) - 1
@@ -64,6 +72,9 @@ class MissionEnv(gym.Env):
         return np.clip(np.array(knobs + readings, np.float32), -10, 10)
 
     def reset(self, *, seed=None, options=None):
+        """Draw the conditions of the episode, reset the mission and
+        return the first observation.
+        """
         super().reset(seed=seed)
         drawn = (
             int(self.np_random.choice(self.seeds))
@@ -75,6 +86,9 @@ class MissionEnv(gym.Env):
         return self.observe(), {'condition': drawn}
 
     def act(self, action):
+        """Move each knob by its action in [-1, 1] times its rate times
+        STEP_S, within its range.
+        """
         m = self.m
         for spec, a in zip(m.specs, np.clip(action, -1, 1)):
             m.knobs[spec['key']] = m.clip(
@@ -82,6 +96,9 @@ class MissionEnv(gym.Env):
             )
 
     def step(self, action):
+        """Apply the action, wait STEP_S, refresh the readings and
+        return the Gymnasium step tuple.
+        """
         m = self.m
         action = np.clip(action, -1, 1)
         self.act(action)

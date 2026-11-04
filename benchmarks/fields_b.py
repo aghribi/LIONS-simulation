@@ -18,10 +18,14 @@ MAP = dict(rmin=0.05, rmax=0.6, nr=111)
 
 
 def bz_b0(r, t):
+    """Case B0 field Bz (T) at radius r (m) and angle t."""
     return B0 * (1 - K * (r - R0)) + 0 * t
 
 
 def write_field(case, ntet):
+    """Write the potential and bmap files of case B0 or B with ntet
+    columns.
+    """
     syn.write_pot_central('pot1.bin')
     syn.write_pot_outer('pot2.dat')
     if case == 'B0':

@@ -1,5 +1,5 @@
-"""Level 0 stages: plain models, no Qt. A human at the arcade, a script or
-an RL agent plays the same reset, step, score.
+"""Level 0 stages: plain models, no Qt. A human at the arcade, a script
+or an RL agent plays the same reset, step, score.
 """
 
 import math
@@ -17,8 +17,8 @@ Action = namedtuple(
 
 
 def load_scenario(name='level0'):
-    """Stage objects from a scenario file. A parameter whose unit differs
-    from the one the stage expects is an error.
+    """Stage objects from a scenario file. A parameter whose unit
+    differs from the one the stage expects is an error.
     """
     import lions.game.missions  # noqa: F401, E402   registers the mission stages
 
@@ -36,7 +36,8 @@ def load_scenario(name='level0'):
             item = entry['params'][key]
             if item['unit'] != unit:
                 raise ValueError(
-                    f"{entry['stage']}.{key}: unit {item['unit']}, expected {unit}"
+                    f"{entry['stage']}.{key}: unit {item['unit']}, "
+                    f'expected {unit}'
                 )
             params[key] = item['value']
         stages.append(cls(scenario['scenario'], entry, params))
@@ -44,6 +45,8 @@ def load_scenario(name='level0'):
 
 
 class Stage:
+    """Base of the level 0 stages: reset, step, score."""
+
     UNITS = {}
 
     def __init__(self, scenario, entry, params):
@@ -61,6 +64,9 @@ class Stage:
         self.switches = entry.get('switches', {})
 
     def reset(self, seed):
+        """Seed the stage, clear its counters, set up and return the
+        first observation.
+        """
         self.seed, self.rng = seed, random.Random(seed)
         self.time, self.points, self.steps, self.knob_changes = 0.0, 0, 0, 0
         self.done, self.success, self.message = False, False, ''
@@ -87,11 +93,12 @@ class Stage:
         return self.observation(), self.metrics(), self.done
 
     def finish(self, success, message):
+        """End the stage with success or failure and a message."""
         self.done, self.success, self.message = True, success, message
 
     def score(self):
-        """The record of a run: scenario, seed, switches, budget, metrics
-        (SPEC section 7). No player identity.
+        """The record of a run: scenario, seed, switches, budget,
+        metrics (SPEC section 7). No player identity.
         """
         return {
             'scenario': self.scenario,
@@ -109,19 +116,29 @@ class Stage:
         }
 
     def setup(self):
+        """Initialise the stage state; defined by each stage."""
         raise NotImplementedError
 
     def advance(self, action, dt):
+        """Advance by dt seconds under the action; defined by each
+        stage.
+        """
         raise NotImplementedError
 
     def observation(self):
+        """Observation dict; defined by each stage."""
         raise NotImplementedError
 
     def metrics(self):
+        """Metrics of the run; empty in the base stage."""
         return {}
 
 
 class Larmor(Stage):
+    """Set the field B and the energy W so that the orbit radius hits a
+    target ring.
+    """
+
     UNITS = {
         'b_max': 'T',
         'b_min': 'T',
@@ -140,6 +157,9 @@ class Larmor(Stage):
     }
 
     def setup(self):
+        """Reset the field, energy, shots and hits, and draw the first
+        target.
+        """
         p = self.p
         self.b, self.w = p['b_start'], p['w_start']
         self.hits, self.shots = 0, 0
@@ -147,12 +167,16 @@ class Larmor(Stage):
         self.new_target()
 
     def new_target(self):
+        """Draw a target radius [m] and a rotation sense."""
         self.target = self.rng.uniform(
             self.p['target_min'], self.p['target_max']
         )
         self.target_rotation = self.rng.choice((-1, 1))
 
     def advance(self, action, dt):
+        """Move B and W, or advance the shot in flight; fire launches a
+        shot.
+        """
         p = self.p
         if self.flight is not None:
             self.flight += dt / p['flight_time']
@@ -180,6 +204,9 @@ class Larmor(Stage):
             self.flight = 0.0
 
     def judge(self):
+        """Compare the radius and rotation of the shot with the target
+        and score it.
+        """
         error = self.shot_radius / self.target - 1
         if self.shot_rotation != self.target_rotation:
             self.message = 'WRONG WAY: FLIP THE SIGN OF B'
@@ -198,12 +225,14 @@ class Larmor(Stage):
         self.after_shot()
 
     def after_shot(self):
+        """Finish when all targets are hit or the shots are used up."""
         if self.hits >= self.p['targets']:
             self.finish(True, 'ALL RINGS LOCKED')
         elif self.shots >= self.p['shots'] and not self.tutorial:
             self.finish(False, 'OUT OF SHOTS')
 
     def observation(self):
+        """Field [T], energy [MeV], target [m], hits and shots."""
         return {
             'b_T': self.b,
             'w_MeV': self.w,
@@ -214,15 +243,19 @@ class Larmor(Stage):
         }
 
     def metrics(self):
+        """Hits and shots."""
         return {'hits': self.hits, 'shots': self.shots}
 
 
 class GapStage(Stage):
-    """An ion crossing a gap twice per turn: gain q V cos(phi), phase slip
-    pi (f_rf / f_rev - 1) per crossing.
+    """An ion crossing a gap twice per turn: gain q V cos(phi), phase
+    slip pi (f_rf / f_rev - 1) per crossing.
     """
 
     def setup_gap(self, phi):
+        """Set the energy to w_start, the phase to phi [rad] and clear
+        the counters.
+        """
         self.w, self.phi, self.crossings, self.combo, self.crest = (
             self.p['w_start'],
             phi,
@@ -243,6 +276,9 @@ class GapStage(Stage):
         )
 
     def cross(self):
+        """Cross the gap: energy gain, combo and crest count, loss
+        check, phase slip and next arc.
+        """
         p = self.p
         self.w = max(self.w + p['v_gap'] * math.cos(self.phi), 0.0)
         self.crossings += 1
@@ -260,6 +296,9 @@ class GapStage(Stage):
         self.arcs.append(self.arc(self.arcs[-1][1]))
 
     def advance_gap(self, dt):
+        """Advance the crossings by dt; finish on target energy or time
+        limit.
+        """
         self.frac += dt / self.p['crossing_time']
         while self.frac >= 1 and not self.done:
             self.frac -= 1
@@ -274,6 +313,7 @@ class GapStage(Stage):
             self.finish(False, 'TIME UP')
 
     def observation(self):
+        """Energy [MeV], phase [rad], crossings and combo."""
         return {
             'w_MeV': self.w,
             'phi_rad': self.phi,
@@ -282,6 +322,9 @@ class GapStage(Stage):
         }
 
     def metrics(self):
+        """Energy [MeV], crossings and fraction of crossings on the
+        crest.
+        """
         return {
             'w_MeV': self.w,
             'crossings': self.crossings,
@@ -290,6 +333,10 @@ class GapStage(Stage):
 
 
 class DeeBeat(GapStage):
+    """Bring the RF frequency to the revolution frequency in a fixed
+    field B.
+    """
+
     UNITS = {
         'b': 'T',
         'v_gap': 'MV',
@@ -305,9 +352,11 @@ class DeeBeat(GapStage):
     }
 
     def field(self):
+        """Magnetic field [T], fixed."""
         return self.p['b']
 
     def setup(self):
+        """Draw the RF frequency off nominal and a start phase [rad]."""
         p = self.p
         self.f_nominal = physics.revolution_frequency(p['w_start'], p['b'])
         sign = self.rng.choice((-1, 1))
@@ -317,19 +366,27 @@ class DeeBeat(GapStage):
         self.setup_gap(self.rng.uniform(-math.pi / 2, math.pi / 2))
 
     def update_phase(self):
+        """Add the phase slip of the crossing, pi (f / f_rev - 1)."""
         self.phi += math.pi * (
             self.f / physics.revolution_frequency(self.w, self.p['b']) - 1
         )
 
     def advance(self, action, dt):
+        """Change the RF frequency by the x action and advance the
+        gap."""
         self.f += action.x * self.p['f_rate'] * self.f_nominal * dt
         self.advance_gap(dt)
 
     def observation(self):
+        """Gap observation plus the RF frequency [Hz]."""
         return {**super().observation(), 'f_rf_Hz': self.f}
 
 
 class TrimCoils(GapStage):
+    """Follow the energy with the field offset delta at a fixed RF
+    frequency.
+    """
+
     UNITS = {
         'b': 'T',
         'v_gap': 'MV',
@@ -343,14 +400,21 @@ class TrimCoils(GapStage):
     }
 
     def field(self):
+        """Magnetic field [T] with the relative offset delta."""
         return self.p['b'] * (1 + self.delta)
 
     def setup(self):
+        """Reset delta and the ghost phase, set the nominal RF
+        frequency.
+        """
         self.delta, self.ghost_phi = 0.0, 0.0
         self.f = physics.revolution_frequency(self.p['w_start'], self.p['b'])
         self.setup_gap(0.0)
 
     def update_phase(self):
+        """Add the phase slip with the trimmed field, and the ghost
+        phase with the untrimmed field.
+        """
         self.phi += math.pi * (
             self.f / physics.revolution_frequency(self.w, self.field()) - 1
         )
@@ -359,16 +423,18 @@ class TrimCoils(GapStage):
         )
 
     def needed_delta(self):
-        """B = gamma B0, relative to the injection energy, for which the RF
-        is set.
+        """B = gamma B0, relative to the injection energy, for which the
+        RF is set.
         """
         return physics.gamma(self.w) / physics.gamma(self.p['w_start']) - 1
 
     def advance(self, action, dt):
+        """Change delta by the y action and advance the gap."""
         self.delta += action.y * self.p['delta_rate'] * dt
         self.advance_gap(dt)
 
     def observation(self):
+        """Gap observation plus delta and delta_needed."""
         return {
             **super().observation(),
             'delta': self.delta,
@@ -377,6 +443,10 @@ class TrimCoils(GapStage):
 
 
 class Fallout(Stage):
+    """Hold the ion between the poles with vertical kicks while z'' = k
+    z grows.
+    """
+
     UNITS = {
         'w_start': 'MeV',
         'w_per_turn': 'MeV',
@@ -389,6 +459,9 @@ class Fallout(Stage):
     }
 
     def setup(self):
+        """Draw the start side of z, reset the motion and the kick
+        charges.
+        """
         p = self.p
         self.z = p['z_start'] * self.rng.choice((-1, 1))
         self.dz, self.turns, self.charges = 0.0, 0.0, p['charges']
@@ -396,6 +469,9 @@ class Fallout(Stage):
         self.trail = []
 
     def advance(self, action, dt):
+        """Apply a kick on a y edge, then advance z over dt with z'' = k
+        z.
+        """
         p = self.p
         if self.y_edge and self.charges > 0:
             self.dz += math.copysign(p['kick'], self.y_edge)
@@ -420,6 +496,9 @@ class Fallout(Stage):
             self.finish(True, 'HELD ON. NOT FOR LONG')
 
     def observation(self):
+        """Vertical position [mm] and slope [mm/rad], energy [MeV],
+        turns and charges.
+        """
         return {
             'z_mm': self.z,
             'dz_mm_rad': self.dz,
@@ -429,10 +508,15 @@ class Fallout(Stage):
         }
 
     def metrics(self):
+        """Turns held and kick charges left."""
         return {'turns': self.turns, 'charges_left': self.charges}
 
 
 class Thomas(Stage):
+    """Keep the vertical tune in a band with the flutter and the spiral
+    angle while the energy rises.
+    """
+
     UNITS = {
         'n_sectors': '1',
         'w_start': 'MeV',
@@ -454,6 +538,8 @@ class Thomas(Stage):
     DTHETA = 0.02  # rad, leapfrog step of the vertical motion
 
     def setup(self):
+        """Reset flutter, spiral angle, energy and the vertical
+        motion."""
         p = self.p
         self.flutter, self.xi_deg, self.w, self.turns = (
             p['f_start'],
@@ -470,6 +556,9 @@ class Thomas(Stage):
         self.update_tunes()
 
     def update_tunes(self):
+        """Compute Qz^2, Qr^2 and Qz from the energy, flutter and spiral
+        angle.
+        """
         k = physics.isochronous_index(self.w)
         spiral = math.radians(self.xi_deg)
         self.qz2 = physics.qz_squared(
@@ -481,6 +570,9 @@ class Thomas(Stage):
         self.qz = math.sqrt(self.qz2) if self.qz2 > 0 else 0.0
 
     def advance(self, action, dt):
+        """Change flutter and spiral angle by the actions and advance z
+        by leapfrog steps.
+        """
         p = self.p
         self.flutter = min(
             max(self.flutter + action.y * p['f_rate'] * dt, 0.0), p['f_max']
@@ -495,8 +587,8 @@ class Thomas(Stage):
         h = total / n
         for _ in range(
             n
-            # z'' + (Qz^2 + e cos theta) z = d cos theta: the errors act at
-            # 2 Qz = 1 and at Qz = 1
+            # z'' + (Qz^2 + e cos theta) z = d cos theta: the errors act
+            # at 2 Qz = 1 and at Qz = 1
         ):
             self.z += 0.5 * h * self.dz
             self.theta += h
@@ -518,6 +610,9 @@ class Thomas(Stage):
             self.finish(True, 'TARGET ENERGY')
 
     def observation(self):
+        """Vertical motion, energy, flutter, spiral angle and the
+        squared tunes.
+        """
         return {
             'z_mm': self.z,
             'dz_mm_rad': self.dz,
@@ -529,6 +624,7 @@ class Thomas(Stage):
         }
 
     def metrics(self):
+        """Energy [MeV], turns in the band and turns."""
         return {
             'w_MeV': self.w,
             'turns_in_band': self.in_band,

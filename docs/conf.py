@@ -1,3 +1,5 @@
+"""Sphinx configuration for the LIONS documentation."""
+
 project = "LIONS"
 author = "Omar Kamalou, Adnan Ghribi"
 copyright = "2026, Omar Kamalou, Adnan Ghribi"
@@ -28,4 +30,5 @@ def _skip_qt_signals(app, what, name, obj, skip, options):
 
 
 def setup(app):
+    """Skip PyQt5 signals in autodoc."""
     app.connect("autodoc-skip-member", _skip_qt_signals)

@@ -36,8 +36,8 @@ TUNES_Q = np.linspace(
     0.005,
     0.12,
     231,
-    # section frequency of the radial oscillation, turns^-1: Qr - 1 is 0.014
-    # to 0.034 on this map
+    # section frequency of the radial oscillation, turns^-1: Qr - 1 is
+    # 0.014 to 0.034 on this map
 )
 NEAR_CREST_DEG = 30.0
 SUPPORTED, REFUTED = (
@@ -48,16 +48,20 @@ PHASE_BINS = (-180, -120, -90, -60, -30, 0, 30, 60, 90, 180)
 
 
 class Recorded(case_v.Pass):
+    """Pass that keeps every section crossing of every particle."""
+
     def __init__(self, *args, **kwargs):
         self.history, self.z_prev = [], None
         super().__init__(*args, **kwargs)
 
     def step(self, d):
+        """Advance one step and remember the longitudinal positions."""
         carry_on = super().step(d)
         self.z_prev = d.bunch.z.copy()
         return carry_on
 
     def crossing(self, c, d, xp, yp, gp, tp):
+        """Record r, energy, phase and z at the theta = 0 crossing."""
         b = d.bunch
         f = -yp[c] / (b.y[c] - yp[c])
         when = tp + f * (d.run.t - tp)
@@ -78,6 +82,7 @@ class Recorded(case_v.Pass):
 
 
 def one(job):
+    """Track one tune through LIONS and pickle its crossings."""
     row, mapdir, parts, start_mev = job
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
@@ -131,10 +136,14 @@ def one(job):
     return row['tune']
 
 
-UNITS = 'r_m m, w_mev MeV, phase_deg deg (T0 phase, 0 at the crest), z_m m, t_s s, turn crossing count, x_m a_m m, q 1/turn, w_* MeV'
+UNITS = (
+    'r_m m, w_mev MeV, phase_deg deg (T0 phase, 0 at the crest), '
+    'z_m m, t_s s, turn crossing count, x_m a_m m, q 1/turn, w_* MeV'
+)
 
 
 def record(outdir, mp, tunes, workers, start_mev):
+    """Run all tunes in a pool and write the history parquet tables."""
     rows = pq.read_table(tunes).to_pylist()
     parts = outdir / 'parts'
     parts.mkdir(parents=True, exist_ok=True)
@@ -193,10 +202,12 @@ def record(outdir, mp, tunes, workers, start_mev):
 
 
 def momentum(w):
+    """Return p / (m c) for kinetic energy w, MeV."""
     return np.sqrt((1 + w / case_v.REST_MEV) ** 2 - 1)
 
 
 def closed_orbit(mp):
+    """Return the closed-orbit radius, m, as a spline of momentum."""
     rec = sorted(
         (r['w_mev'], r['r_co_m'])
         for r in pq.read_table(mp.dir / 'case_p_orbits.parquet').to_pylist()
@@ -214,8 +225,8 @@ def closed_orbit(mp):
 
 
 def fit(n, x):
-    """x = c + a cos(2 pi q n) + b sin(2 pi q n), q on a grid. Returns q,
-    c, a, b and the rms residual.
+    """x = c + a cos(2 pi q n) + b sin(2 pi q n), q on a grid. Returns
+    q, c, a, b and the rms residual.
     """
     best = None
     for q in TUNES_Q:
@@ -234,8 +245,11 @@ def fit(n, x):
 
 
 def analyse(outdir, mp, reference):
+    """Fit the radial oscillation of each extracted particle."""
     orbit = closed_orbit(mp)
-    grid = np.linspace(momentum(mp.w0), momentum(case_v.P.W_EXT) * 1.15, 40000)
+    grid = np.linspace(
+        momentum(mp.w0), momentum(case_v.case_p.W_EXT) * 1.15, 40000
+    )
     r_grid = orbit(grid)
 
     def w_of(r, s):
@@ -376,6 +390,7 @@ def explained(rows, key):
 
 
 def spread(rows, key):
+    """Return the median over tunes of std(key) / 18.0."""
     by = {}
     for r in rows:
         by.setdefault(r['tune'], []).append(r[key])
@@ -385,6 +400,7 @@ def spread(rows, key):
 
 
 def report(fits, tunes, mp):
+    """Print the fit statistics and the registered outcome."""
     usable = [
         f
         for f in fits
@@ -422,10 +438,13 @@ def report(fits, tunes, mp):
         ):
             pooled, median = explained(rows, key)
             print(
-                f'  variance explained, {label}: pooled {pooled:.3f}, median over tunes {median:.3f}; predicted spread {spread(rows, key):.5f}'
+                f'  variance explained, {label}: pooled {pooled:.3f}, '
+                f'median over tunes {median:.3f}; '
+                f'predicted spread {spread(rows, key):.5f}'
             )
         print(
-            f"  actual spread, median over tunes {spread(rows, 'w_extraction_mev'):.5f}"
+            "  actual spread, median over tunes "
+            f"{spread(rows, 'w_extraction_mev'):.5f}"
         )
         pooled = explained(rows, 'w_pred_mev')[0]
         print(
@@ -435,17 +454,26 @@ def report(fits, tunes, mp):
             else 'refuted'
             if pooled < REFUTED
             else 'partial',
-            f'(pooled {pooled:.3f}; supported at {SUPPORTED}, refuted below {REFUTED})',
+            f'(pooled {pooled:.3f}; supported at {SUPPORTED}, '
+            f'refuted below {REFUTED})',
         )
         inside = [
             f['w_lo_mev'] - 0.1 <= f['w_extraction_mev'] <= f['w_hi_mev'] + 0.1
             for f in rows
         ]
         print(
-            f'  extraction energy within w(r_ext -+ A), one turn gain (0.1 MeV) of margin: {np.mean(inside):.3f}'
+            '  extraction energy within w(r_ext -+ A), one turn gain '
+            f'(0.1 MeV) of margin: {np.mean(inside):.3f}'
         )
         print(
-            f"  A median mm {1e3 * np.median([f['a_m'] for f in rows]):.3f}, q median {np.median([f['q_late'] for f in rows]):.4f}, c median mm {1e3 * np.median([f['c_m'] for f in rows]):.3f}, c 5 to 95% mm {1e3 * np.percentile([f['c_m'] for f in rows], 5):.3f} {1e3 * np.percentile([f['c_m'] for f in rows], 95):.3f}"
+            f"  A median mm {1e3 * np.median([f['a_m'] for f in rows]):.3f}, "
+            "q median "
+            f"{np.median([f['q_late'] for f in rows]):.4f}, "
+            "c median mm "
+            f"{1e3 * np.median([f['c_m'] for f in rows]):.3f}, "
+            "c 5 to 95% mm "
+            f"{1e3 * np.percentile([f['c_m'] for f in rows], 5):.3f} "
+            f"{1e3 * np.percentile([f['c_m'] for f in rows], 95):.3f}"
         )
     print('== amplitude against start phase')
     for lo, hi in zip(PHASE_BINS[:-1], PHASE_BINS[1:]):
@@ -457,7 +485,16 @@ def report(fits, tunes, mp):
                 if 'a_early_m' in f
             ]
             print(
-                f"  {lo:5d} to {hi:4d} deg: n {len(s):4d}; A late mm median {1e3 * np.median([f['a_m'] for f in s]):.3f}, 5 to 95% {1e3 * np.percentile([f['a_m'] for f in s], 5):.3f} {1e3 * np.percentile([f['a_m'] for f in s], 95):.3f}; early A carried by sqrt(p) mm {1e3 * np.median(early) if early else float('nan'):.3f} (n {len(early)}); energy spread {np.std([f['w_extraction_mev'] for f in s]) / 18.0:.5f}"
+                f"  {lo:5d} to {hi:4d} deg: n {len(s):4d}; "
+                "A late mm median "
+                f"{1e3 * np.median([f['a_m'] for f in s]):.3f}, "
+                "5 to 95% "
+                f"{1e3 * np.percentile([f['a_m'] for f in s], 5):.3f} "
+                f"{1e3 * np.percentile([f['a_m'] for f in s], 95):.3f}; "
+                "early A carried by sqrt(p) mm "
+                f"{1e3 * np.median(early) if early else float('nan'):.3f} "
+                f"(n {len(early)}); energy spread "
+                f"{np.std([f['w_extraction_mev'] for f in s]) / 18.0:.5f}"
             )
     near = [
         f

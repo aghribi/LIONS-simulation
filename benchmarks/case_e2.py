@@ -37,6 +37,7 @@ DEVICE = 'cpu'
 
 
 def make_port(d, dtype, compiled):
+    """Return a Port of d in dtype on DEVICE, optionally compiled."""
     # int x float promotes to the default dtype; case_e sets float64,
     # which MPS cannot hold
     torch.set_default_dtype(dtype)
@@ -51,6 +52,7 @@ def make_port(d, dtype, compiled):
 
 
 def start(d, n, dtype):
+    """Initial state of n particles, r = 0.14 to 0.15 m, on DEVICE."""
     r0 = torch.linspace(0.14, 0.15, n, dtype=torch.float64)
     return tuple(
         v.to(DEVICE, dtype) for v in initial(r0, 0.0, d.bunch.p[0], n)
@@ -82,6 +84,7 @@ def timed(fn):
 
 
 def lions_time(n):
+    """Median and first-call wall time of LIONS with n particles."""
     with contextlib.redirect_stdout(io.StringIO()):
         syn.write_deck(
             'deck_speed.dat',
@@ -97,6 +100,9 @@ def lions_time(n):
 
 
 def main(outdir):
+    """Time LIONS and the port on DEVICE and compare accuracy; write
+    case_e2.parquet.
+    """
     # the accuracy section runs the CPU reference, then restores the
     # device
     global DEVICE
@@ -107,15 +113,18 @@ def main(outdir):
     )
 
     def add(code, dtype, compiled, mode, n, run):
-        """Time run() and record it; a variant that fails (a backend that
-        cannot compile it) is recorded too.
+        """Time run() and record it; a variant that fails (a backend
+        that cannot compile it) is recorded too.
         """
         try:
             wall, first = run()
             error = None
         except Exception as exc:
             wall = first = None
-            error = f'{type(exc).__name__}: {str(exc).strip().splitlines()[0][:300]}'
+            error = (
+                f'{type(exc).__name__}: '
+                f'{str(exc).strip().splitlines()[0][:300]}'
+            )
             print(
                 f'{code} {dtype} compiled={compiled} {mode} {n}: {error}',
                 file=sys.stderr,
@@ -219,7 +228,10 @@ def main(outdir):
             for (dev, dtype, compiled), (r, phase) in out.items():
                 if (dev, dtype, compiled) == ('cpu', torch.float64, False):
                     continue
-                label = f"{dev}_{str(dtype).removeprefix('torch.')}{'_compiled' if compiled else ''}"
+                label = (
+                    f"{dev}_{str(dtype).removeprefix('torch.')}"
+                    f"{'_compiled' if compiled else ''}"
+                )
                 for metric, value in (
                     (
                         f'{label}_r_max_rel',
@@ -253,7 +265,8 @@ def main(outdir):
         'cpu': lambda: platform.processor() or platform.machine(),
     }[DEVICE]()
     meta = {
-        'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, device {DEVICE}',
+        'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, '
+        f'device {DEVICE}',
         'device_name': device_name,
         'torch': torch.__version__,
         'cpu': platform.processor() or platform.machine(),

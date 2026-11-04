@@ -1,4 +1,5 @@
-"""Input deck, field maps and potentials; Fortran list-directed reading."""
+"""Input deck, field maps and potentials; Fortran list-directed
+reading."""
 
 import numpy as np
 
@@ -23,15 +24,16 @@ from .fields import add_harmonics, prepare_hermite
 
 
 def prompt(prompt=''):
-    """Print the prompt if any, then read one stripped line from stdin."""
+    """Print the prompt if any, then read one stripped line from
+    stdin."""
     if prompt:
         print(prompt)
     return input().strip()
 
 
 def _read_block(f, nrows, ncols):
-    """nrows x ncols values in list-directed format; ValueError if the file
-    ends early.
+    """nrows x ncols values in list-directed format; ValueError if the
+    file ends early.
     """
     rows = []
     for _ in range(nrows):
@@ -80,7 +82,8 @@ def read_bfield_map(path):
                 dbzy_read = _read_block(f, nr, 91)
             except (ValueError, IndexError):
                 print(
-                    'field map without dBz/dx, dBz/dy: Bx = By = 0, motion stays in the median plane'
+                    'field map without dBz/dx, dBz/dy: Bx = By = 0, '
+                    'motion stays in the median plane'
                 )
                 dbzx_read = dbzy_read = np.zeros((nr, 91))
             # 8-fold symmetry, as in the Fortran (1-based ranges in
@@ -117,8 +120,8 @@ def read_bfield_map(path):
 
 
 def read_central_potential(path, swap=False):
-    """Central-region potential: Fortran unformatted file, grid header in
-    mm.
+    """Central-region potential: Fortran unformatted file, grid header
+    in mm.
 
     Records: (xmin, xmax, ymin, ymax as float64, nx, ny as int32), then
     nx rows of pot, then nx rows of d2pot (optional, zero when missing).
@@ -133,7 +136,8 @@ def read_central_potential(path, swap=False):
         f.read(4)
         if not (1 < nx <= CENTRAL_NX and 1 < ny <= CENTRAL_NY):
             raise ValueError(
-                f'{path}: grid nx={nx}, ny={ny} outside {CENTRAL_NX} x {CENTRAL_NY}'
+                f'{path}: grid nx={nx}, ny={ny}'
+                f' outside {CENTRAL_NX} x {CENTRAL_NY}'
                 ' (wrong byte order?)'
             )
         rows = []
@@ -166,8 +170,8 @@ def read_central_potential(path, swap=False):
 
 
 def read_outer_potential(path):
-    """Outer-region potential (text): xmin xmax ymin ymax nx ny in m, then
-    pot and d2pot rows.
+    """Outer-region potential (text): xmin xmax ymin ymax nx ny in m,
+    then pot and d2pot rows.
     """
     with open(path) as raw:
         f = FortranFile(raw)
@@ -176,7 +180,8 @@ def read_outer_potential(path):
         nx, ny = int(fortran_float(vals[4])), int(fortran_float(vals[5]))
         if not (1 < nx <= OUTER_NX and 1 < ny <= OUTER_NY):
             raise ValueError(
-                f'{path}: grid nx={nx}, ny={ny} outside {OUTER_NX} x {OUTER_NY}'
+                f'{path}: grid nx={nx}, ny={ny}'
+                f' outside {OUTER_NX} x {OUTER_NY}'
             )
         pot = _read_block(f, nx, ny)
         d2pot = _read_block(f, nx, ny)
@@ -193,8 +198,8 @@ def read_outer_potential(path):
 
 
 def load(d, deck):
-    """Set up d from a deck (Deck or path): field maps, potentials, bunch
-    and output files.
+    """Set up d from a deck (Deck or path): field maps, potentials,
+    bunch and output files.
     """
     d.outputs.open.clear()
     if isinstance(deck, Deck):
@@ -351,7 +356,8 @@ def load(d, deck):
         fgrid = d.outputs.open[f'grid{kg}']
         fgrid.write('particles (n A amat q):\n')
         fgrid.write(
-            f'{n_particles} {f0.mass_number} {f0.atomic_mass} {f0.charge_state}\n'
+            f'{n_particles} {f0.mass_number} {f0.atomic_mass}'
+            f' {f0.charge_state}\n'
         )
         fgrid.write('RF (steps per turn, frequency, harmonic):\n')
         fgrid.write(f'{run.steps_per_turn} {rf.frequency} {rf.harmonic}\n')
@@ -444,7 +450,8 @@ def load(d, deck):
         bz_max = np.max(np.abs(d.field.bz[: d.field.nr, :ntheta_all]))
         if bz_max == 0.0:
             raise ValueError(
-                f'magnetic field map is zero ({d.files.bfield}): b_factor cannot be applied'
+                f'magnetic field map is zero ({d.files.bfield}): '
+                'b_factor cannot be applied'
             )
         scale = d.field.b_factor / bz_max
         d.field.bz *= scale
@@ -452,7 +459,8 @@ def load(d, deck):
         d.field.dbzdx *= scale
         d.field.dbzdy *= scale
         print(
-            f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.field.b_factor:.6f} T'
+            f'magnetic field map: Bmax read = {bz_max:.6e} T, '
+            f'B factor = {d.field.b_factor:.6f} T'
         )
 
     d.field.interpolation = deck.field_interpolation

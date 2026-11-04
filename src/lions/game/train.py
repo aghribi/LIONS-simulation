@@ -20,6 +20,9 @@ from lions.game.tuners import (
 
 
 def main(missions, steps=None):
+    """Train the PPO policy of each mission and test it on the held-out
+    conditions.
+    """
     for mission_id in missions:
         path = policy_path(mission_id)
         path.parent.mkdir(parents=True, exist_ok=True)

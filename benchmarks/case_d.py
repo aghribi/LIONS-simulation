@@ -1,5 +1,5 @@
-"""Case D2: long-term canonical angular momentum in the B0 field (DESIGN.md
-section 16).
+"""Case D2: long-term canonical angular momentum in the B0 field
+(DESIGN.md section 16).
 
 usage: uv run --group bench python benchmarks/case_d.py [outdir] Writes
 case_d.parquet. OPAL runs in Docker; outdir must be visible to Docker.
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import RF_Track as rft  # noqa: N813 (external name)
+import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
 import synthetic as syn  # noqa: E402
 from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
@@ -35,8 +35,8 @@ TOL = 1e-12
 
 
 def invariant(pos, mom, q_over_mc):
-    """Canonical angular momentum in beta gamma m (DESIGN.md section 16),
-    plane z = 0.
+    """Canonical angular momentum in beta gamma m (DESIGN.md section
+    16), plane z = 0.
     """
     x, y = pos[:, 0], pos[:, 1]
     r = np.hypot(x, y)
@@ -48,6 +48,7 @@ def invariant(pos, mom, q_over_mc):
 
 
 def metrics(t, pos, mom, q_over_mc):
+    """Relative drift of the invariant and of |p|, and turns tracked."""
     lz = invariant(pos, mom, q_over_mc)
     p = np.linalg.norm(mom, axis=1)
     slope = np.polyfit(t - t[0], lz - lz[0], 1)[0]
@@ -60,6 +61,7 @@ def metrics(t, pos, mom, q_over_mc):
 
 
 def main(outdir):
+    """Track 10 000 turns in each code; write case_d.parquet."""
     outdir.mkdir(parents=True, exist_ok=True)
     versions = {
         'lions': importlib.metadata.version('lions'),
@@ -113,7 +115,8 @@ def main(outdir):
 
     table = pa.Table.from_pylist(records).replace_schema_metadata(
         {
-            'case': f'D2: B0 field Bz = {B0} (1 - {K} (r - {R0})) T, {W} MeV proton, r_eo + {OFFSET} m, z = 0, '
+            'case': f'D2: B0 field Bz = {B0} (1 - {K} (r - {R0})) T, '
+            f'{W} MeV proton, r_eo + {OFFSET} m, z = 0, '
             f'{TURNS} turns at {STEPS} steps per turn',
             'rf_track_tolerance': str(TOL),
             **provenance(),

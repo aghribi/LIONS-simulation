@@ -1,5 +1,5 @@
-"""lions.run on a uniform magnetic field with zero electric fields (1 MeV
-proton).
+"""lions.run on a uniform magnetic field with zero electric fields (1
+MeV proton).
 """
 
 import contextlib
@@ -109,8 +109,8 @@ def test_on_step_stops_and_closes_files(workdir):
 
 @pytest.mark.parametrize('ntet', [361, 721, 1081])
 def test_field_just_below_the_x_axis(workdir, ntet):
-    """theta = 2 pi - arccos(1) = 2 pi for a tiny negative y must read map
-    column 0, not ntet.
+    """theta = 2 pi - arccos(1) = 2 pi for a tiny negative y must read
+    map column 0, not ntet.
     """
     syn.write_bmap('bmap.dat', lambda r, t: -1.0 - 0.1 * np.sin(t), ntet=ntet)
     syn.write_deck(
@@ -138,7 +138,8 @@ HERMITE = ['no no', 'interpolation=hermite']
 
 @pytest.mark.parametrize('b', [-1.0, -0.5])
 def test_hermite_closed_orbit(workdir, b):
-    """Hermite is exact on a uniform map: same orbit as the bilinear model."""
+    """Hermite is exact on a uniform map: same orbit as the bilinear
+    model."""
     d = uniform_case(b, b, tail=HERMITE)
     assert d.field.interpolation == 'hermite'
     assert np.hypot(d.bunch.x[0], d.bunch.y[0]) == pytest.approx(
@@ -161,8 +162,8 @@ def smooth_field(r, t):
 
 
 def field_at(tail, r, t, z):
-    """Bz and (Bx, By) / z from compute_fields at the points (r, t, z) on
-    the smooth_field map.
+    """Bz and (Bx, By) / z from compute_fields at the points (r, t, z)
+    on the smooth_field map.
     """
     syn.write_bmap(
         'bmap.dat',
@@ -191,8 +192,8 @@ def field_at(tail, r, t, z):
 
 
 def test_hermite_nodes_and_accuracy(workdir):
-    """At the nodes the option returns the map; between them it is closer
-    to the analytic field.
+    """At the nodes the option returns the map; between them it is
+    closer to the analytic field.
     """
     nodes_r = np.linspace(0.05, 0.5, 46)[5:40:7]
     nodes_t = np.linspace(0, 2 * np.pi, 361)[3:350:37]
@@ -217,7 +218,8 @@ def test_hermite_nodes_and_accuracy(workdir):
 
 
 def test_atan2_azimuth_near_the_x_axis(workdir):
-    """At theta = 1e-9 rad atan2 gives the azimuth to rounding; arccos(x /
+    """At theta = 1e-9 rad atan2 gives the azimuth to rounding; arccos(x
+    /
     r) loses it (error ~ eps / sin theta).
     """
     theta = 1e-9 * np.arange(1, 6)

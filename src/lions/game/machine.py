@@ -1,5 +1,5 @@
-"""Control-room model of a cyclotron for the missions: macroparticles from
-the source to the target, turn by turn.
+"""Control-room model of a cyclotron for the missions: macroparticles
+from the source to the target, turn by turn.
 
 Tier T0: closed forms along the machine, no tracked field map. It keeps
 what a tuner meets: frequency and field are coupled, the harmonic sets
@@ -24,12 +24,15 @@ BEHIND_RF = 0.2  # cos(phi) under this: lost on the dee structure
 
 @dataclass
 class Ion:
+    """An ion species: mass number and charge."""
+
     name: str
     mass_number: float
     charge: float
 
     @property
     def rest_mev(self):
+        """Rest energy [MeV]."""
         return (
             physics.PROTON_MEV
             if self.mass_number == 1 and self.charge == 1
@@ -38,9 +41,11 @@ class Ion:
 
     @property
     def mass_kg(self):
+        """Mass [kg]."""
         return self.rest_mev * 1e6 * E_CHARGE / C**2
 
     def gamma(self, w_mev):
+        """Lorentz factor at the energy w_mev [MeV]."""
         return 1 + w_mev / self.rest_mev
 
     def rigidity(self, w_mev):
@@ -49,6 +54,9 @@ class Ion:
         return np.sqrt(g * g - 1) * self.mass_kg * C / (self.charge * E_CHARGE)
 
     def f_rev(self, w_mev, b):
+        """Revolution frequency [Hz] at the energy w_mev [MeV] and the
+        field b [T].
+        """
         return (
             self.charge
             * E_CHARGE
@@ -101,6 +109,10 @@ class Errors:
 
 @dataclass
 class Beam:
+    """Result of one pass: extracted beam, radial probe and spot at the
+    target.
+    """
+
     extracted_ua: float
     transmission: float
     w_mean: float  # MeV, total
@@ -155,8 +167,8 @@ def deflector_nominal(machine, ion, w_mev):
 
 
 def start_phases(knobs, errors):
-    """RF phase [rad] of each macroparticle at injection, in [-pi, pi). 0
-    is the crest.
+    """RF phase [rad] of each macroparticle at injection, in [-pi, pi).
+    0 is the crest.
     """
     phi_u = np.linspace(-np.pi, np.pi, MACROPARTICLES, endpoint=False)
     phi = (
@@ -175,15 +187,17 @@ def start_heights(machine, draws):
 
 
 def turn_limit(machine, ion, knobs, b0, h):
-    """Turns after which a macroparticle still circulating counts as lost."""
+    """Turns after which a macroparticle still circulating counts as
+    lost."""
     full_gain = abs(energy_gain(machine, ion, knobs['dee_kv'], h, 0.0))
     return 3 * machine_energy(machine, ion, b0) / max(full_gain, 1e-6) + 50
 
 
 def run(machine, ion, knobs, errors, draws):
-    """One pass. The harmonic is not a knob: it is the integer nearest f_rf
-    / f_rev at injection. knobs: rf_mhz, dee_kv, phase_deg, buncher,
-    source_ua, b0, trim, deflector_kv, steer_x, steer_y, quad, slit.
+    """One pass. The harmonic is not a knob: it is the integer nearest
+    f_rf / f_rev at injection. knobs: rf_mhz, dee_kv, phase_deg,
+    buncher, source_ua, b0, trim, deflector_kv, steer_x, steer_y, quad,
+    slit.
 
     draws: fixed standard normals (MACROPARTICLES, 3) for this seed.
     """

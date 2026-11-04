@@ -1,5 +1,5 @@
-"""Deck reader and writer: round trips, every optional section, run from a
-Deck object.
+"""Deck reader and writer: round trips, every optional section, run from
+a Deck object.
 """
 
 from pathlib import Path

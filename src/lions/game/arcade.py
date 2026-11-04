@@ -45,10 +45,14 @@ CONTROLS = {
     'thomas': 'UP DOWN: FLUTTER F   LEFT RIGHT: SPIRAL XI',
 }
 REPLAY_FRAMES = 5  # frames per pass replayed from a tuning method
-MISSION_CONTROLS = 'UP DOWN: PICK A KNOB   LEFT RIGHT: TURN IT   SHIFT: FINE   HOLD SPACE: BEAM ON'
+MISSION_CONTROLS = (
+    'UP DOWN: PICK A KNOB   LEFT RIGHT: TURN IT   SHIFT: FINE   HOLD '
+    'SPACE: BEAM ON'
+)
 
 
 def wrapped(text, width):
+    """Wrap text at word boundaries to a line width in characters."""
     lines, line = [], ''
     for word in text.split():
         if len(line) + len(word) + 1 > width:
@@ -60,6 +64,8 @@ def wrapped(text, width):
 
 
 class Arcade(QWidget):
+    """The game window: draws the current stage and handles the keys."""
+
     def __init__(self, store=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle('ION RUSH')
@@ -85,6 +91,7 @@ class Arcade(QWidget):
         self.timer.start(16)
 
     def scanlines(self):
+        """A pixmap of dark horizontal lines, one every 3 pixels."""
         pixmap = QPixmap(W, H)
         pixmap.fill(Qt.transparent)
         p = QPainter(pixmap)
@@ -97,6 +104,9 @@ class Arcade(QWidget):
     # ---------- flow
 
     def frame(self):
+        """Advance the clock and the current state by one frame, then
+        repaint.
+        """
         self.clock += DT
         if self.state == 'play':
             self.play_step()
@@ -107,21 +117,27 @@ class Arcade(QWidget):
         self.update()
 
     def new_game(self):
+        """Start a game: full lives, zero score, back to the menu."""
         self.lives, self.total, self.choice = LIVES, 0, 0
         self.completed = set()
         self.state = 'menu'
 
     def menu_items(self):
+        """The menu lines: level 0, then one line per mission."""
         return [
             ('LEVEL 0', 'HOW A CYCLOTRON WORKS', self.level0),
             *((m.mission_id, m.title, [m]) for m in self.missions),
         ]
 
     def choose(self):
+        """Select the stages of the highlighted menu line and show their
+        brief.
+        """
         self.stages, self.index = self.menu_items()[self.choice][2], 0
         self.state = 'brief'
 
     def current_stage(self):
+        """The stage on screen, or None."""
         return (
             getattr(self, 'stage', None)
             if self.state in ('play', 'tuning', 'clear', 'lost')
@@ -131,12 +147,16 @@ class Arcade(QWidget):
         )
 
     def show_behind(self):
+        """Open the window of what runs behind, or bring it to the
+        front.
+        """
         if self.behind is None:
             self.behind = Behind(self)
         self.behind.show()
         self.behind.raise_()
 
     def closeEvent(self, event):  # noqa: N802 (Qt)
+        """Stop tuning, training, the behind window and the timer."""
         self.end_tuning()
         self.end_training()
         if self.behind:
@@ -159,17 +179,22 @@ class Arcade(QWidget):
         self.state = 'pick'
 
     def end_tuning(self):
+        """Stop the tuning method, if one is running."""
         if self.tuning:
             self.tuning.stop()
         self.tuning = None
 
     def end_training(self):
+        """Kill the training process, if one is running."""
         if self.training:
             self.training.kill()
             self.training.wait()
         self.training = None
 
     def start_method(self):
+        """Start the selected method. A policy with no saved file is
+        trained first.
+        """
         method = METHODS[self.method_line]
         if method.missing():
             return
@@ -203,6 +228,9 @@ class Arcade(QWidget):
         self.state = 'tuning'
 
     def watch_training(self):
+        """Poll the training process: exit code 0 starts the method, any
+        other code fails.
+        """
         code = self.training.poll()
         if code is None:
             return
@@ -213,6 +241,9 @@ class Arcade(QWidget):
             self.training_failed, self.state = True, 'pick'
 
     def training_progress(self):
+        """The training progress from the .progress file, 0.0 if
+        unreadable.
+        """
         path = policy_path(self.stages[self.index].mission_id).with_suffix(
             '.progress'
         )
@@ -247,6 +278,9 @@ class Arcade(QWidget):
                 )
 
     def apply_pass(self, record):
+        """Set the knobs and the field error of the stage to a recorded
+        pass.
+        """
         s = self.stage
         s.knobs.update(record['knobs'])
         s.errors.field = record['field']
@@ -261,6 +295,7 @@ class Arcade(QWidget):
         self.state = 'play'
 
     def start_stage(self, tutorial=False):
+        """Reset the selected stage with a new random seed, play it."""
         self.stage = self.stages[self.index]
         self.tutorial = tutorial
         self.stage.tutorial = tutorial
@@ -270,6 +305,9 @@ class Arcade(QWidget):
         self.state = 'play'
 
     def play_step(self):
+        """Advance the stage by one frame DT from the held keys, and
+        handle its end.
+        """
         ax = (Qt.Key_Right in self.keys) - (Qt.Key_Left in self.keys)
         ax = ax * 0.1 if Qt.Key_Shift in self.keys else ax
         ay = (Qt.Key_Up in self.keys) - (Qt.Key_Down in self.keys)
@@ -298,6 +336,9 @@ class Arcade(QWidget):
                 self.state = 'lost' if self.lives else 'over'
 
     def press_start(self):
+        """Handle ENTER, A or SPACE: go to the next screen for the
+        current state.
+        """
         state = self.state
         if state == 'attract':
             self.state = 'consent'
@@ -336,6 +377,7 @@ class Arcade(QWidget):
                 self.state = 'attract'
 
     def keyPressEvent(self, event):  # noqa: N802 (Qt)
+        """Record the key and act on it according to the state."""
         key = event.key()
         if event.isAutoRepeat():
             return
@@ -403,10 +445,12 @@ class Arcade(QWidget):
             )
 
     def keyReleaseEvent(self, event):  # noqa: N802 (Qt)
+        """Forget the released key."""
         if not event.isAutoRepeat():
             self.keys.discard(event.key())
 
     def edit_initials(self, key):
+        """Change or confirm the letter of the initials."""
         letter = ord(self.initials[self.letter]) - 65
         if key in (Qt.Key_Up, Qt.Key_Down):
             self.initials[self.letter] = chr(
@@ -421,6 +465,7 @@ class Arcade(QWidget):
     # ---------- drawing tools
 
     def paintEvent(self, _):  # noqa: N802 (Qt)
+        """Paint the current state on the scaled virtual screen."""
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), BACK)
@@ -436,6 +481,7 @@ class Arcade(QWidget):
         p.end()
 
     def text(self, x, y, string, size=20, color=WHITE, align='center'):
+        """Draw glowing text at x, y. align sets which edge x is."""
         p = self.p
         font = QFont(FONT, size, QFont.Bold)
         font.setStyleHint(QFont.Monospace)
@@ -456,12 +502,16 @@ class Arcade(QWidget):
         p.drawText(rect, flag, string)
 
     def block(self, y, string, width, size=16, color=WHITE):
+        """Draw wrapped text from y; return the y below it."""
         for line in wrapped(string, width):
             self.text(W / 2, y, line, size, color)
             y += size * 1.7
         return y
 
     def neon(self, draw, color, width=2):
+        """Call draw twice, with a wide faint pen then a thin one, for a
+        glow.
+        """
         glow = QColor(color)
         glow.setAlpha(55)
         self.p.setBrush(Qt.NoBrush)
@@ -471,6 +521,7 @@ class Arcade(QWidget):
         draw()
 
     def line(self, x1, y1, x2, y2, color, width=2):
+        """Draw a glowing line."""
         self.neon(
             lambda: self.p.drawLine(QPointF(x1, y1), QPointF(x2, y2)),
             color,
@@ -478,11 +529,13 @@ class Arcade(QWidget):
         )
 
     def circle(self, x, y, r, color, width=2):
+        """Draw a glowing circle of radius r."""
         self.neon(
             lambda: self.p.drawEllipse(QPointF(x, y), r, r), color, width
         )
 
     def ion(self, x, y, color=WHITE):
+        """Draw an ion as a glowing dot."""
         glow = QColor(color)
         glow.setAlpha(70)
         self.p.setPen(Qt.NoPen)
@@ -493,6 +546,9 @@ class Arcade(QWidget):
         self.p.setBrush(Qt.NoBrush)
 
     def bar(self, x, y, width, height, fraction, color, label=''):
+        """Draw a bar filled to fraction, from 0 to 1, with an optional
+        label.
+        """
         self.p.setPen(QPen(DIM, 2))
         self.p.setBrush(Qt.NoBrush)
         self.p.drawRect(QRectF(x, y, width, height))
@@ -509,6 +565,9 @@ class Arcade(QWidget):
             self.text(x, y - 24, label, 13, color, 'left')
 
     def hud(self):
+        """Draw the label, the stage title, the lives, and the helper or
+        the message.
+        """
         s = self.stage
         label = (
             'TUNING METHOD'
@@ -544,6 +603,7 @@ class Arcade(QWidget):
         return ''
 
     def helper(self):
+        """Draw the helper box with the advice and its explanation."""
         mission = isinstance(self.stage, Mission)
         if not mission:
             self.advice = self.coach.advise()
@@ -588,6 +648,7 @@ class Arcade(QWidget):
     # ---------- screens
 
     def draw_attract(self):
+        """Draw the attract screen."""
         self.spiral(W / 2, 300, 135)
         self.text(W / 2, 40, 'ION RUSH', 58, CYAN)
         self.text(
@@ -606,6 +667,7 @@ class Arcade(QWidget):
             self.text(W / 2, H - 56, 'PRESS ENTER', 22, GREEN)
 
     def spiral(self, cx, cy, radius):
+        """Draw the spiral orbit with an ion moving along it."""
         turns, n = 5, 400
         phase = self.clock * 1.2 % 1
         path = QPainterPath(QPointF(cx, cy))
@@ -622,16 +684,20 @@ class Arcade(QWidget):
         )
 
     def draw_consent(self):
+        """Draw the consent screen for logging runs."""
         self.text(W / 2, 170, 'HELP THE RESEARCH?', 32, CYAN)
         y = self.block(
             270,
-            'Log your runs on this machine: knobs, readings, scores, with a random id. No name and no initials. '
-            'They can be used to compare human tuning with optimisers and policies.',
+            'Log your runs on this machine: knobs, readings, scores, '
+            'with a random id. No name and no initials. '
+            'They can be used to compare human tuning with optimisers '
+            'and policies.',
             56,
         )
         self.text(W / 2, y + 60, 'Y: YES     N: NO', 24, GREEN)
 
     def draw_menu(self):
+        """Draw the menu screen."""
         self.text(W / 2, 50, 'THE SHIFT', 40, CYAN)
         self.text(
             W / 2,
@@ -682,18 +748,25 @@ class Arcade(QWidget):
         self.text(
             W / 2,
             H - 36,
-            'UP DOWN: CHOOSE A LINE   B: WHAT RUNS BEHIND   ESC: END THE SHIFT',
+            (
+                'UP DOWN: CHOOSE A LINE   B: WHAT RUNS BEHIND   ESC: END '
+                'THE SHIFT'
+            ),
             12,
             DIM,
         )
 
     def draw_pick(self):
+        """Draw the list of tuning methods with their results."""
         s = self.stages[self.index]
         self.text(W / 2, 24, f'WHO TUNES {s.title}?', 30, CYAN)
         self.text(
             W / 2,
             76,
-            f'EACH METHOD SAME MACHINE, {BUDGET} PASSES AT MOST. NO POINTS, NO LIVES',
+            (
+                f'EACH METHOD SAME MACHINE, {BUDGET} PASSES AT MOST. NO '
+                'POINTS, NO LIVES'
+            ),
             13,
             MAGENTA,
         )
@@ -729,7 +802,10 @@ class Arcade(QWidget):
             self.text(
                 W / 2,
                 y,
-                f'NEEDS THE {method.extra.upper()} EXTRA: uv run --extra game --extra {method.extra} lions-arcade',
+                (
+                    f'NEEDS THE {method.extra.upper()} EXTRA: uv run '
+                    f'--extra game --extra {method.extra} lions-arcade'
+                ),
                 13,
                 RED,
             )
@@ -737,7 +813,10 @@ class Arcade(QWidget):
             self.text(
                 W / 2,
                 y,
-                f'TRAINING FAILED. TRY: uv run --extra game --extra rl python -m lions.game.train {s.mission_id}',
+                (
+                    'TRAINING FAILED. TRY: uv run --extra game --extra '
+                    f'rl python -m lions.game.train {s.mission_id}'
+                ),
                 11,
                 RED,
             )
@@ -759,7 +838,7 @@ class Arcade(QWidget):
         self.text(W / 2, H - 34, 'B: WHAT RUNS BEHIND   ESC: BACK', 12, DIM)
 
     def method_state(self, method, s):
-        """The result on this machine, or for a policy its held-out test."""
+        """The result on this machine, or a policy's held-out test."""
         if method.name in self.tuned:
             reached, best, true = self.tuned[method.name]
             if not reached:
@@ -781,6 +860,7 @@ class Arcade(QWidget):
         return ''
 
     def draw_training(self):
+        """Draw the training progress of the PPO policy."""
         s = self.stages[self.index]
         self.text(W / 2, 170, f'TRAINING PPO ON {s.title}', 30, CYAN)
         self.bar(
@@ -790,17 +870,26 @@ class Arcade(QWidget):
             26,
             self.training_progress(),
             GREEN,
-            f'{100 * self.training_progress():.0f}% OF {RL_STEPS["ppo"]} PASSES, {time.monotonic() - self.training_start:.0f} S',
+            (
+                f'{100 * self.training_progress():.0f}% OF '
+                f'{RL_STEPS["ppo"]} PASSES, '
+                f'{time.monotonic() - self.training_start:.0f} S'
+            ),
         )
         self.block(
             360,
-            f'A policy pays up front: {RL_STEPS["ppo"]} passes on other conditions here, against {BUDGET} per run for the other methods.',
+            (
+                f'A policy pays up front: {RL_STEPS["ppo"]} passes on '
+                f'other conditions here, against {BUDGET} per run for the '
+                'other methods.'
+            ),
             60,
             15,
         )
         self.text(W / 2, H - 50, 'ESC: STOP', 14, DIM)
 
     def draw_tuning(self):
+        """Draw the control room with the replay of a tuning method."""
         self.control_room()
         self.hud()
         t = self.tuning
@@ -852,7 +941,10 @@ class Arcade(QWidget):
                 if not reached
                 else f'IN SPEC AFTER {reached} PASSES'
                 if true
-                else f'READS IN SPEC AFTER {reached} PASSES. TRUE BEAM OUT OF SPEC'
+                else (
+                    f'READS IN SPEC AFTER {reached} PASSES. TRUE BEAM OUT '
+                    'OF SPEC'
+                )
             )
             self.text(
                 left + 10,
@@ -872,6 +964,7 @@ class Arcade(QWidget):
         )
 
     def draw_walkthrough(self):
+        """Draw the tutorial steps of a mission."""
         s = self.stages[self.index]
         self.text(W / 2, 28, f'TUTORIAL: {s.title}', 28, CYAN)
         y = self.block(78, s.client, 74, 13, YELLOW) + 8
@@ -892,6 +985,7 @@ class Arcade(QWidget):
         )
 
     def draw_brief(self):
+        """Draw the brief of a stage."""
         s = self.stages[self.index]
         mission = isinstance(s, Mission)
         self.text(
@@ -930,6 +1024,7 @@ class Arcade(QWidget):
             self.text(W / 2, H - 80, 'PRESS ENTER', 22, GREEN)
 
     def draw_clear(self):
+        """Draw the stage clear screen."""
         s = self.stage
         self.text(W / 2, 130, s.title, 28, YELLOW)
         self.text(W / 2, 180, s.message, 22, GREEN if s.success else RED)
@@ -938,6 +1033,7 @@ class Arcade(QWidget):
         self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_lost(self):
+        """Draw the screen shown after a lost stage."""
         s = self.stage
         self.text(W / 2, 200, s.message, 28, RED)
         self.text(W / 2, 280, f'{self.lives} IONS LEFT', 22, MAGENTA)
@@ -945,16 +1041,21 @@ class Arcade(QWidget):
         self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_over(self):
+        """Draw the game over screen."""
         self.text(W / 2, 230, 'GAME OVER', 56, RED)
         self.text(W / 2, 340, f'SCORE {self.total:07d}', 26, CYAN)
         self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_won(self):
+        """Draw the level 0 clear screen."""
         self.text(W / 2, 170, 'LEVEL 0 CLEAR', 46, GREEN)
         self.text(W / 2, 280, f'SCORE {self.total:07d}', 26, CYAN)
         self.block(
             370,
-            'Next: the real machine. Central region, deflector, the CIME layout. Needs the CIME map.',
+            (
+                'Next: the real machine. Central region, deflector, the '
+                'CIME layout. Needs the CIME map.'
+            ),
             54,
             16,
             YELLOW,
@@ -962,6 +1063,7 @@ class Arcade(QWidget):
         self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_initials(self):
+        """Draw the high score entry screen."""
         self.text(W / 2, 170, 'NEW HIGH SCORE', 38, YELLOW)
         self.text(W / 2, 250, f'{self.total:07d}', 28, CYAN)
         for i, letter in enumerate(self.initials):
@@ -975,6 +1077,7 @@ class Arcade(QWidget):
         self.text(W / 2, 480, 'UP DOWN: LETTER   SPACE: NEXT', 16, DIM)
 
     def draw_play(self):
+        """Draw the stage being played."""
         if isinstance(self.stage, Mission):
             self.control_room()
         else:
@@ -984,6 +1087,9 @@ class Arcade(QWidget):
     # ---------- control room
 
     def control_room(self):
+        """Draw the control room of a mission: knobs, probes, readings
+        and its panel.
+        """
         s = self.stage
         if self.coach:
             self.advice = self.coach.advise()
@@ -1045,9 +1151,13 @@ class Arcade(QWidget):
 
     @staticmethod
     def current_text(ua):
+        """Format a current in uA, or in nA below 1 uA."""
         return f'{ua:.1f} UA' if ua >= 1 else f'{1e3 * ua:.2f} NA'
 
     def knob_panel(self, s):
+        """Draw one row per knob: label, value with unit, and a position
+        bar.
+        """
         y = 60
         row = min(50, 560 / len(s.specs))
         for i, spec in enumerate(s.specs):
@@ -1081,7 +1191,10 @@ class Arcade(QWidget):
             self.text(
                 326,
                 y - 2,
-                f"{value:.{digits}f} {spec['unit'] if spec['unit'] != '1' else ''}".strip(),
+                (
+                    f"{value:.{digits}f} "
+                    f"{spec['unit'] if spec['unit'] != '1' else ''}"
+                ).strip(),
                 13,
                 color,
                 'right',
@@ -1110,6 +1223,9 @@ class Arcade(QWidget):
         high=None,
         mask=None,
     ):
+        """Draw ys against xs in a frame and return pos(u, v), the point
+        of (u, v).
+        """
         self.p.setPen(QPen(DIM, 1))
         self.p.setBrush(Qt.NoBrush)
         self.p.drawRect(QRectF(x, y, width, height))
@@ -1136,6 +1252,9 @@ class Arcade(QWidget):
         return pos
 
     def crosshair(self, x, y, radius, s, limit_mm, title, spot=None):
+        """Draw a target ring of radius limit_mm with the beam position
+        and spot, or NO BEAM.
+        """
         scale = radius / (2 * limit_mm)
         self.circle(x, y, limit_mm * scale, GREEN)
         self.line(x - radius, y, x + radius, y, DIM, 1)
@@ -1153,6 +1272,7 @@ class Arcade(QWidget):
         self.text(x, y - radius - 24, title, 11, CYAN)
 
     def lights(self, x, y, rows):
+        """Draw one green or red light per (label, good) row."""
         for label, good in rows:
             self.p.setPen(Qt.NoPen)
             self.p.setBrush(GREEN if good else RED)
@@ -1162,6 +1282,9 @@ class Arcade(QWidget):
             y += 26
 
     def panel_therapy(self, s, x, y, width, height):
+        """Draw the therapy panel: dose against depth, crosshair, dose
+        bars.
+        """
         p = s.p
         d0, d1 = s.depth_axis[0], s.depth_axis[-1]
         w = width - 200
@@ -1183,7 +1306,10 @@ class Arcade(QWidget):
         self.text(
             x,
             y + 154,
-            f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   SPOT {s.spot():.1f} MM',
+            (
+                f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   '
+                f'SPOT {s.spot():.1f} MM'
+            ),
             13,
             WHITE,
             'left',
@@ -1198,7 +1324,10 @@ class Arcade(QWidget):
             20,
             s.delivered / (p['dose_gy'] * (1 + p['dose_tolerance'])),
             GREEN,
-            f"TUMOUR {s.delivered:.1f} / {p['dose_gy']:.1f} GY   RATE {s.rate:.2f} GY/S",
+            (
+                f"TUMOUR {s.delivered:.1f} / {p['dose_gy']:.1f} GY   RATE "
+                f"{s.rate:.2f} GY/S"
+            ),
         )
         ok = x + width * (1 - p['dose_tolerance']) / (1 + p['dose_tolerance'])
         self.line(ok, y + 202, ok, y + 230, YELLOW)
@@ -1213,6 +1342,9 @@ class Arcade(QWidget):
         )
 
     def panel_isotope(self, s, x, y, width, height):
+        """Draw the isotope panel: activity, power and loss bars,
+        crosshair.
+        """
         p = s.p
         self.bar(
             x,
@@ -1245,7 +1377,10 @@ class Arcade(QWidget):
         self.text(
             x,
             y + 190,
-            f"SATURATION {p['yield_gbq_ua']:.0f} GBQ/UA AT {p['w_ref']:.0f} MEV",
+            (
+                f"SATURATION {p['yield_gbq_ua']:.0f} GBQ/UA AT "
+                f"{p['w_ref']:.0f} MEV"
+            ),
             12,
             DIM,
             'left',
@@ -1261,6 +1396,7 @@ class Arcade(QWidget):
         )
 
     def panel_experiment(self, s, x, y, width, height):
+        """Draw the experiment panel: lights, crosshair, hold bar."""
         p, b = s.p, s.beam
         energy = (
             abs(b.w_mean / p['w_target'] - 1) <= p['w_tolerance']
@@ -1272,19 +1408,32 @@ class Arcade(QWidget):
             y,
             (
                 (
-                    f"ENERGY {b.w_mean / s.ion.mass_number:.3f} MEV/U, WANT {p['w_target'] / s.ion.mass_number:.2f}",
+                    (
+                        f"ENERGY {b.w_mean / s.ion.mass_number:.3f} "
+                        "MEV/U, WANT "
+                        f"{p['w_target'] / s.ion.mass_number:.2f}"
+                    ),
                     energy,
                 ),
                 (
-                    f"SPREAD {100 * b.w_spread:.2f}%, MAX {100 * p['spread_max']:.1f}%",
+                    (
+                        f"SPREAD {100 * b.w_spread:.2f}%, MAX "
+                        f"{100 * p['spread_max']:.1f}%"
+                    ),
                     b.w_mean > 0 and b.w_spread <= p['spread_max'],
                 ),
                 (
-                    f"CURRENT {b.extracted_ua:.2f} UA, {p['current_min']:.1f} TO {p['current_max']:.1f}",
+                    (
+                        f"CURRENT {b.extracted_ua:.2f} UA, "
+                        f"{p['current_min']:.1f} TO {p['current_max']:.1f}"
+                    ),
                     p['current_min'] <= b.extracted_ua <= p['current_max'],
                 ),
                 (
-                    f"ON AXIS {math.hypot(b.x, b.y):.1f} MM, MAX {p['position_mm']:.0f}",
+                    (
+                        f"ON AXIS {math.hypot(b.x, b.y):.1f} MM, MAX "
+                        f"{p['position_mm']:.0f}"
+                    ),
                     math.hypot(b.x, b.y) <= p['position_mm'],
                 ),
                 (
@@ -1303,10 +1452,16 @@ class Arcade(QWidget):
             22,
             s.delivered / p['hold_s'],
             GREEN,
-            f"BEAM IN SPEC {s.delivered:.1f} / {p['hold_s']:.0f} S   {s.ion.name}   HARMONIC {b.harmonic}",
+            (
+                f"BEAM IN SPEC {s.delivered:.1f} / {p['hold_s']:.0f} S   "
+                f"{s.ion.name}   HARMONIC {b.harmonic}"
+            ),
         )
 
     def panel_qualification(self, s, x, y, width, height):
+        """Draw the qualification panel: spec lights, crosshair, fluence
+        bars.
+        """
         p = s.p
         beam = s.has_beam()
         self.lights(
@@ -1314,21 +1469,33 @@ class Arcade(QWidget):
             y,
             (
                 (
-                    f"ON SAMPLE {s.w_sample():.1f} MEV, WANT {p['w_sample']:.0f}",
+                    (
+                        f"ON SAMPLE {s.w_sample():.1f} MEV, WANT "
+                        f"{p['w_sample']:.0f}"
+                    ),
                     beam
                     and abs(s.w_sample() / p['w_sample'] - 1)
                     <= p['w_sample_tolerance'],
                 ),
                 (
-                    f"FLUX {s.flux():.1e}, {p['flux_min']:.0e} TO {p['flux_max']:.0e} /CM2/S",
+                    (
+                        f"FLUX {s.flux():.1e}, {p['flux_min']:.0e} TO "
+                        f"{p['flux_max']:.0e} /CM2/S"
+                    ),
                     beam and p['flux_min'] <= s.flux() <= p['flux_max'],
                 ),
                 (
-                    f"EDGE OVER CENTRE {s.edge_ratio():.2f}, MIN {p['uniformity']:.2f}",
+                    (
+                        f"EDGE OVER CENTRE {s.edge_ratio():.2f}, MIN "
+                        f"{p['uniformity']:.2f}"
+                    ),
                     beam and s.edge_ratio() >= p['uniformity'],
                 ),
                 (
-                    f"SPOT {s.spot():.1f} MM ON A {2 * p['sample_radius_mm']:.0f} MM SAMPLE",
+                    (
+                        f"SPOT {s.spot():.1f} MM ON A "
+                        f"{2 * p['sample_radius_mm']:.0f} MM SAMPLE"
+                    ),
                     beam,
                 ),
             ),
@@ -1356,6 +1523,9 @@ class Arcade(QWidget):
         )
 
     def panel_isol(self, s, x, y, width, height):
+        """Draw the isol panel: energy, power and power density bars,
+        crosshair.
+        """
         p = s.p
         self.bar(
             x,
@@ -1382,7 +1552,10 @@ class Arcade(QWidget):
             18,
             s.density() / p['density_limit'],
             RED,
-            f"POWER DENSITY {1e3 * s.density():.1f} / {1e3 * p['density_limit']:.0f} W/MM2",
+            (
+                f"POWER DENSITY {1e3 * s.density():.1f} / "
+                f"{1e3 * p['density_limit']:.0f} W/MM2"
+            ),
         )
         self.crosshair(
             x + width - 90, y + 90, 80, s, p['target_radius_mm'], 'TARGET'
@@ -1391,6 +1564,7 @@ class Arcade(QWidget):
     # ---------- stage views
 
     def view_larmor(self):
+        """Draw the Larmor stage: target ring, shot arc and readouts."""
         s = self.stage
         cx, cy, scale = W / 2 - 110, H / 2 + 20, 255 / s.p['target_max']
         r = s.target * scale
@@ -1429,6 +1603,7 @@ class Arcade(QWidget):
         self.text(x, 560, 'RHO = P / (Q B)', 13, DIM, 'left')
 
     def arrow(self, x, y, angle, color):
+        """Draw an arrowhead with its tip at x, y along angle."""
         for side in (2.6, -2.6):
             self.line(
                 x,
@@ -1439,6 +1614,9 @@ class Arcade(QWidget):
             )
 
     def gap_view(self, reference_radius):
+        """Draw the two dees and the arcs flown so far, with the ion on
+        the last arc.
+        """
         s = self.stage
         cx, cy, radius = 330, H / 2 + 20, 280
         scale = radius / reference_radius
@@ -1483,6 +1661,9 @@ class Arcade(QWidget):
         )
 
     def phase_dial(self, x, y, ghost=None):
+        """Draw the RF phase dial: crest arc, phase needle, optional
+        ghost needle.
+        """
         s = self.stage
         r = 72
         self.circle(x, y, r, DIM)
@@ -1521,6 +1702,7 @@ class Arcade(QWidget):
         self.text(x, y - r - 30, 'RF PHASE', 14, CYAN)
 
     def view_dee_beat(self):
+        """Draw the dee beat stage."""
         s = self.stage
         self.gap_view(physics.radius(s.p['w_target'], s.p['b']))
         x = W - 150
@@ -1542,6 +1724,7 @@ class Arcade(QWidget):
             self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
 
     def view_trim_coils(self):
+        """Draw the trim coils stage."""
         s = self.stage
         gamma_ratio = physics.gamma(s.p['w_target']) / physics.gamma(
             s.p['w_start']
@@ -1567,6 +1750,9 @@ class Arcade(QWidget):
             self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
 
     def tunnel(self, top=110, bottom=470):
+        """Draw the two gap walls, the ion trail and the ion at height
+        z.
+        """
         s = self.stage
         mid, scale = (top + bottom) / 2, (bottom - top) / 2 / s.p['gap']
         for y in (top, bottom):
@@ -1589,6 +1775,7 @@ class Arcade(QWidget):
         )
 
     def view_fallout(self):
+        """Draw the fallout stage."""
         s = self.stage
         self.tunnel()
         k = physics.isochronous_index(s.w)
@@ -1601,6 +1788,7 @@ class Arcade(QWidget):
         self.bar(W - 280, 535, 220, 22, s.charges / s.p['charges'], CYAN)
 
     def view_thomas(self):
+        """Draw the Thomas focusing stage."""
         s = self.stage
         self.tunnel()
         self.bar(
@@ -1657,6 +1845,7 @@ class Arcade(QWidget):
 
 
 def main():
+    """Open the arcade window and run the Qt event loop."""
     app = QApplication(sys.argv)
     window = Arcade()
     window.show()

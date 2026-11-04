@@ -38,6 +38,7 @@ COLORS = {
 
 
 def log_ticks(ax, ticks):
+    """Label the x axis of ax at ticks, no minor tick labels."""
     ax.set_xticks(ticks, [str(t) for t in ticks])
     ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
 
@@ -65,6 +66,7 @@ def psi_band():
 
 
 def table(path):
+    """Read a Parquet table under RUNS; record its sha256 in SOURCES."""
     path = RUNS / path
     SOURCES[str(path.relative_to(ROOT))] = hashlib.sha256(
         path.read_bytes()
@@ -82,26 +84,30 @@ def num(name, value, digits=2):
     if value != 0 and (abs(value) < 1e-2 or abs(value) >= 1e4):
         text = f'{value:.{digits - 1}e}'
     elif abs(value) >= 10**digits:  # e.g. 770, not 7.7e+02
-        text = f'{round(value, digits - 1 - int(np.floor(np.log10(abs(value))))):.0f}'
+        text = f'{round(value, digits - 1 - int(np.floor(np.log10(abs(value))))):.0f}'  # noqa: E501 (f-string, Python 3.10)
     else:
         text = f'{value:.{digits}g}'
     NUMBERS[name] = rf'\num{{{text}}}'
 
 
 def raw(name, text):
+    """Set the LaTeX macro name to text, as given."""
     NUMBERS[name] = text
 
 
 def sci(value, digits=2):
+    """Format value as a siunitx \\num in scientific form."""
     return rf'\num{{{value:.{digits - 1}e}}}'
 
 
 def save(fig, name):
+    """Save fig as GEN/name.pdf and close it."""
     fig.savefig(GEN / f'{name}.pdf')
     plt.close(fig)
 
 
 def write_table(name, header, rows):
+    """Write GEN/tab_name.tex: a booktabs table of header and rows."""
     lines = [
         r'\begin{tabular}{' + 'l' + 'r' * (len(header) - 1) + '}',
         r'\toprule',
@@ -115,6 +121,7 @@ def write_table(name, header, rows):
 
 
 def order(e1, e2):
+    """Observed convergence order, log2 of |e1| / |e2|."""
     return np.log2(abs(e1) / abs(e2))
 
 
@@ -122,15 +129,15 @@ def order(e1, e2):
 
 
 def boris_polygon():
-    """Boris in a uniform field, n steps per turn: positions on a circle of
-    radius rho sqrt(1 + (w dt/2)^2).
+    """Boris in a uniform field, n steps per turn: positions on a circle
+    of radius rho sqrt(1 + (w dt/2)^2).
     """
     n, rho = 8, 1.0
     wdt = 2 * np.pi / n
     angle = (
         2 * np.arctan(wdt / 2)
-        # Boris rotation of p per step; |p| and the step length rho w dt are
-        # exact
+        # Boris rotation of p per step; |p| and the step length rho w dt
+        # are exact
     )
     phase = -angle / 2 + angle * np.arange(1, n + 1)
     steps = rho * wdt * np.column_stack([-np.sin(phase), np.cos(phase)])
@@ -269,8 +276,8 @@ def field_maps():
 
 
 def interpolation_kinks():
-    """Bz and dBz/dtheta along theta on the 3-sector master at one radius:
-    1 deg nodes, bilinear against Hermite.
+    """Bz and dBz/dtheta along theta on the 3-sector master at one
+    radius: 1 deg nodes, bilinear against Hermite.
     """
     path = RUNS / 'case_g1' / '3sector_master' / 'master.h5'
     with h5py.File(path) as f:
@@ -339,8 +346,8 @@ def interpolation_kinks():
 
 
 def interpolation_orders():
-    """Interpolation error bounds for one harmonic sin(2 pi theta / lambda)
-    sampled with N nodes per period.
+    """Interpolation error bounds for one harmonic sin(2 pi theta /
+    lambda) sampled with N nodes per period.
     """
     for n, key in ((18, 'Eighteen'), (54, 'FiftyFour')):
         kh = 2 * np.pi / n
@@ -352,6 +359,7 @@ def interpolation_orders():
 
 
 def case_a():
+    """Figure case_a and its numbers, from case_a.parquet."""
     d = table('case_a/case_a.parquet')
     fig, axes = plt.subplots(1, 2, figsize=(6.8, 2.7))
     fig.subplots_adjust(wspace=0.4)
@@ -435,6 +443,7 @@ def case_a():
 
 
 def case_b():
+    """Figures case_b0, case_b_scatter, numbers: case_b.parquet."""
     d = table('case_b/case_b.parquet')
     b0 = d[d.case == 'B0']
     exact = b0[b0.code == 'exact'].set_index(['energy_mev', 'metric']).value
@@ -658,6 +667,7 @@ def case_b():
 
 
 def case_d():
+    """Table d2 and numbers, from case_d.parquet."""
     d = table('case_d/case_d.parquet')
     v = d.set_index(['code', 'integrator', 'metric']).value
     rows = []
@@ -696,6 +706,7 @@ def case_d():
 
 
 def case_e():
+    """Figure case_e_fd, tables e_grad, e_cost: case_e.parquet."""
     d = table('case_e/case_e.parquet')
     g = d[d.param != 'validation']
     fig, ax = plt.subplots(figsize=(4.2, 2.8))
@@ -710,7 +721,8 @@ def case_e():
         )
     ax.axhline(1e-6, color='k', ls='--', lw=0.7, label='registered criterion')
     ax.set_xlabel(
-        'finite-difference step $h$ (relative for $s$; m for $r_0$; $\\beta\\gamma$ for $p_{r0}$)'
+        'finite-difference step $h$ (relative for $s$; m for $r_0$; '
+        '$\\beta\\gamma$ for $p_{r0}$)'
     )
     ax.set_ylabel('max |autograd/FD - 1|')
     ax.legend(
@@ -797,12 +809,15 @@ def case_e():
 E2_SITES = {
     'M3 CPU': 'case_e2_cpu/case_e2.parquet',
     'Apple GPU (MPS)': 'case_e2_mps/case_e2.parquet',
-    'A100 (Jean-Zay)': 'sites/jeanzay/case_e2/1791641_jean-zay-iam02/case_e2.parquet',
-    'H100 NVL (CC-IN2P3)': 'sites/cc/case_e2/62923301_ccwgslurm0200/case_e2.parquet',
+    'A100 (Jean-Zay)': 'sites/jeanzay/case_e2/'
+    '1791641_jean-zay-iam02/case_e2.parquet',
+    'H100 NVL (CC-IN2P3)': 'sites/cc/case_e2/'
+    '62923301_ccwgslurm0200/case_e2.parquet',
 }
 
 
 def case_e2():
+    """Figure case_e2 and table e2, from the E2_SITES tables."""
     fig, ax = plt.subplots(figsize=(4.6, 3.0))
     rows = []
     for (label, path), color in zip(
@@ -927,6 +942,7 @@ def case_e2():
 
 
 def g1():
+    """Figure g1 and its numbers, from the case G1 tables."""
     fig, axes = plt.subplots(2, 2, figsize=(6.8, 4.8), sharex=True)
     fig.subplots_adjust(wspace=0.35)
     for col, (name, s2, s3) in enumerate(
@@ -1064,7 +1080,8 @@ def g1():
         f4 = d2[d2['map'] == '4 deg']
         raw(
             f'G{name}FourDegFailed',
-            f'{len(f4[f4.metric == "failed"])} of {len(f4.groupby(["a", "steps_per_turn"]))}',
+            f'{len(f4[f4.metric == "failed"])} of '
+            f'{len(f4.groupby(["a", "steps_per_turn"]))}',
         )
     val = pd.concat(
         [
@@ -1089,6 +1106,7 @@ def g1():
 
 
 def g2():
+    """Figure g2_tunes, table g2, numbers: the case G2 tables."""
     s2 = table('case_g2/step2/case_g2_step2.parquet')
     s3 = table('case_g2/step3/case_g2_step3.parquet')
     s3 = s3[
@@ -1276,6 +1294,7 @@ def h_worst(d):
 
 
 def case_h():
+    """Figure h_matrix, h_* tables, numbers: the H_MAPS tables."""
     worst = {m: h_worst(table(p)) for m, p in H_MAPS.items()}
     panels = (
         ('3-sector', '1/3 deg'),
@@ -1297,7 +1316,8 @@ def case_h():
                     color=colors[field],
                     lw=0.9,
                     ms=3,
-                    label=f'{H_FIELDS[field]}, {"Boris" if integ == "boris" else "RK4"}',
+                    label=f'{H_FIELDS[field]}, '
+                    f'{"Boris" if integ == "boris" else "RK4"}',
                 )
         ax.axhline(1e-4, color='k', lw=0.7, ls=':')
         ax.set_title(f'{"PSI Ring" if m == "psi" else m}, {sp}', fontsize=8)
@@ -1411,8 +1431,10 @@ def case_h():
         rows.append(
             [
                 label,
-                f'{sci(c[field + "_boris"], 3)} ({c[field + "_boris"] / base:.2g})',
-                f'{sci(c[field + "_rk4"], 3)} ({c[field + "_rk4"] / base:.2g})',
+                f'{sci(c[field + "_boris"], 3)} '
+                f'({c[field + "_boris"] / base:.2g})',
+                f'{sci(c[field + "_rk4"], 3)} '
+                f'({c[field + "_rk4"] / base:.2g})',
             ]
         )
         num(
@@ -1480,6 +1502,7 @@ def case_h():
 
 
 def main():
+    """Write every figure, table and the .tex number files in GEN."""
     GEN.mkdir(exist_ok=True)
     for f in (
         boris_polygon,
@@ -1507,7 +1530,8 @@ def main():
         r'Table & sha256 (first 16) \\',
         r'\midrule',
         *(
-            rf'\texttt{{{k.replace("_", chr(92) + "_")}}} & \texttt{{{v[:16]}}} \\'
+            rf'\texttt{{{k.replace("_", chr(92) + "_")}}} & '
+            rf'\texttt{{{v[:16]}}} \\'
             for k, v in sorted(SOURCES.items())
         ),
         r'\bottomrule',
