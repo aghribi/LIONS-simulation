@@ -1117,3 +1117,16 @@ def test_model_slot_holds_t0_in_game_and_table_in_benchmark(
     m.knobs['rf_mhz'] *= 2 / 3
     m.refresh()
     assert not m.has_beam()
+
+
+def test_case_o_refuses_an_ion_with_more_than_one_nucleon(monkeypatch):
+    from pathlib import Path
+
+    pytest.importorskip('pyarrow')
+    repo = Path(__file__).parent.parent
+    monkeypatch.syspath_prepend(str(repo / 'benchmarks'))
+    import case_o
+
+    monkeypatch.setattr(case_o.case_v.case_p, 'A', 20)
+    with pytest.raises(ValueError, match='per nucleon'):
+        case_o.closed_orbit(None)

@@ -208,6 +208,11 @@ def momentum(w):
 
 def closed_orbit(mp):
     """Return the closed-orbit radius, m, as a spline of momentum."""
+    if case_v.case_p.A != 1:
+        raise ValueError(
+            'case_o: w_mev in the orbit table is per nucleon, momentum() '
+            'takes total energy: A = 1 only'
+        )
     rec = sorted(
         (r['w_mev'], r['r_co_m'])
         for r in pq.read_table(mp.dir / 'case_p_orbits.parquet').to_pylist()
