@@ -41,7 +41,9 @@ bench = [
     "scipy>=1.13",
 ]
 dev = [
+    "pycodestyle>=2.15.0",
     "pytest>=9.2.0",
+    "ruff>=0.17.3",
 ]
 docs = [
     "sphinx>=7",
