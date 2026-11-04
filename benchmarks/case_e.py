@@ -4,6 +4,7 @@ usage: uv run --group bench --with torch python benchmarks/case_e.py [outdir]
        uv run --group bench --with torch python benchmarks/case_e.py --cost N PARTICLES CHECKPOINT  (one cost point, JSON)
 Writes case_e.parquet.
 """
+
 import contextlib
 import io
 import json
@@ -32,9 +33,13 @@ from provenance import provenance  # noqa: E402
 from fields_b import B0, MAP, write_field  # noqa: E402
 
 torch.set_default_dtype(torch.float64)
-W, Z0 = 1.0, 1e-3                       # MeV, m
+W, Z0 = 1.0, 1e-3  # MeV, m
 STEPS = [360, 3600]
-FD = {'s': 1e-6, 'r0': 1e-7, 'pr0': 1e-7}   # s relative, r0 in m, pr0 in beta gamma
+FD = {
+    's': 1e-6,
+    'r0': 1e-7,
+    'pr0': 1e-7,
+}  # s relative, r0 in m, pr0 in beta gamma
 SWEEP = [1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9]
 COST_STEPS, COST_PARTICLES = [1_000, 10_000, 100_000], [1, 1000]
 OUTPUTS = ('r', 'pr', 'phase')
@@ -53,8 +58,15 @@ def load(n_steps, turns=1):
     d = lions.State()
     d.run.swap_bytes = 'n'
     with contextlib.redirect_stdout(io.StringIO()):
-        syn.write_deck('deck.dat', fhf=syn.revolution_frequency(W, B0), r0=syn.larmor_radius(W, B0), w0=W,
-                       z0=Z0, turns=turns, npaspt=n_steps)
+        syn.write_deck(
+            'deck.dat',
+            fhf=syn.revolution_frequency(W, B0),
+            r0=syn.larmor_radius(W, B0),
+            w0=W,
+            z0=Z0,
+            turns=turns,
+            npaspt=n_steps,
+        )
         lions.load(d, 'deck.dat')
     return d
 
@@ -66,8 +78,15 @@ class Port:
         f = d.field
         self.maps = [torch.tensor(a) for a in (f.bz, f.d2bz, f.dbzdx, f.dbzdy)]
         # Python floats: MPS has no float64, so numpy float64 scalars cannot enter its tensors
-        self.rmin, self.dr, self.dtheta = float(f.rmin), float(f.dr), float(f.dtheta)
-        self.bcoef, self.c_dt = float(d.bunch.boris_b_coef[0]), float(d.run.c_dt)
+        self.rmin, self.dr, self.dtheta = (
+            float(f.rmin),
+            float(f.dr),
+            float(f.dtheta),
+        )
+        self.bcoef, self.c_dt = (
+            float(d.bunch.boris_b_coef[0]),
+            float(d.run.c_dt),
+        )
 
     def fields(self, x, y, z, s):
         r = torch.sqrt(x * x + y * y)
@@ -79,11 +98,22 @@ class Port:
         d1, d2 = a - self.dr, b - self.dtheta
         c1, c2, c3, c4 = d1 * d2, a * d2, a * b, d1 * b
         vz = z * z * 0.5
-        cell = [[m[i + p, j + q] for p in (0, 1) for q in (0, 1)] for m in self.maps]
+        cell = [
+            [m[i + p, j + q] for p in (0, 1) for q in (0, 1)]
+            for m in self.maps
+        ]
         (b00, b01, b10, b11), (e00, e01, e10, e11) = cell[0], cell[1]
         h = 1.0 / (self.dr * self.dtheta)
-        bz = (c1 * (b00 - vz * e00) - c2 * (b10 - vz * e10) + c3 * (b11 - vz * e11) - c4 * (b01 - vz * e01)) * h
-        bx, by = ((c1 * g00 - c2 * g10 + c3 * g11 - c4 * g01) * z * h for g00, g01, g10, g11 in cell[2:])
+        bz = (
+            c1 * (b00 - vz * e00)
+            - c2 * (b10 - vz * e10)
+            + c3 * (b11 - vz * e11)
+            - c4 * (b01 - vz * e01)
+        ) * h
+        bx, by = (
+            (c1 * g00 - c2 * g10 + c3 * g11 - c4 * g01) * z * h
+            for g00, g01, g10, g11 in cell[2:]
+        )
         return s * bx, s * by, s * bz
 
     def step(self, x, y, z, px, py, pz, s):
@@ -99,10 +129,16 @@ class Port:
         s31, s13 = s13 + a2, s13 - a2
         s23 = a2 * a3
         s32, s23 = s23 - a1, s23 + a1
-        v4, v5, v6 = vec * (0.0 + 2.0 * px), vec * (0.0 + 2.0 * py), vec * (0.0 + 2.0 * pz)
-        px, py, pz = (px - (v2 + v3) * v4 + s12 * v5 + s13 * v6,
-                      py + s21 * v4 - (v1 + v3) * v5 + s23 * v6,
-                      pz + s31 * v4 + s32 * v5 - (v1 + v2) * v6)
+        v4, v5, v6 = (
+            vec * (0.0 + 2.0 * px),
+            vec * (0.0 + 2.0 * py),
+            vec * (0.0 + 2.0 * pz),
+        )
+        px, py, pz = (
+            px - (v2 + v3) * v4 + s12 * v5 + s13 * v6,
+            py + s21 * v4 - (v1 + v3) * v5 + s23 * v6,
+            pz + s31 * v4 + s32 * v5 - (v1 + v2) * v6,
+        )
         vec = self.c_dt / torch.sqrt(1.0 + px**2 + py**2 + pz**2)
         return x + vec * px, y + vec * py, z + vec * pz, px, py, pz
 
@@ -123,8 +159,12 @@ class Port:
             done = 0
             while done < n:
                 k = min(segment, n - done)
-                phase, *state = checkpoint(lambda *a, k=k: self.segment(k, s, *a), phase, *state,
-                                           use_reentrant=False)
+                phase, *state = checkpoint(
+                    lambda *a, k=k: self.segment(k, s, *a),
+                    phase,
+                    *state,
+                    use_reentrant=False,
+                )
                 done += k
         x, y = state[0], state[1]
         r = torch.sqrt(x * x + y * y)
@@ -158,7 +198,9 @@ def validate(d):
             state = port.step(*state, 1.0)
             out.append([v.item() for v in state])
     out = np.array(out)
-    scale = np.repeat([np.abs(ref[1:, :3]).max(), np.abs(ref[1:, 3:]).max()], 3)   # positions, momenta
+    scale = np.repeat(
+        [np.abs(ref[1:, :3]).max(), np.abs(ref[1:, 3:]).max()], 3
+    )  # positions, momenta
     return np.max(np.abs(out - ref[1:]) / scale)
 
 
@@ -173,19 +215,37 @@ def gradients(d, n):
 
     leaf = {k: torch.tensor(v, requires_grad=True) for k, v in params.items()}
     out = forward(leaf)
-    ad = {o: torch.autograd.grad(out[i].sum(), list(leaf.values()), retain_graph=True)
-          for i, o in enumerate(OUTPUTS)}
+    ad = {
+        o: torch.autograd.grad(
+            out[i].sum(), list(leaf.values()), retain_graph=True
+        )
+        for i, o in enumerate(OUTPUTS)
+    }
     rows = []
     with torch.no_grad():
         for j, k in enumerate(params):
             for h_rel in sorted({FD[k], *SWEEP}, reverse=True):
                 h = h_rel * (params[k] if k == 's' else 1.0)
-                hi, lo = forward({**params, k: params[k] + h}), forward({**params, k: params[k] - h})
+                hi, lo = (
+                    forward({**params, k: params[k] + h}),
+                    forward({**params, k: params[k] - h}),
+                )
                 for i, o in enumerate(OUTPUTS):
                     fd = ((hi[i] - lo[i]) / (2 * h)).item()
                     g = ad[o][j].item()
-                    rows.append({'output': o, 'param': k, 'fd_step': h_rel, 'registered': h_rel == FD[k],
-                                 'autograd': g, 'fd': fd, 'rel_diff': abs(g - fd) / abs(fd) if fd else math.inf})
+                    rows.append(
+                        {
+                            'output': o,
+                            'param': k,
+                            'fd_step': h_rel,
+                            'registered': h_rel == FD[k],
+                            'autograd': g,
+                            'fd': fd,
+                            'rel_diff': abs(g - fd) / abs(fd)
+                            if fd
+                            else math.inf,
+                        }
+                    )
     return rows
 
 
@@ -197,12 +257,24 @@ def cost_point(n, particles, ckpt):
     r0 = torch.linspace(0.14, 0.15, particles)
     s = torch.tensor(1.0, requires_grad=True)
     t0 = time.perf_counter()
-    r, pr, phase = port.run(initial(r0, 0.0, p, particles), s, n, int(math.isqrt(n)) if ckpt else None)
+    r, pr, phase = port.run(
+        initial(r0, 0.0, p, particles),
+        s,
+        n,
+        int(math.isqrt(n)) if ckpt else None,
+    )
     phase.sum().backward()
     wall = time.perf_counter() - t0
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return {'steps': n, 'particles': particles, 'checkpoint': ckpt, 'wall_s': wall,
-            'peak_rss_mb': rss / (1 if platform.system() == 'Linux' else 1024) / 1024}
+    return {
+        'steps': n,
+        'particles': particles,
+        'checkpoint': ckpt,
+        'wall_s': wall,
+        'peak_rss_mb': rss
+        / (1 if platform.system() == 'Linux' else 1024)
+        / 1024,
+    }
 
 
 def main(outdir):
@@ -214,42 +286,118 @@ def main(outdir):
         with contextlib.chdir(work):
             write_case(case)
             err = validate(load(STEPS[0]))
-            records.append({'case': case, 'steps': STEPS[0], 'output': 'state', 'param': 'validation',
-                            'fd_step': None, 'registered': True, 'autograd': None, 'fd': None, 'rel_diff': err})
+            records.append(
+                {
+                    'case': case,
+                    'steps': STEPS[0],
+                    'output': 'state',
+                    'param': 'validation',
+                    'fd_step': None,
+                    'registered': True,
+                    'autograd': None,
+                    'fd': None,
+                    'rel_diff': err,
+                }
+            )
             if err > 1e-13:
-                raise RuntimeError(f'case {case}: port differs from LIONS by {err} relative')
+                raise RuntimeError(
+                    f'case {case}: port differs from LIONS by {err} relative'
+                )
             for n in STEPS:
-                records += [{'case': case, 'steps': n, **row} for row in gradients(load(STEPS[0]), n)]
+                records += [
+                    {'case': case, 'steps': n, **row}
+                    for row in gradients(load(STEPS[0]), n)
+                ]
         print(f'case {case} done', file=sys.stderr)
-    meta = {'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
-            'torch': torch.__version__,
-            **provenance(), 'machine': platform.platform(), 'python': platform.python_version()}
-    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e.parquet')
+    meta = {
+        'case': f'E: PyTorch port of the LIONS Boris step, {W} MeV proton, z0 = {Z0} m',
+        'torch': torch.__version__,
+        **provenance(),
+        'machine': platform.platform(),
+        'python': platform.python_version(),
+    }
+    pq.write_table(
+        pa.Table.from_pylist(records).replace_schema_metadata(meta),
+        outdir / 'case_e.parquet',
+    )
     ram_mb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**20
     for n in COST_STEPS:
         for particles in COST_PARTICLES:
             for ckpt in (False, True):
                 # memory grows linearly in steps without checkpointing: skip a point extrapolated past half the RAM
-                prev = [c for c in cost if c['particles'] == particles and not c['checkpoint'] and c['peak_rss_mb']]
-                if not ckpt and prev and prev[-1]['peak_rss_mb'] * n / prev[-1]['steps'] > ram_mb / 2:
-                    cost.append({'steps': n, 'particles': particles, 'checkpoint': ckpt, 'wall_s': None,
-                                 'peak_rss_mb': None,
-                                 'error': f"skipped: extrapolated {prev[-1]['peak_rss_mb'] * n / prev[-1]['steps']:.0f} MB"
-                                          f" > half of {ram_mb:.0f} MB RAM"})
+                prev = [
+                    c
+                    for c in cost
+                    if c['particles'] == particles
+                    and not c['checkpoint']
+                    and c['peak_rss_mb']
+                ]
+                if (
+                    not ckpt
+                    and prev
+                    and prev[-1]['peak_rss_mb'] * n / prev[-1]['steps']
+                    > ram_mb / 2
+                ):
+                    cost.append(
+                        {
+                            'steps': n,
+                            'particles': particles,
+                            'checkpoint': ckpt,
+                            'wall_s': None,
+                            'peak_rss_mb': None,
+                            'error': f"skipped: extrapolated {prev[-1]['peak_rss_mb'] * n / prev[-1]['steps']:.0f} MB"
+                            f" > half of {ram_mb:.0f} MB RAM",
+                        }
+                    )
                     continue
-                res = subprocess.run([sys.executable, __file__, '--cost', str(n), str(particles), str(int(ckpt))],
-                                     capture_output=True, text=True)
+                res = subprocess.run(
+                    [
+                        sys.executable,
+                        __file__,
+                        '--cost',
+                        str(n),
+                        str(particles),
+                        str(int(ckpt)),
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
                 # the RF-Track import prints a banner on stdout: the result is the last line
-                cost.append({'error': None, **json.loads(res.stdout.strip().splitlines()[-1])} if res.returncode == 0 else
-                            {'steps': n, 'particles': particles, 'checkpoint': ckpt, 'wall_s': None,
-                             'peak_rss_mb': None, 'error': res.stderr[-300:]})
+                cost.append(
+                    {
+                        'error': None,
+                        **json.loads(res.stdout.strip().splitlines()[-1]),
+                    }
+                    if res.returncode == 0
+                    else {
+                        'steps': n,
+                        'particles': particles,
+                        'checkpoint': ckpt,
+                        'wall_s': None,
+                        'peak_rss_mb': None,
+                        'error': res.stderr[-300:],
+                    }
+                )
                 print(cost[-1], file=sys.stderr)
-    pq.write_table(pa.Table.from_pylist(cost).replace_schema_metadata(meta), outdir / 'case_e_cost.parquet')
+    pq.write_table(
+        pa.Table.from_pylist(cost).replace_schema_metadata(meta),
+        outdir / 'case_e_cost.parquet',
+    )
 
 
 if __name__ == '__main__':
     if sys.argv[1:2] == ['--cost']:
-        print(json.dumps(cost_point(int(sys.argv[2]), int(sys.argv[3]), bool(int(sys.argv[4])))))
+        print(
+            json.dumps(
+                cost_point(
+                    int(sys.argv[2]), int(sys.argv[3]), bool(int(sys.argv[4]))
+                )
+            )
+        )
     else:
-        out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'benchmarks' / 'runs' / 'case_e'
+        out = (
+            Path(sys.argv[1])
+            if len(sys.argv) > 1
+            else ROOT / 'benchmarks' / 'runs' / 'case_e'
+        )
         main(out.resolve())

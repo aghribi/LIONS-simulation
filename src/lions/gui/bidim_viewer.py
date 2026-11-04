@@ -4,11 +4,21 @@ import struct
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvasQTAgg,
+    NavigationToolbar2QT,
+)
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QFileDialog, QComboBox, QLabel, QDialog, QListWidget,
-    QSplitter
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QFileDialog,
+    QComboBox,
+    QLabel,
+    QDialog,
+    QListWidget,
+    QSplitter,
 )
 from PyQt5.QtCore import Qt
 
@@ -109,8 +119,14 @@ def plot_bidim(ax, bidim_data, nbins=256, cmap='hot'):
 
     h_display = np.where(h > 0, np.log10(h + 1), 0)
 
-    ax.imshow(h_display, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
-              origin='lower', aspect='auto', cmap=cmap, interpolation='nearest')
+    ax.imshow(
+        h_display,
+        extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+        origin='lower',
+        aspect='auto',
+        cmap=cmap,
+        interpolation='nearest',
+    )
 
     ax.set_xlabel(d['labelx'] if d['labelx'] else 'x')
     ax.set_ylabel(d['labely'] if d['labely'] else 'y')
@@ -134,7 +150,9 @@ class BidimViewerWidget(QWidget):
 
         toolbar.addWidget(QLabel("Colormap:"))
         self.cmap_combo = QComboBox()
-        self.cmap_combo.addItems(['hot', 'viridis', 'plasma', 'inferno', 'jet', 'gray'])
+        self.cmap_combo.addItems(
+            ['hot', 'viridis', 'plasma', 'inferno', 'jet', 'gray']
+        )
         self.cmap_combo.currentTextChanged.connect(self.replot)
         toolbar.addWidget(self.cmap_combo)
 
@@ -174,7 +192,8 @@ class BidimViewerWidget(QWidget):
 
     def open_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Open bidim file(s)", "", "Bidim (*.bid);;All (*)")
+            self, "Open bidim file(s)", "", "Bidim (*.bid);;All (*)"
+        )
         if paths:
             self.bidim_files = paths
             self.file_list.clear()

@@ -89,7 +89,7 @@ import lions
 
 d = lions.run('don.120.ref_phi10_mars_2017', swap=False)
 b = d.bunch
-b.x, b.y, b.z, b.px, b.py, b.pz, b.alive   # per particle, SI, p = beta gamma
+b.x, b.y, b.z, b.px, b.py, b.pz, b.alive  # per particle, SI, p = beta gamma
 ```
 
 GUI:

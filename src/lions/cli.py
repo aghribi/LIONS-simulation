@@ -1,6 +1,5 @@
 """Tracking loop, scripted run and the interactive program."""
 
-
 import numpy as np
 
 from .state import State
@@ -26,8 +25,19 @@ def banner():
     print('swap bytes? (y/n) (y for old unformatted data files)')
 
 
-def set_vertical_sorter(d, rmin=1000.0, rmax=2000.0, theta1=0.0, theta2=0.0,
-                        voltage=0.0, gap=0.0, phase=0.0, nuz=0.0, nuz_z_cut=0.0, dv=0.0):
+def set_vertical_sorter(
+    d,
+    rmin=1000.0,
+    rmax=2000.0,
+    theta1=0.0,
+    theta2=0.0,
+    voltage=0.0,
+    gap=0.0,
+    phase=0.0,
+    nuz=0.0,
+    nuz_z_cut=0.0,
+    dv=0.0,
+):
     """Vertical sorter: region (m, deg), drive voltage (V), gap (m), phase (deg).
 
     gap = 0: no vertical sorting. Prompt order of the Fortran: rmin rmax theta1 theta2,
@@ -78,7 +88,9 @@ def track(d, bidim=None, on_step=None):
                 boris_push(d.bunch, d.run, d.traps)
                 d.run.t = step * d.run.dt + d.run.t0
                 write_outputs(d)
-                if d.bidims.first != 0 and (step % d.bidims.every == 0 or step == 1):
+                if d.bidims.first != 0 and (
+                    step % d.bidims.every == 0 or step == 1
+                ):
                     fill_bidims(d, bidim)
                 if on_step is not None and on_step(d) is False:
                     break
@@ -112,7 +124,9 @@ def write_trapped(bunch, traps):
     if len(traps.circles) != 0:
         n_free = np.count_nonzero(bunch.alive)
         print(f'particles not trapped: {n_free}')
-        print("write the trapped particle numbers to a file? ('o' for yes, 'n' for no)")
+        print(
+            "write the trapped particle numbers to a file? ('o' for yes, 'n' for no)"
+        )
         answer = input().strip()
         if answer == 'o':
             print('file name:')
@@ -122,7 +136,7 @@ def write_trapped(bunch, traps):
                 for k in range(bunch.n_particles):
                     if not bunch.alive[k]:
                         n_trapped += 1
-                        f.write(f' {n_trapped:5d} {k+1:5d}\n')
+                        f.write(f' {n_trapped:5d} {k + 1:5d}\n')
 
 
 def main():

@@ -46,18 +46,20 @@ import lions
 
 d = lions.run('don.120.ref_phi10_mars_2017', swap=False)
 b = d.bunch
-b.x, b.y, b.z, b.px, b.py, b.pz, b.alive   # per particle, SI, p = beta gamma
-d.rf.v_right, d.field.bz, d.extraction.deflectors   # other components
+b.x, b.y, b.z, b.px, b.py, b.pz, b.alive  # per particle, SI, p = beta gamma
+d.rf.v_right, d.field.bz, d.extraction.deflectors  # other components
 
 # on_step is called after every step; returning False stops the run
-d = lions.run('don.120.ref_phi10_mars_2017', on_step=lambda d: d.run.step < 1000)
+d = lions.run(
+    'don.120.ref_phi10_mars_2017', on_step=lambda d: d.run.step < 1000
+)
 ```
 
 Decks as data: `read_deck` returns a `Deck` dataclass (file units, English names), `write_deck` writes one that the Fortran also reads. `run` and `load` take a `Deck` or a path.
 
 ```python
 deck = lions.read_deck('don.120.ref_phi10_mars_2017')
-deck.v_dee_right = deck.v_dee_left = 52e3   # V
+deck.v_dee_right = deck.v_dee_left = 52e3  # V
 deck.families[0].phi0_deg = -245.0
 d = lions.run(deck)
 lions.write_deck(deck, 'don.modified')

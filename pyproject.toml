@@ -67,3 +67,21 @@ testpaths = ["tests"]
 
 [tool.uv]
 default-groups = ["dev", "docs"]
+
+[tool.ruff]
+line-length = 79
+extend-exclude = ["benchmarks/external", "benchmarks/runs"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "N", "D1"]
+# D105, D107: dunders and __init__ are covered by the class docstring.
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 72
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D1"]

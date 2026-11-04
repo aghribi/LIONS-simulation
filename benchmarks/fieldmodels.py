@@ -1,5 +1,6 @@
 """Field models on the LIONS map nodes for case H (DESIGN.md section 23). F0 bilinear and F2, F3 splines are in
 case_g1 (bilinear_field, smooth_field); this module adds the node arrays and F1, the bicubic Hermite field."""
+
 import numpy as np
 
 
@@ -7,12 +8,18 @@ def node_arrays(grids, attrs, every):
     """LIONS map nodes (full turn, endpoint included, LIONS sign): r, theta, Bz, dBz/dr, dBz/dtheta."""
     n_sec, nth = int(attrs['sector_count']), grids['bz'].shape[1]
     if nth % every:
-        raise ValueError(f'{nth} master columns per sector are not a multiple of {every}')
+        raise ValueError(
+            f'{nth} master columns per sector are not a multiple of {every}'
+        )
     ntet = n_sec * nth // every + 1
     cols = (np.arange(ntet) * every) % nth
     th = attrs['theta_step_rad'] * every * np.arange(ntet)
     r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])
-    return (r, th, *(-grids[k][:, cols] for k in ('bz', 'dbz_dr', 'dbz_dtheta')))
+    return (
+        r,
+        th,
+        *(-grids[k][:, cols] for k in ('bz', 'dbz_dr', 'dbz_dtheta')),
+    )
 
 
 def _basis(u):
@@ -43,13 +50,31 @@ def hermite_surface(r, th, bz, dbr, dbt):
         s = ds_r = ds_t = 0.0
         for a in (0, 1):
             for b in (0, 1):
-                f, fr, ft, frt = bz[i + a, j + b], dbr[i + a, j + b], dbt[i + a, j + b], drt[i + a, j + b]
-                s = s + f * hu[a] * hv[b] + fr * dr * su[a] * hv[b] + ft * dth * hu[a] * sv[b] \
+                f, fr, ft, frt = (
+                    bz[i + a, j + b],
+                    dbr[i + a, j + b],
+                    dbt[i + a, j + b],
+                    drt[i + a, j + b],
+                )
+                s = (
+                    s
+                    + f * hu[a] * hv[b]
+                    + fr * dr * su[a] * hv[b]
+                    + ft * dth * hu[a] * sv[b]
                     + frt * dr * dth * su[a] * sv[b]
-                ds_r = ds_r + (f * dhu[a] * hv[b] / dr + fr * dsu[a] * hv[b] + ft * dth * dhu[a] * sv[b] / dr
-                               + frt * dth * dsu[a] * sv[b])
-                ds_t = ds_t + (f * hu[a] * dhv[b] / dth + fr * dr * su[a] * dhv[b] / dth + ft * hu[a] * dsv[b]
-                               + frt * dr * su[a] * dsv[b])
+                )
+                ds_r = ds_r + (
+                    f * dhu[a] * hv[b] / dr
+                    + fr * dsu[a] * hv[b]
+                    + ft * dth * dhu[a] * sv[b] / dr
+                    + frt * dth * dsu[a] * sv[b]
+                )
+                ds_t = ds_t + (
+                    f * hu[a] * dhv[b] / dth
+                    + fr * dr * su[a] * dhv[b] / dth
+                    + ft * hu[a] * dsv[b]
+                    + frt * dr * su[a] * dsv[b]
+                )
         return s, ds_r, ds_t
 
     return surface

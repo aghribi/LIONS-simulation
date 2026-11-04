@@ -1,8 +1,6 @@
 """Relativistic Boris pusher."""
 
-
 import numpy as np
-
 
 
 def boris_push(bunch, run, traps):
@@ -38,7 +36,9 @@ def boris_push(bunch, run, traps):
         bunch.py[m] = bunch.py[m] + s21 * v4 - (v1 + v3) * v5 + s23 * v6 + fy_m
         bunch.pz[m] = bunch.pz[m] + s31 * v4 + s32 * v5 - (v1 + v2) * v6 + fz_m
 
-        bunch.gamma[m] = np.sqrt(1.0 + bunch.px[m]**2 + bunch.py[m]**2 + bunch.pz[m]**2)
+        bunch.gamma[m] = np.sqrt(
+            1.0 + bunch.px[m] ** 2 + bunch.py[m] ** 2 + bunch.pz[m] ** 2
+        )
         vec_m = run.c_dt / bunch.gamma[m]
         bunch.x[m] = bunch.x[m] + vec_m * bunch.px[m]
         bunch.y[m] = bunch.y[m] + vec_m * bunch.py[m]

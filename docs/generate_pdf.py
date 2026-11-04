@@ -3,6 +3,7 @@
 Usage: uv run --with fpdf2 python generate_pdf.py
 Output: docs/_build/pdf/LIONS.pdf
 """
+
 import datetime
 import glob
 import os
@@ -103,14 +104,22 @@ def generate_pdf():
     cell_ln(pdf, 0, 10, 'Technical guide', align='C')
     pdf.ln(10)
     pdf.set_font('Helvetica', '', 11)
-    cell_ln(pdf, 0, 8, 'Ion tracking in separated-sector cyclotrons', align='C')
+    cell_ln(
+        pdf, 0, 8, 'Ion tracking in separated-sector cyclotrons', align='C'
+    )
     pdf.ln(20)
     pdf.set_font('Helvetica', 'I', 10)
     cell_ln(pdf, 0, 8, 'Fortran code: P. Bertrand, GANIL', align='C')
     cell_ln(pdf, 0, 8, 'Python port and GUI: O. Kamalou, GANIL', align='C')
     pdf.ln(30)
     pdf.set_font('Helvetica', '', 9)
-    cell_ln(pdf, 0, 6, f'Generated on {datetime.date.today().isoformat()}', align='C')
+    cell_ln(
+        pdf,
+        0,
+        6,
+        f'Generated on {datetime.date.today().isoformat()}',
+        align='C',
+    )
 
     # Content
     i = 0
@@ -162,8 +171,8 @@ def generate_pdf():
 
         # Headings: H1 (one per guide page) starts a new page
         level = len(stripped) - len(stripped.lstrip('#'))
-        if 1 <= level <= 4 and stripped[level:level + 1] == ' ':
-            title = clean_text(stripped[level + 1:])
+        if 1 <= level <= 4 and stripped[level : level + 1] == ' ':
+            title = clean_text(stripped[level + 1 :])
             if level == 1:
                 pdf.add_page()
                 pdf.set_font('Helvetica', 'B', 18)
@@ -195,7 +204,11 @@ def generate_pdf():
             if rows:
                 n_cols = len(rows[0])
                 page_w = 190
-                font_size = 6 if n_cols > 6 else (7 if n_cols > 5 else (8 if n_cols > 3 else 9))
+                font_size = (
+                    6
+                    if n_cols > 6
+                    else (7 if n_cols > 5 else (8 if n_cols > 3 else 9))
+                )
 
                 # Column widths from the content
                 pdf.set_font('Helvetica', 'B', font_size)
@@ -217,7 +230,11 @@ def generate_pdf():
                 pdf.set_fill_color(0, 51, 102)
                 pdf.set_text_color(255, 255, 255)
                 for ci, cell in enumerate(rows[0]):
-                    w = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
+                    w = (
+                        col_widths[ci]
+                        if ci < len(col_widths)
+                        else col_widths[-1]
+                    )
                     txt = fit_text(pdf, clean_text(cell), w)
                     pdf.cell(w, 5, txt, border=1, fill=True)
                 pdf.ln()
@@ -226,11 +243,15 @@ def generate_pdf():
                 # Data rows
                 pdf.set_font('Helvetica', '', font_size)
                 for ri, row in enumerate(rows[1:]):
-                    fill = (ri % 2 == 0)
+                    fill = ri % 2 == 0
                     if fill:
                         pdf.set_fill_color(245, 245, 250)
                     for ci in range(n_cols):
-                        w = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
+                        w = (
+                            col_widths[ci]
+                            if ci < len(col_widths)
+                            else col_widths[-1]
+                        )
                         if ci < len(row):
                             txt = fit_text(pdf, clean_text(row[ci]), w)
                         else:
@@ -278,7 +299,9 @@ def generate_pdf():
     os.makedirs(os.path.dirname(PDF_FILE), exist_ok=True)
     pdf.output(PDF_FILE)
     print(f'{len(pages)} guide pages -> {PDF_FILE}')
-    print(f'size: {os.path.getsize(PDF_FILE) / 1024:.0f} kB, pages: {pdf.page_no()}')
+    print(
+        f'size: {os.path.getsize(PDF_FILE) / 1024:.0f} kB, pages: {pdf.page_no()}'
+    )
 
 
 if __name__ == '__main__':

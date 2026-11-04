@@ -4,6 +4,7 @@ Section state: (r, pr, z, pz) at y = 0, x > 0, momenta in beta gamma; the total 
 Each code returns full-step trajectories (t, pos, mom); the section crossing is interpolated in time
 with a 4-point Lagrange polynomial.
 """
+
 import concurrent.futures
 import contextlib
 import io
@@ -50,7 +51,10 @@ def crossings(t, pos, mom):
         for _ in range(20):
             yc = lagrange4(ts, ps[:, 1], tc)
             h = 1e-6 * (t[k + 1] - t[k])
-            dy = (lagrange4(ts, ps[:, 1], tc + h) - lagrange4(ts, ps[:, 1], tc - h)) / (2 * h)
+            dy = (
+                lagrange4(ts, ps[:, 1], tc + h)
+                - lagrange4(ts, ps[:, 1], tc - h)
+            ) / (2 * h)
             step = yc / dy
             tc -= step
             if abs(step) < 1e-15 * (t[k + 1] - t[k]) + 1e-300:
@@ -66,13 +70,17 @@ def initial_vectors(states, p):
     s = np.atleast_2d(states)
     r, pr, z, pz = s.T
     pt = np.sqrt(p**2 - pr**2 - pz**2)
-    return (np.column_stack([r, np.zeros_like(r), z]),
-            np.column_stack([pr, pt, pz]))
+    return (
+        np.column_stack([r, np.zeros_like(r), z]),
+        np.column_stack([pr, pt, pz]),
+    )
 
 
 def deck_tail(options):
     """Deck tail lines carrying LIONS options after an explicit 'no no' (ficloa ficsto)."""
-    return ('no no', *(f'{k}={v}' for k, v in options.items())) if options else ()
+    return (
+        ('no no', *(f'{k}={v}' for k, v in options.items())) if options else ()
+    )
 
 
 class LionsTracker:
@@ -83,8 +91,22 @@ class LionsTracker:
     options: LIONS deck options, e.g. {'interpolation': 'hermite', 'azimuth': 'atan2'}; none = the Fortran model.
     """
 
-    def __init__(self, workdir, w_mev, fhf_hz, steps_per_turn, species=(syn.HYDROGEN, 1, 1), options=None):
-        self.workdir, self.w, self.fhf, self.n, self.species = Path(workdir), w_mev, fhf_hz, steps_per_turn, species
+    def __init__(
+        self,
+        workdir,
+        w_mev,
+        fhf_hz,
+        steps_per_turn,
+        species=(syn.HYDROGEN, 1, 1),
+        options=None,
+    ):
+        self.workdir, self.w, self.fhf, self.n, self.species = (
+            Path(workdir),
+            w_mev,
+            fhf_hz,
+            steps_per_turn,
+            species,
+        )
         self.tail = deck_tail(options)
 
     def track(self, states, turns):
@@ -92,8 +114,17 @@ class LionsTracker:
         states = np.atleast_2d(states)
         n_part = len(states)
         with contextlib.chdir(self.workdir):
-            syn.write_deck('deck.dat', fhf=self.fhf, r0=states[0, 0], w0=self.w, turns=int(np.ceil(turns)),
-                           npaspt=self.n, nbrion=n_part, species=self.species, tail=self.tail)
+            syn.write_deck(
+                'deck.dat',
+                fhf=self.fhf,
+                r0=states[0, 0],
+                w0=self.w,
+                turns=int(np.ceil(turns)),
+                npaspt=self.n,
+                nbrion=n_part,
+                species=self.species,
+                tail=self.tail,
+            )
             d = lions.State()
             d.run.swap_bytes = 'n'
             quiet = contextlib.redirect_stdout(io.StringIO())
@@ -105,7 +136,9 @@ class LionsTracker:
             # LIONS treats the deck momentum as p(-1/2): step it back half a step from p(0).
             b.px[:], b.py[:], b.pz[:] = mom.T
             b.gamma[:] = np.sqrt(1 + (mom**2).sum(axis=1))
-            lions.cli.check_box(b, d.field, d.box)   # r and the in-map mask for compute_fields
+            lions.cli.check_box(
+                b, d.field, d.box
+            )  # r and the in-map mask for compute_fields
             lions.cli.compute_fields(d)
             half_kick(d, -0.5)
             rows = []
@@ -114,19 +147,30 @@ class LionsTracker:
                 # p(k) = half Boris kick of p(k - 1/2) with the field at x(k): the inverse of the
                 # start, so the recorded map is conjugate to the Boris step map.
                 bb = state.bunch
-                kept = bb.px.copy(), bb.py.copy(), bb.pz.copy(), bb.gamma.copy()
+                kept = (
+                    bb.px.copy(),
+                    bb.py.copy(),
+                    bb.pz.copy(),
+                    bb.gamma.copy(),
+                )
                 lions.cli.check_box(bb, state.field, state.box)
                 lions.cli.compute_fields(state)
                 half_kick(state, 0.5)
-                rows.append(np.stack([np.column_stack([bb.x, bb.y, bb.z]),
-                                      np.column_stack([bb.px, bb.py, bb.pz])]))
+                rows.append(
+                    np.stack(
+                        [
+                            np.column_stack([bb.x, bb.y, bb.z]),
+                            np.column_stack([bb.px, bb.py, bb.pz]),
+                        ]
+                    )
+                )
                 bb.px[:], bb.py[:], bb.pz[:], bb.gamma[:] = kept
 
             try:
                 lions.cli.track(d, on_step=record)
             finally:
                 quiet.__exit__(None, None, None)
-        a = np.array(rows)                      # (steps, 2, n, 3)
+        a = np.array(rows)  # (steps, 2, n, 3)
         t = np.arange(len(a)) * d.run.dt
         return t, a[:, 0], a[:, 1]
 
@@ -146,15 +190,35 @@ def half_kick(d, fraction):
 class OpalTracker:
     """OPAL-cycl single-particle runs in Docker, CARBONCYCL map written from a LIONS FieldMap."""
 
-    def __init__(self, workdir, field, mass_kg, p, f_rev_hz, steps_per_turn, integrator='LF2'):
-        self.workdir, self.n, self.integrator, self.p = Path(workdir).resolve(), steps_per_turn, integrator, p
+    def __init__(
+        self,
+        workdir,
+        field,
+        mass_kg,
+        p,
+        f_rev_hz,
+        steps_per_turn,
+        integrator='LF2',
+    ):
+        self.workdir, self.n, self.integrator, self.p = (
+            Path(workdir).resolve(),
+            steps_per_turn,
+            integrator,
+            p,
+        )
         self.mass_gev = mass_kg * syn.C**2 / syn.QE / 1e9
         self.f_rev_mhz = f_rev_hz / 1e6
         self.workdir.mkdir(parents=True, exist_ok=True)
         convert.write_opal_carbon(self.workdir / 'bmap_carbon.dat', field)
         (self.workdir / 'part.dat').write_text('1\n0 0 0 0 0 0\n')
-        self.workers = int(subprocess.run(['docker', 'info', '--format', '{{.NCPU}}'], capture_output=True,
-                                          text=True, check=True).stdout)
+        self.workers = int(
+            subprocess.run(
+                ['docker', 'info', '--format', '{{.NCPU}}'],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        )
 
     def track_one(self, state, turns, tag='run'):
         r, pr, z, pz = state
@@ -180,16 +244,34 @@ RUN, METHOD="CYCLOTRON-T", BEAM=beam1, FIELDSOLVER=fs, DISTRIBUTION=dist;
 ENDTRACK;
 STOP;
 ''')
-        subprocess.run(['docker', 'run', '--rm', '-v', f'{self.workdir}:/data', OPAL_IMAGE,
-                        'bash', '-c', f'opal {stem}.in > {stem}.log 2>&1'], check=True)
-        pos, mom = convert.read_opal_orbit(self.workdir / f'{stem}-trackOrbit.dat')
+        subprocess.run(
+            [
+                'docker',
+                'run',
+                '--rm',
+                '-v',
+                f'{self.workdir}:/data',
+                OPAL_IMAGE,
+                'bash',
+                '-c',
+                f'opal {stem}.in > {stem}.log 2>&1',
+            ],
+            check=True,
+        )
+        pos, mom = convert.read_opal_orbit(
+            self.workdir / f'{stem}-trackOrbit.dat'
+        )
         t = np.arange(len(pos)) / (self.f_rev_mhz * 1e6 * self.n)
         return t, pos, mom
 
     def track(self, states, turns):
         with concurrent.futures.ThreadPoolExecutor(self.workers) as pool:
-            out = list(pool.map(lambda a: self.track_one(a[1], turns, tag=f'p{a[0]}'),
-                                enumerate(np.atleast_2d(states))))
+            out = list(
+                pool.map(
+                    lambda a: self.track_one(a[1], turns, tag=f'p{a[0]}'),
+                    enumerate(np.atleast_2d(states)),
+                )
+            )
         return stack_runs(out)
 
 
@@ -204,7 +286,9 @@ class _UserField(rft.UserField):
         self.b, self.half_mm = b, length * 1e3 / 2
 
     def get_field(self, x, y, z, t):
-        pos, _ = convert.from_rftrack([x, 0.0, y, 0.0, z - self.half_mm, 0.0], 1.0)
+        pos, _ = convert.from_rftrack(
+            [x, 0.0, y, 0.0, z - self.half_mm, 0.0], 1.0
+        )
         return [0.0, 0.0, 0.0], list(convert.to_rftrack_field(self.b(*pos[0])))
 
 
@@ -215,7 +299,17 @@ class RFTrackTracker:
     nominal period.
     """
 
-    def __init__(self, b, half_size, mass_kg, p, period_s, samples_per_turn, tol, algorithm='rkf45'):
+    def __init__(
+        self,
+        b,
+        half_size,
+        mass_kg,
+        p,
+        period_s,
+        samples_per_turn,
+        tol,
+        algorithm='rkf45',
+    ):
         self.mass_mev = mass_kg * syn.C**2 / syn.QE / 1e6
         self.p, self.tol, self.algorithm = p, tol, algorithm
         self.period_mm = period_s * syn.C * 1e3
@@ -230,13 +324,25 @@ class RFTrackTracker:
         opt.t_max_mm = turns * self.period_mm
         opt.odeint_algorithm = self.algorithm
         opt.odeint_epsabs = opt.odeint_epsrel = self.tol
-        self.volume.track(rft.Bunch6dT(self.mass_mev, 1.0, 1.0, convert.to_rftrack(pos, mom, self.mass_mev)), opt)
-        tt = self.volume.get_transport_table('%t %mean_X %mean_Px %mean_Y %mean_Py %mean_Z %mean_Pz')
+        self.volume.track(
+            rft.Bunch6dT(
+                self.mass_mev,
+                1.0,
+                1.0,
+                convert.to_rftrack(pos, mom, self.mass_mev),
+            ),
+            opt,
+        )
+        tt = self.volume.get_transport_table(
+            '%t %mean_X %mean_Px %mean_Y %mean_Py %mean_Z %mean_Pz'
+        )
         pos, mom = convert.from_rftrack(tt[:, 1:], self.mass_mev)
         return tt[:, 0] * 1e-3 / syn.C, pos, mom
 
     def track(self, states, turns):
-        return stack_runs([self.track_one(s, turns) for s in np.atleast_2d(states)])
+        return stack_runs(
+            [self.track_one(s, turns) for s in np.atleast_2d(states)]
+        )
 
 
 class BorisTracker:
@@ -249,7 +355,7 @@ class BorisTracker:
     def __init__(self, field, mass_kg, charge_c, p, f_rev_hz, steps_per_turn):
         self.field, self.p, self.n = field, p, steps_per_turn
         self.dt = 1 / (f_rev_hz * steps_per_turn)
-        self.bcoef = charge_c * self.dt / 2 / mass_kg      # LIONS boris_b_coef
+        self.bcoef = charge_c * self.dt / 2 / mass_kg  # LIONS boris_b_coef
         self.c_dt = syn.C * self.dt
 
     def kick(self, pos, mom, fraction):
@@ -267,10 +373,18 @@ class BorisTracker:
         s23 = a2 * a3
         s32, s23 = s23 - a1, s23 + a1
         px, py, pz = mom.T
-        v4, v5, v6 = vec * (0.0 + 2.0 * px), vec * (0.0 + 2.0 * py), vec * (0.0 + 2.0 * pz)
-        return np.column_stack([px - (v2 + v3) * v4 + s12 * v5 + s13 * v6,
-                                py + s21 * v4 - (v1 + v3) * v5 + s23 * v6,
-                                pz + s31 * v4 + s32 * v5 - (v1 + v2) * v6])
+        v4, v5, v6 = (
+            vec * (0.0 + 2.0 * px),
+            vec * (0.0 + 2.0 * py),
+            vec * (0.0 + 2.0 * pz),
+        )
+        return np.column_stack(
+            [
+                px - (v2 + v3) * v4 + s12 * v5 + s13 * v6,
+                py + s21 * v4 - (v1 + v3) * v5 + s23 * v6,
+                pz + s31 * v4 + s32 * v5 - (v1 + v2) * v6,
+            ]
+        )
 
     def track(self, states, turns):
         pos, mom = initial_vectors(states, self.p)
@@ -279,10 +393,19 @@ class BorisTracker:
         out_pos, out_mom = [pos], [mom]
         for _ in range(steps):
             half = self.kick(pos, half, 1.0)
-            pos = pos + self.c_dt * half / np.sqrt(1 + (half**2).sum(axis=1))[:, None]
+            pos = (
+                pos
+                + self.c_dt
+                * half
+                / np.sqrt(1 + (half**2).sum(axis=1))[:, None]
+            )
             out_pos.append(pos)
             out_mom.append(self.kick(pos, half, 0.5))
-        return np.arange(steps + 1) * self.dt, np.array(out_pos), np.array(out_mom)
+        return (
+            np.arange(steps + 1) * self.dt,
+            np.array(out_pos),
+            np.array(out_mom),
+        )
 
 
 class RK4Tracker:
@@ -315,14 +438,21 @@ class RK4Tracker:
             mom = mom + h / 6 * (k1p + 2 * k2p + 2 * k3p + k4p)
             out_pos.append(pos)
             out_mom.append(mom)
-        return np.arange(steps + 1) * self.dt, np.array(out_pos), np.array(out_mom)
+        return (
+            np.arange(steps + 1) * self.dt,
+            np.array(out_pos),
+            np.array(out_mom),
+        )
 
 
 def stack_runs(out):
     """Single-particle runs [(t, pos, mom)] to (t, pos, mom) of shape (steps, n, 3), cut to the shortest."""
     steps = min(len(o[0]) for o in out)
-    return (out[0][0][:steps], np.stack([o[1][:steps] for o in out], axis=1),
-            np.stack([o[2][:steps] for o in out], axis=1))
+    return (
+        out[0][0][:steps],
+        np.stack([o[1][:steps] for o in out], axis=1),
+        np.stack([o[2][:steps] for o in out], axis=1),
+    )
 
 
 def section_series(t, pos, mom):
@@ -336,7 +466,9 @@ def one_turn(track, states):
     series = section_series(t, pos, mom)
     lost = [i for i, s in enumerate(series) if len(s) == 0]
     if lost:
-        raise RuntimeError(f'particles {lost} never crossed the section (lost from the map or invalid start)')
+        raise RuntimeError(
+            f'particles {lost} never crossed the section (lost from the map or invalid start)'
+        )
     return np.array([s[0, 1:] for s in series])
 
 
@@ -344,10 +476,16 @@ def closed_orbit(track, guess, iters=8, h=1e-7):
     """Newton on (r, pr) at z = pz = 0, finite-difference Jacobian. Returns state and residual."""
     s = np.array([guess[0], guess[1], 0.0, 0.0])
     for _ in range(iters):
-        probes = [s] + [s + h * e for e in np.eye(4)[:2]] + [s - h * e for e in np.eye(4)[:2]]
+        probes = (
+            [s]
+            + [s + h * e for e in np.eye(4)[:2]]
+            + [s - h * e for e in np.eye(4)[:2]]
+        )
         out = one_turn(track, np.array(probes))
         f0 = out[0, :2] - s[:2]
-        jac = np.column_stack([(out[1 + i, :2] - out[3 + i, :2]) / (2 * h) for i in range(2)]) - np.eye(2)
+        jac = np.column_stack(
+            [(out[1 + i, :2] - out[3 + i, :2]) / (2 * h) for i in range(2)]
+        ) - np.eye(2)
         delta = np.linalg.solve(jac, -f0)
         s[:2] += delta
         if np.max(np.abs(delta)) < 1e-13:
@@ -392,8 +530,11 @@ def jacobian(track, s, h_r, h_p):
 
 def linear_tunes(m):
     """Fractional tunes from the r and z diagonal blocks: cos(2 pi Q) = trace / 2."""
-    return tuple(np.arccos(np.clip(np.trace(m[i:i + 2, i:i + 2]) / 2, -1, 1)) / (2 * np.pi)
-                 for i in (0, 2))
+    return tuple(
+        np.arccos(np.clip(np.trace(m[i : i + 2, i : i + 2]) / 2, -1, 1))
+        / (2 * np.pi)
+        for i in (0, 2)
+    )
 
 
 def symplectic_error(m):

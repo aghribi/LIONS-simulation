@@ -5,15 +5,39 @@ from dataclasses import astuple
 import math
 import os
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox,
-    QPushButton, QFileDialog, QScrollArea, QToolButton,
-    QFrame, QGroupBox, QSizePolicy, QPlainTextEdit, QMessageBox
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QDoubleSpinBox,
+    QSpinBox,
+    QComboBox,
+    QPushButton,
+    QFileDialog,
+    QScrollArea,
+    QToolButton,
+    QFrame,
+    QGroupBox,
+    QSizePolicy,
+    QPlainTextEdit,
+    QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from ..constants import AMU, C_LIGHT, ELECTRON_MASS_U, MEV
-from ..deck import OPTIONS, Deck, Deflector, Dipole, Family, FieldHarmonic, Grid, read_deck, write_deck
+from ..deck import (
+    OPTIONS,
+    Deck,
+    Deflector,
+    Dipole,
+    Family,
+    FieldHarmonic,
+    Grid,
+    read_deck,
+    write_deck,
+)
 from ..fortran_text import parse_floats
 
 
@@ -36,7 +60,8 @@ class CollapsibleSection(QWidget):
         )
         self.toggle_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.toggle_btn.setArrowType(
-            Qt.RightArrow if collapsed else Qt.DownArrow)
+            Qt.RightArrow if collapsed else Qt.DownArrow
+        )
         self.toggle_btn.setText(title)
         self.toggle_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.toggle_btn.clicked.connect(self._toggle)
@@ -53,7 +78,8 @@ class CollapsibleSection(QWidget):
         self._is_collapsed = not self._is_collapsed
         self.content.setVisible(not self._is_collapsed)
         self.toggle_btn.setArrowType(
-            Qt.RightArrow if self._is_collapsed else Qt.DownArrow)
+            Qt.RightArrow if self._is_collapsed else Qt.DownArrow
+        )
 
     def add_row(self, label, widget):
         self.content_layout.addRow(label, widget)
@@ -99,7 +125,11 @@ def _numbers(values):
 
 def _rows(text, width, count):
     """count rows of width floats from a text box, padded with zeros."""
-    rows = [(parse_floats(line) + [0.0] * width)[:width] for line in text.splitlines() if line.strip()]
+    rows = [
+        (parse_floats(line) + [0.0] * width)[:width]
+        for line in text.splitlines()
+        if line.strip()
+    ]
     rows += [[0.0] * width for _ in range(count - len(rows))]
     return rows[:count]
 
@@ -214,7 +244,9 @@ class InputFormPanel(QWidget):
         self.sec_general.add_row("Data file :", file_widget)
 
         btn_load_data = QPushButton("Load data file")
-        btn_load_data.clicked.connect(lambda: self.load_data_file(self.ficin_edit.text()))
+        btn_load_data.clicked.connect(
+            lambda: self.load_data_file(self.ficin_edit.text())
+        )
         self.sec_general.add_row("", btn_load_data)
 
         # ============================================================
@@ -290,7 +322,8 @@ class InputFormPanel(QWidget):
         self.sec_harmonics.content_layout.addRow(self.coh0_detail)
         self.coh0_detail.setVisible(False)
         self.ncoh0_spin.valueChanged.connect(
-            lambda v: self.coh0_detail.setVisible(v != 0))
+            lambda v: self.coh0_detail.setVisible(v != 0)
+        )
 
         sep_h = QFrame()
         sep_h.setFrameShape(QFrame.HLine)
@@ -309,7 +342,8 @@ class InputFormPanel(QWidget):
         self.sec_harmonics.content_layout.addRow(self.coh1_detail)
         self.coh1_detail.setVisible(False)
         self.ncoh1_spin.valueChanged.connect(
-            lambda v: self.coh1_detail.setVisible(v != 0))
+            lambda v: self.coh1_detail.setVisible(v != 0)
+        )
 
         # ============================================================
         # Section 7: Z geometry
@@ -353,7 +387,8 @@ class InputFormPanel(QWidget):
         ext_lay.addRow("Extraction voltage :", self.edf_spin)
         self.deflectors_text = QPlainTextEdit()
         self.deflectors_text.setPlaceholderText(
-            "1 line per deflector: rdf edf xdfi ydfi xdfo ydfo tetdfi_deg tetdfo_deg")
+            "1 line per deflector: rdf edf xdfi ydfi xdfo ydfo tetdfi_deg tetdfo_deg"
+        )
         self.deflectors_text.setMaximumHeight(80)
         ext_lay.addRow("Deflectors :", self.deflectors_text)
 
@@ -365,7 +400,8 @@ class InputFormPanel(QWidget):
         ext_lay.addRow("Mag. dipoles (count) :", self.ndm_spin)
         self.magdip_text = QPlainTextEdit()
         self.magdip_text.setPlaceholderText(
-            "1 line per dipole: rdm bdm xdm ydm tetdmi_deg tetdmo_deg")
+            "1 line per dipole: rdm bdm xdm ydm tetdmi_deg tetdmo_deg"
+        )
         self.magdip_text.setMaximumHeight(60)
         ext_lay.addRow("Mag. dipoles :", self.magdip_text)
 
@@ -377,7 +413,8 @@ class InputFormPanel(QWidget):
         grid_lay.addRow("Grids (count) :", self.ngex_spin)
         self.grids_text = QPlainTextEdit()
         self.grids_text.setPlaceholderText(
-            "1 line per grid: tetagex xgex_mm ygex_mm xgexc_mm ygexc_mm")
+            "1 line per grid: tetagex xgex_mm ygex_mm xgexc_mm ygexc_mm"
+        )
         self.grids_text.setMaximumHeight(60)
         grid_lay.addRow("Grids :", self.grids_text)
         self.ficdebgex_edit = QLineEdit()
@@ -447,7 +484,9 @@ class InputFormPanel(QWidget):
         # ============================================================
         # Section 10: Correlations
         # ============================================================
-        self.sec_correlations = CollapsibleSection("Correlations", collapsed=True)
+        self.sec_correlations = CollapsibleSection(
+            "Correlations", collapsed=True
+        )
         main_layout.addWidget(self.sec_correlations)
 
         self.iflcor_spin = _make_int_spin(0, 0, 10)
@@ -456,7 +495,9 @@ class InputFormPanel(QWidget):
         self.correl_detail = QWidget()
         cor_lay = QFormLayout(self.correl_detail)
         cor_lay.setContentsMargins(0, 0, 0, 0)
-        w_ficsig, self.ficsig_edit, _btn = _make_file_row('', lambda: self._browse_open(self.ficsig_edit))
+        w_ficsig, self.ficsig_edit, _btn = _make_file_row(
+            '', lambda: self._browse_open(self.ficsig_edit)
+        )
         cor_lay.addRow("Sigma file :", w_ficsig)
         self.phase_space_edit = QLineEdit('6d')
         cor_lay.addRow("Phase space :", self.phase_space_edit)
@@ -473,16 +514,17 @@ class InputFormPanel(QWidget):
         self.sig_dpz = _make_double_spin(1.0, 0.0, 1e6, decimals=6)
         self.sig_dphi = _make_double_spin(0.1, 0.0, 1000.0, decimals=6)
         self.sig_dp = _make_double_spin(1.0, 0.0, 1e6, decimals=6)
-        cor_lay.addRow(u"\u03c3 dr (mm) :", self.sig_dr)
-        cor_lay.addRow(u"\u03c3 ds (mrad) :", self.sig_ds)
-        cor_lay.addRow(u"\u03c3 dz (mm) :", self.sig_dz)
-        cor_lay.addRow(u"\u03c3 dpz (mrad) :", self.sig_dpz)
-        cor_lay.addRow(u"\u03c3 d\u03c6 (mm) :", self.sig_dphi)
-        cor_lay.addRow(u"\u03c3 dp (mrad) :", self.sig_dp)
+        cor_lay.addRow("\u03c3 dr (mm) :", self.sig_dr)
+        cor_lay.addRow("\u03c3 ds (mrad) :", self.sig_ds)
+        cor_lay.addRow("\u03c3 dz (mm) :", self.sig_dz)
+        cor_lay.addRow("\u03c3 dpz (mrad) :", self.sig_dpz)
+        cor_lay.addRow("\u03c3 d\u03c6 (mm) :", self.sig_dphi)
+        cor_lay.addRow("\u03c3 dp (mrad) :", self.sig_dp)
         btn_apply_sig = QPushButton("Apply \u2192 sigma file")
         btn_apply_sig.setToolTip(
             "Write the diagonal values to the sigma file "
-            "(overwrites the existing file)")
+            "(overwrites the existing file)"
+        )
         btn_apply_sig.clicked.connect(self._write_sigma_from_gui)
         cor_lay.addRow("", btn_apply_sig)
 
@@ -498,7 +540,8 @@ class InputFormPanel(QWidget):
         self.sec_correlations.content_layout.addRow(self.correl_detail)
         self.correl_detail.setVisible(False)
         self.iflcor_spin.valueChanged.connect(
-            lambda v: self.correl_detail.setVisible(v != 0))
+            lambda v: self.correl_detail.setVisible(v != 0)
+        )
 
         # ============================================================
         # Section 11: Simulation
@@ -514,7 +557,9 @@ class InputFormPanel(QWidget):
         # ============================================================
         # Section 12: Output files
         # ============================================================
-        self.sec_output_files = CollapsibleSection("Output files", collapsed=True)
+        self.sec_output_files = CollapsibleSection(
+            "Output files", collapsed=True
+        )
         main_layout.addWidget(self.sec_output_files)
 
         self.ficz_edit = QLineEdit('no')
@@ -525,21 +570,30 @@ class InputFormPanel(QWidget):
         # ============================================================
         # Section 13: Field files
         # ============================================================
-        self.sec_field_files = CollapsibleSection("Field files", collapsed=True)
+        self.sec_field_files = CollapsibleSection(
+            "Field files", collapsed=True
+        )
         main_layout.addWidget(self.sec_field_files)
 
-        w_ficb, self.ficb_edit, _btn = _make_file_row('', lambda: self._browse_ficb())
+        w_ficb, self.ficb_edit, _btn = _make_file_row(
+            '', lambda: self._browse_ficb()
+        )
         self.sec_field_files.add_row("Magnetic map (ficb) :", w_ficb)
-        w_ficv1, self.ficv1_edit, _btn = _make_file_row('', lambda: self._browse_open(self.ficv1_edit))
+        w_ficv1, self.ficv1_edit, _btn = _make_file_row(
+            '', lambda: self._browse_open(self.ficv1_edit)
+        )
         self.sec_field_files.add_row("Central potential (ficv1) :", w_ficv1)
-        w_ficv2, self.ficv2_edit, _btn = _make_file_row('', lambda: self._browse_open(self.ficv2_edit))
+        w_ficv2, self.ficv2_edit, _btn = _make_file_row(
+            '', lambda: self._browse_open(self.ficv2_edit)
+        )
         self.sec_field_files.add_row("Outer potential (ficv2) :", w_ficv2)
 
         self.b_factor_spin = _make_double_spin(1.0, 0.0, 100.0, decimals=6)
         self.b_factor_spin.setSuffix(" T")
         self.b_factor_spin.setToolTip(
             "B factor (tesla). The magnetic map is normalised to 1,\n"
-            "then multiplied by this factor. Example: 1.56 T for CIME.")
+            "then multiplied by this factor. Example: 1.56 T for CIME."
+        )
         self.sec_field_files.add_row("B factor (T) :", self.b_factor_spin)
 
         self.field_interp_combo = QComboBox()
@@ -547,8 +601,11 @@ class InputFormPanel(QWidget):
         self.field_interp_combo.setToolTip(
             "Magnetic map interpolation. bilinear: the Fortran model.\n"
             "hermite: bicubic Hermite surface, C1 across cells, about 1.8 times the field cost\n"
-            "(benchmarks/DESIGN.md, case H).")
-        self.sec_field_files.add_row("Field interpolation :", self.field_interp_combo)
+            "(benchmarks/DESIGN.md, case H)."
+        )
+        self.sec_field_files.add_row(
+            "Field interpolation :", self.field_interp_combo
+        )
 
         # ============================================================
         # Section 14: Vertical sorter
@@ -754,9 +811,11 @@ class InputFormPanel(QWidget):
         w0mev = self.w0mev_spin.value()
         if amat <= 0 or w0mev <= 0:
             return 0.0
-        rest_energy = AMU * (amat - ELECTRON_MASS_U * self.qn_spin.value()) * C_LIGHT ** 2
+        rest_energy = (
+            AMU * (amat - ELECTRON_MASS_U * self.qn_spin.value()) * C_LIGHT**2
+        )
         gamma = 1.0 + w0mev * MEV * mass_number / rest_energy
-        return math.sqrt(gamma ** 2 - 1.0)
+        return math.sqrt(gamma**2 - 1.0)
 
     def _load_sigma_diag(self, ficsig, data_path):
         """Load the 6 diagonal values of a sigma file into the spinboxes.
@@ -776,8 +835,14 @@ class InputFormPanel(QWidget):
                 return
             bg_total = self._compute_betagamma()
             with open(sig_path, 'r') as sf:
-                spins = [self.sig_dr, self.sig_ds, self.sig_dz,
-                         self.sig_dpz, self.sig_dphi, self.sig_dp]
+                spins = [
+                    self.sig_dr,
+                    self.sig_ds,
+                    self.sig_dz,
+                    self.sig_dpz,
+                    self.sig_dphi,
+                    self.sig_dp,
+                ]
                 # True = position (m -> mm), False = momentum (bg -> mrad)
                 is_pos = [True, False, True, False, True, False]
                 for i, spin in enumerate(spins):
@@ -815,14 +880,19 @@ class InputFormPanel(QWidget):
             sig_path = ficsig
         try:
             bg_total = self._compute_betagamma()
-            sig_gui = [self.sig_dr.value(), self.sig_ds.value(),
-                       self.sig_dz.value(), self.sig_dpz.value(),
-                       self.sig_dphi.value(), self.sig_dp.value()]
+            sig_gui = [
+                self.sig_dr.value(),
+                self.sig_ds.value(),
+                self.sig_dz.value(),
+                self.sig_dpz.value(),
+                self.sig_dphi.value(),
+                self.sig_dp.value(),
+            ]
             # True = position (mm -> m), False = momentum (mrad -> bg)
             is_pos = [True, False, True, False, True, False]
             # Floor sigma^2 above 0: the Cholesky decomposition needs a positive definite matrix
-            EPS_POS = 1e-30   # m^2 (~ 1e-12 mm)
-            EPS_MOM = 1e-30   # (bg)^2
+            EPS_POS = 1e-30  # m^2 (~ 1e-12 mm)
+            EPS_MOM = 1e-30  # (bg)^2
             sig2 = []
             for i, s in enumerate(sig_gui):
                 if is_pos[i]:
@@ -853,8 +923,11 @@ class InputFormPanel(QWidget):
     def _browse_ficb(self):
         """Browse for the magnetic field map, then detect Bmax."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Open magnetic map", "",
-            "Field maps (*.dat *.lio.dat);;All (*)")
+            self,
+            "Open magnetic map",
+            "",
+            "Field maps (*.dat *.lio.dat);;All (*)",
+        )
         if path:
             self.ficb_edit.setText(path)
             self._auto_detect_bmax(path)
@@ -874,9 +947,11 @@ class InputFormPanel(QWidget):
                     if not line:
                         break
                     for tok in line.split():
-                        bz_vals.append(float(tok.replace('d', 'e').replace('D', 'e')))
+                        bz_vals.append(
+                            float(tok.replace('d', 'e').replace('D', 'e'))
+                        )
                 if bz_vals:
-                    bmax = max(abs(v) for v in bz_vals[:nr * ntet])
+                    bmax = max(abs(v) for v in bz_vals[: nr * ntet])
                     self.b_factor_spin.setValue(bmax)
                     print(f'Bmax detected: {bmax:.6e} T, B factor updated')
         except Exception as e:
@@ -884,7 +959,8 @@ class InputFormPanel(QWidget):
 
     def _save_data_file_dialog(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save data file", "", "All (*)")
+            self, "Save data file", "", "All (*)"
+        )
         if path:
             self.write_data_file(path)
 
@@ -905,8 +981,8 @@ class InputFormPanel(QWidget):
             self.file_loaded.emit(path)
         except Exception as e:
             QMessageBox.warning(
-                self, "Load error",
-                f"Error while loading {path}:\n{e}")
+                self, "Load error", f"Error while loading {path}:\n{e}"
+            )
         finally:
             self._loading = False
 
@@ -930,8 +1006,19 @@ class InputFormPanel(QWidget):
         self.pothfd_spin.setValue(deck.v_dee_right)
         self.pothfg_spin.setValue(deck.v_dee_left)
         for h, n_spin, coef_edit, phase_spin in (
-                (deck.harmonic1, self.ncoh0_spin, self.coh0_edit, self.phihar0_spin),
-                (deck.harmonic2, self.ncoh1_spin, self.coh1_edit, self.phihar1_spin)):
+            (
+                deck.harmonic1,
+                self.ncoh0_spin,
+                self.coh0_edit,
+                self.phihar0_spin,
+            ),
+            (
+                deck.harmonic2,
+                self.ncoh1_spin,
+                self.coh1_edit,
+                self.phihar1_spin,
+            ),
+        ):
             n_spin.setValue(0 if h is None else len(h.coefs))
             coef_edit.setText('' if h is None else _numbers(h.coefs))
             phase_spin.setValue(0.0 if h is None else h.phase_deg)
@@ -944,13 +1031,21 @@ class InputFormPanel(QWidget):
         self.tet2ex_spin.setValue(deck.grids_on)
         self.eex_spin.setValue(deck.grid_start)
         self.ndf_spin.setValue(len(deck.deflectors))
-        self.edf_spin.setValue(deck.deflectors[0].e if deck.deflectors else 0.0)
-        self.deflectors_text.setPlainText('\n'.join(_numbers(astuple(e)) for e in deck.deflectors))
+        self.edf_spin.setValue(
+            deck.deflectors[0].e if deck.deflectors else 0.0
+        )
+        self.deflectors_text.setPlainText(
+            '\n'.join(_numbers(astuple(e)) for e in deck.deflectors)
+        )
         self.ndm_spin.setValue(len(deck.dipoles))
-        self.magdip_text.setPlainText('\n'.join(_numbers(astuple(m)) for m in deck.dipoles))
+        self.magdip_text.setPlainText(
+            '\n'.join(_numbers(astuple(m)) for m in deck.dipoles)
+        )
         if deck.grids:
             self.ngex_spin.setValue(len(deck.grids))
-            self.grids_text.setPlainText('\n'.join(_numbers(astuple(g)) for g in deck.grids))
+            self.grids_text.setPlainText(
+                '\n'.join(_numbers(astuple(g)) for g in deck.grids)
+            )
             self.ficdebgex_edit.setText(deck.grid_file_prefix)
 
         self.nbrfam_spin.setValue(len(deck.families))
@@ -1003,10 +1098,19 @@ class InputFormPanel(QWidget):
 
     @staticmethod
     def _family(widget):
-        return Family(widget.nbrion_spin.value(), widget.amat_spin.value(),
-                      widget.a_mass_spin.value(), widget.qn_spin.value(), widget.r0_spin.value(),
-                      widget.teta0_spin.value(), widget.z0_spin.value(), widget.pr0_spin.value(),
-                      widget.pz0_spin.value(), widget.w0mev_spin.value(), widget.phi0_spin.value())
+        return Family(
+            widget.nbrion_spin.value(),
+            widget.amat_spin.value(),
+            widget.a_mass_spin.value(),
+            widget.qn_spin.value(),
+            widget.r0_spin.value(),
+            widget.teta0_spin.value(),
+            widget.z0_spin.value(),
+            widget.pr0_spin.value(),
+            widget.pz0_spin.value(),
+            widget.w0mev_spin.value(),
+            widget.phi0_spin.value(),
+        )
 
     # ================================================================
     # Data file writing
@@ -1015,29 +1119,49 @@ class InputFormPanel(QWidget):
     def to_deck(self):
         """Deck built from the form values."""
         harmonics = []
-        for n_spin, coef_edit, phase_spin in ((self.ncoh0_spin, self.coh0_edit, self.phihar0_spin),
-                                              (self.ncoh1_spin, self.coh1_edit, self.phihar1_spin)):
+        for n_spin, coef_edit, phase_spin in (
+            (self.ncoh0_spin, self.coh0_edit, self.phihar0_spin),
+            (self.ncoh1_spin, self.coh1_edit, self.phihar1_spin),
+        ):
             n = n_spin.value()
             coefs = (parse_floats(coef_edit.text()) + [0.0] * n)[:n]
-            harmonics.append(FieldHarmonic(coefs, phase_spin.value()) if n else None)
+            harmonics.append(
+                FieldHarmonic(coefs, phase_spin.value()) if n else None
+            )
 
         deflectors, dipoles, grids = [], [], []
         grid_prefix = ''
         if self.rex_spin.value() < 0:
-            rows = _rows(self.deflectors_text.toPlainText(), 8, self.ndf_spin.value())
+            rows = _rows(
+                self.deflectors_text.toPlainText(), 8, self.ndf_spin.value()
+            )
             if rows:
-                rows[0][1] = self.edf_spin.value()  # the field box overrides deflector 1
+                rows[0][1] = (
+                    self.edf_spin.value()
+                )  # the field box overrides deflector 1
             deflectors = [Deflector(*row) for row in rows]
-            dipoles = [Dipole(*row) for row in _rows(self.magdip_text.toPlainText(), 6,
-                                                     self.ndm_spin.value())]
+            dipoles = [
+                Dipole(*row)
+                for row in _rows(
+                    self.magdip_text.toPlainText(), 6, self.ndm_spin.value()
+                )
+            ]
             if self.tet2ex_spin.value() > 0:
-                grids = [Grid(*row) for row in _rows(self.grids_text.toPlainText(), 5,
-                                                     self.ngex_spin.value())]
+                grids = [
+                    Grid(*row)
+                    for row in _rows(
+                        self.grids_text.toPlainText(),
+                        5,
+                        self.ngex_spin.value(),
+                    )
+                ]
                 grid_prefix = self.ficdebgex_edit.text().strip() or 'grex'
 
         n_families = self.nbrfam_spin.value()
         families = [self._family(self)]
-        families += [self._family(w) for w in self.extra_families[:n_families - 1]]
+        families += [
+            self._family(w) for w in self.extra_families[: n_families - 1]
+        ]
         families += [self._family(self)] * (n_families - len(families))
 
         kept = self._loaded_deck
@@ -1103,14 +1227,16 @@ class InputFormPanel(QWidget):
         summary.append(
             f"  Family 1: nbrion={self.nbrion_spin.value()}, "
             f"amat={self.amat_spin.value()}, qn={self.qn_spin.value()}, "
-            f"w0={self.w0mev_spin.value()}")
+            f"w0={self.w0mev_spin.value()}"
+        )
         for k in range(nbrfam - 1):
             if k < len(self.extra_families):
                 fw = self.extra_families[k]
                 summary.append(
-                    f"  Family {k+2}: nbrion={fw.nbrion_spin.value()}, "
+                    f"  Family {k + 2}: nbrion={fw.nbrion_spin.value()}, "
                     f"amat={fw.amat_spin.value()}, qn={fw.qn_spin.value()}, "
-                    f"w0={fw.w0mev_spin.value()}")
+                    f"w0={fw.w0mev_spin.value()}"
+                )
         print('\n'.join(summary))
 
     # ================================================================
@@ -1134,6 +1260,7 @@ class InputFormPanel(QWidget):
             return []
 
         from ..fortran_text import fortran_float
+
         result = []
         for line in text.splitlines():
             line = line.strip()
@@ -1143,15 +1270,17 @@ class InputFormPanel(QWidget):
             if len(parts) < 8:
                 continue
             try:
-                result.append({
-                    'rdf_m': fortran_float(parts[0]),
-                    'xdfi_m': fortran_float(parts[2]),
-                    'ydfi_m': fortran_float(parts[3]),
-                    'xdfo_m': fortran_float(parts[4]),
-                    'ydfo_m': fortran_float(parts[5]),
-                    'tetdfi_deg': fortran_float(parts[6]),
-                    'tetdfo_deg': fortran_float(parts[7]),
-                })
+                result.append(
+                    {
+                        'rdf_m': fortran_float(parts[0]),
+                        'xdfi_m': fortran_float(parts[2]),
+                        'ydfi_m': fortran_float(parts[3]),
+                        'xdfo_m': fortran_float(parts[4]),
+                        'ydfo_m': fortran_float(parts[5]),
+                        'tetdfi_deg': fortran_float(parts[6]),
+                        'tetdfo_deg': fortran_float(parts[7]),
+                    }
+                )
             except (ValueError, IndexError):
                 continue
         return result
@@ -1183,12 +1312,14 @@ class InputFormPanel(QWidget):
         # 3. rmin_ver rmax_ver teta1_ver teta2_ver
         answers.append(
             f"{self.rmin_ver.value()} {self.rmax_ver.value()} "
-            f"{self.teta1_ver.value()} {self.teta2_ver.value()}")
+            f"{self.teta1_ver.value()} {self.teta2_ver.value()}"
+        )
         # 4. pot_ver h_ver phi_ver anuz coupnuz dpotspot
         answers.append(
             f"{self.pot_ver.value()} {self.h_ver.value()} "
             f"{self.phi_ver.value()} {self.anuz.value()} "
-            f"{self.coupnuz.value()} {self.dpotspot.value()}")
+            f"{self.coupnuz.value()} {self.dpotspot.value()}"
+        )
         # 5. numbid
         answers.append(str(self.numbid_spin.value()))
 
@@ -1197,22 +1328,23 @@ class InputFormPanel(QWidget):
             answers.append(self.baryc_combo.currentText())
             answers.append(
                 f"{self.bid_xmin.value()} {self.bid_xmax.value()} "
-                f"{self.bid_ymin.value()} {self.bid_ymax.value()}")
+                f"{self.bid_ymin.value()} {self.bid_ymax.value()}"
+            )
             # Multi-particle correlations (initgra reads them when d.n > 1)
             total_n = self.nbrion_spin.value()
             for fw in self.extra_families:
                 total_n += fw.nbrion_spin.value()
             if total_n > 1:
                 answers.append(
-                    f"{self.dphi_max.value()} {self.dwsw_max.value()}")
-                answers.append(
-                    f"{self.dr_max.value()} {self.dpr_max.value()}")
-                answers.append(
-                    f"{self.dz_max.value()} {self.dpz_max.value()}")
+                    f"{self.dphi_max.value()} {self.dwsw_max.value()}"
+                )
+                answers.append(f"{self.dr_max.value()} {self.dpr_max.value()}")
+                answers.append(f"{self.dz_max.value()} {self.dpz_max.value()}")
                 answers.append(str(self.itebid_spin.value()))
             answers.append(
                 f"{self.bary_xmin.value()} {self.bary_xmax.value()} "
-                f"{self.bary_ymin.value()} {self.bary_ymax.value()}")
+                f"{self.bary_ymin.value()} {self.bary_ymax.value()}"
+            )
             answers.append(self.ficrep_edit.text() or "no")
 
         return answers
@@ -1231,7 +1363,8 @@ class InputFormPanel(QWidget):
 
     def save_params(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save parameters", "", "JSON (*.json)")
+            self, "Save parameters", "", "JSON (*.json)"
+        )
         if not path:
             return
         data = self._collect_all_params()
@@ -1240,7 +1373,8 @@ class InputFormPanel(QWidget):
 
     def load_params(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Load parameters", "", "JSON (*.json)")
+            self, "Load parameters", "", "JSON (*.json)"
+        )
         if not path:
             return
         with open(path, 'r') as f:
@@ -1308,8 +1442,9 @@ class InputFormPanel(QWidget):
             'pz0': self.pz0_spin.value(),
             'w0mev': self.w0mev_spin.value(),
             'phi0': self.phi0_spin.value(),
-            'extra_families': [fw.get_values() for fw in self.extra_families
-                               if fw.isVisible()],
+            'extra_families': [
+                fw.get_values() for fw in self.extra_families if fw.isVisible()
+            ],
             # Correlations
             'iflcor': self.iflcor_spin.value(),
             'ficsig': self.ficsig_edit.text(),
@@ -1460,7 +1595,9 @@ class InputFormPanel(QWidget):
         self.ficv1_edit.setText(data.get('ficv1', ''))
         self.ficv2_edit.setText(data.get('ficv2', ''))
         self.b_factor_spin.setValue(data.get('b_factor', 1.0))
-        self.field_interp_combo.setCurrentText(data.get('field_interpolation', 'bilinear'))
+        self.field_interp_combo.setCurrentText(
+            data.get('field_interpolation', 'bilinear')
+        )
         # Vertical sorter
         self.rmin_ver.setValue(data.get('rmin_ver', 1000.0))
         self.rmax_ver.setValue(data.get('rmax_ver', 2000.0))

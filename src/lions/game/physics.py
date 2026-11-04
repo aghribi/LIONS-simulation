@@ -1,9 +1,10 @@
 """Tier T0 of the trainer: closed forms for a proton in a cyclotron (Lecture chapter 1). Tested against LIONS."""
+
 import math
 
 from lions.constants import AMU, C_LIGHT as C, E_CHARGE, ELECTRON_MASS_U
 
-HYDROGEN_U = 1.00782503    # atomic mass of hydrogen (u), as the LIONS test decks
+HYDROGEN_U = 1.00782503  # atomic mass of hydrogen (u), as the LIONS test decks
 PROTON_KG = AMU * (HYDROGEN_U - ELECTRON_MASS_U)
 PROTON_MEV = PROTON_KG * C**2 / E_CHARGE / 1e6
 
@@ -35,25 +36,37 @@ def rotation(b_tesla):
 
 def isochronous_index(w_mev):
     """Field index k = (r / B) dB/dr of the isochronous field B = gamma B0."""
-    return gamma(w_mev)**2 - 1
+    return gamma(w_mev) ** 2 - 1
 
 
 def qz_squared(k, n_sectors, flutter, spiral_rad):
     """Smooth approximation: Qz^2 = -k + N^2 / (N^2 - 1) F (1 + 2 tan^2 xi)."""
-    return -k + n_sectors**2 / (n_sectors**2 - 1) * flutter * (1 + 2 * math.tan(spiral_rad)**2)
+    return -k + n_sectors**2 / (n_sectors**2 - 1) * flutter * (
+        1 + 2 * math.tan(spiral_rad) ** 2
+    )
 
 
 def qr_squared(k, n_sectors, flutter, spiral_rad):
     """Smooth approximation: Qr^2 = 1 + k + 3 N^2 / ((N^2 - 1)(N^2 - 4)) F (1 + tan^2 xi)."""
     n2 = n_sectors**2
-    return 1 + k + 3 * n2 / ((n2 - 1) * (n2 - 4)) * flutter * (1 + math.tan(spiral_rad)**2)
+    return (
+        1
+        + k
+        + 3
+        * n2
+        / ((n2 - 1) * (n2 - 4))
+        * flutter
+        * (1 + math.tan(spiral_rad) ** 2)
+    )
 
 
 # Beam on matter. Water, protons: Bortfeld, Med. Phys. 24, 2024 (1997). Highland form of multiple scattering.
-BRAGG_ALPHA, BRAGG_P = 0.0022, 1.77     # R [cm] = alpha E [MeV]^p
-STRAGGLING_A, STRAGGLING_B = 0.012, 0.935     # sigma [cm] = a R [cm]^b
-WATER_X0_CM = 36.08    # radiation length [UNVERIFIED: the usual value, from memory]
-GY_PER_FLUENCE = 1.602e-10    # Gy per (MeV cm2/g) per (proton/cm2), from 1 MeV = 1.602e-13 J and 1 g = 1e-3 kg
+BRAGG_ALPHA, BRAGG_P = 0.0022, 1.77  # R [cm] = alpha E [MeV]^p
+STRAGGLING_A, STRAGGLING_B = 0.012, 0.935  # sigma [cm] = a R [cm]^b
+WATER_X0_CM = (
+    36.08  # radiation length [UNVERIFIED: the usual value, from memory]
+)
+GY_PER_FLUENCE = 1.602e-10  # Gy per (MeV cm2/g) per (proton/cm2), from 1 MeV = 1.602e-13 J and 1 g = 1e-3 kg
 
 
 def proton_range(w_mev):
@@ -62,7 +75,7 @@ def proton_range(w_mev):
 
 
 def energy_at_range(range_cm):
-    return (range_cm / BRAGG_ALPHA)**(1 / BRAGG_P)
+    return (range_cm / BRAGG_ALPHA) ** (1 / BRAGG_P)
 
 
 def straggling(range_cm):

@@ -5,6 +5,7 @@ OPAL-cycl: same axes, m and beta gamma (`-trackOrbit.dat`), map Bz stored with t
 RF-Track: Y vertical, positions in mm, momenta in MeV/c. The proper rotation
 (x, y, z) -> (X, Y, Z) = (x, z, -y) keeps both frames right-handed; fields map the same way.
 """
+
 import numpy as np
 
 C = 299792458.0
@@ -19,11 +20,15 @@ def write_opal_carbon(path, field):
     ntheta = field.ntheta
     span_deg = np.degrees(field.dtheta) * (ntheta - 1)
     if not np.isclose(span_deg, 360.0):
-        raise ValueError(f'OPAL CARBONCYCL needs a full 360 deg map, got {span_deg} deg')
-    bz_kg = -10.0 * field.bz[:field.nr, :ntheta - 1]
+        raise ValueError(
+            f'OPAL CARBONCYCL needs a full 360 deg map, got {span_deg} deg'
+        )
+    bz_kg = -10.0 * field.bz[: field.nr, : ntheta - 1]
     with open(path, 'w') as f:
-        f.write(f'{field.rmin * 1e3:.15g}\n{field.dr * 1e3:.15g}\n0.0\n'
-                f'{np.degrees(field.dtheta):.15g}\n{ntheta - 1}\n{field.nr}\n')
+        f.write(
+            f'{field.rmin * 1e3:.15g}\n{field.dr * 1e3:.15g}\n0.0\n'
+            f'{np.degrees(field.dtheta):.15g}\n{ntheta - 1}\n{field.nr}\n'
+        )
         for row in bz_kg:
             f.write(' '.join(f'{v:.9E}' for v in row) + '\n')
 
@@ -38,8 +43,16 @@ def to_rftrack(pos, mom, mass_mev):
     """LIONS positions (m) and momenta (beta gamma), shape (n, 3), to RF-Track [X Px Y Py Z Pz]."""
     pos_mm = np.asarray(pos) * 1e3
     p_mev = np.asarray(mom) * mass_mev
-    return np.column_stack([pos_mm[:, 0], p_mev[:, 0], pos_mm[:, 2], p_mev[:, 2],
-                            -pos_mm[:, 1], -p_mev[:, 1]])
+    return np.column_stack(
+        [
+            pos_mm[:, 0],
+            p_mev[:, 0],
+            pos_mm[:, 2],
+            p_mev[:, 2],
+            -pos_mm[:, 1],
+            -p_mev[:, 1],
+        ]
+    )
 
 
 def from_rftrack(ps, mass_mev):

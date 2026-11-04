@@ -23,11 +23,15 @@ class BidimWriter:
         self.y_bits = np.zeros(50, dtype=np.int32)
         self.x_max = np.zeros(50, dtype=np.int32)
         self.y_max = np.zeros(50, dtype=np.int32)
-        self.fill = np.zeros(50, dtype=np.int32)  # next free buffer slot, 1-based as in the Fortran
+        self.fill = np.zeros(
+            50, dtype=np.int32
+        )  # next free buffer slot, 1-based as in the Fortran
         self.buffer = np.zeros((4096, 50), dtype=np.int32)
         self.files = {}
 
-    def open(self, count, first, x_bits, y_bits, titles, x_labels, y_labels, bounds):
+    def open(
+        self, count, first, x_bits, y_bits, titles, x_labels, y_labels, bounds
+    ):
         """Create files <first>.bid ... <first+count-1>.bid and write their headers. Returns 0 or an error code."""
         self.n_open = 0
         date = [0, 0, 0]
@@ -50,15 +54,19 @@ class BidimWriter:
         self.last = first + count - 1
 
         for i in range(count):
-            mx = 2**x_bits[i] - 1
+            mx = 2 ** x_bits[i] - 1
             if mx > 8191:
-                print(f'bidim open: bidim {i+1}, wrong number of x bits: {x_bits[i]}')
+                print(
+                    f'bidim open: bidim {i + 1}, wrong number of x bits: {x_bits[i]}'
+                )
                 return 3
             self.x_bits[i] = x_bits[i]
             self.x_max[i] = mx
-            my = 2**y_bits[i] - 1
+            my = 2 ** y_bits[i] - 1
             if my > 8191:
-                print(f'bidim open: bidim {i+1}, wrong number of y bits: {y_bits[i]}')
+                print(
+                    f'bidim open: bidim {i + 1}, wrong number of y bits: {y_bits[i]}'
+                )
                 return 4
             self.y_bits[i] = y_bits[i]
             self.y_max[i] = my
@@ -95,7 +103,7 @@ class BidimWriter:
                 f.write(header)
                 self.fill[i] = 1
             except IOError:
-                print(f'bidim open: cannot open bidim {i+1}')
+                print(f'bidim open: cannot open bidim {i + 1}')
                 for k in range(i):
                     self.files[k].close()
                 return 5
@@ -117,7 +125,9 @@ class BidimWriter:
             print(f'...outside: {self.first} {self.last}')
             return 1
         num = n - self.first
-        events = np.clip(ix, 0, self.x_max[num]) * 65536 + np.clip(iy, 0, self.y_max[num])
+        events = np.clip(ix, 0, self.x_max[num]) * 65536 + np.clip(
+            iy, 0, self.y_max[num]
+        )
         pos = 0
         while pos < len(events):
             # A full buffer is written only when the next event arrives, as in the Fortran
@@ -126,7 +136,7 @@ class BidimWriter:
                 self.fill[num] = 1
             idx = self.fill[num] - 1
             take = min(4096 - idx, len(events) - pos)
-            self.buffer[idx:idx + take, num] = events[pos:pos + take]
+            self.buffer[idx : idx + take, num] = events[pos : pos + take]
             self.fill[num] += take
             pos += take
         return 0
@@ -163,12 +173,13 @@ def setup_bidims(d, bidim, numbid=None):
         return
 
     d.bidims.every = int(prompt('bidim period in time steps:'))
-    d.bidims.centre_mode = prompt('plot centres of curvature or barycentres (c or b):')
+    d.bidims.centre_mode = prompt(
+        'plot centres of curvature or barycentres (c or b):'
+    )
     d.bidims.bary_size = abs(d.run.steps_per_turn // d.bidims.every)
     d.bidims.bary_count = 0
 
-    vals = parse_floats(prompt(
-        'bidim box (xmin xmax ymin ymax in metres):'))
+    vals = parse_floats(prompt('bidim box (xmin xmax ymin ymax in metres):'))
     box = np.zeros((2, 2))
     box[0, 0] = vals[0]
     box[0, 1] = vals[1]
@@ -207,9 +218,13 @@ def setup_bidims(d, bidim, numbid=None):
         dz_max = vals[0]
         dpz_max = vals[1]
         print(f'number of steps: {d.run.n_steps}')
-        d.bidims.start_step = int(prompt('first step stored in the bidims (1 to number of steps):'))
+        d.bidims.start_step = int(
+            prompt('first step stored in the bidims (1 to number of steps):')
+        )
 
-    vals = parse_floats(prompt('barycentre window in metres (xmin xmax ymin ymax):'))
+    vals = parse_floats(
+        prompt('barycentre window in metres (xmin xmax ymin ymax):')
+    )
     bary_xmin, bary_xmax, bary_ymin, bary_ymax = vals[:4]
 
     bounds[0, 0, 0] = box[0, 0]
@@ -226,7 +241,16 @@ def setup_bidims(d, bidim, numbid=None):
     else:
         n_bidims = 5
 
-    err = bidim.open(n_bidims, d.bidims.first, x_bits, y_bits, titles, x_labels, y_labels, bounds)
+    err = bidim.open(
+        n_bidims,
+        d.bidims.first,
+        x_bits,
+        y_bits,
+        titles,
+        x_labels,
+        y_labels,
+        bounds,
+    )
     if err != 0:
         print(f'bidim open failed, error {err}')
         sys.exit(1)
@@ -273,7 +297,9 @@ def setup_bidims(d, bidim, numbid=None):
     if marker_file != 'no':
         try:
             with open(marker_file, 'r') as f:
-                for _ in range(3):  # display window, grid size, niter omer: unused
+                for _ in range(
+                    3
+                ):  # display window, grid size, niter omer: unused
                     f.readline()
                 n_points = 360
                 while True:
@@ -290,27 +316,47 @@ def setup_bidims(d, bidim, numbid=None):
                             for kk in range(n_points):
                                 xd = x1 + kk * step_x
                                 yd = y1 + kk * step_y
-                                ix = int(d.bidims.ax1[0] * xd / 1000.0 + d.bidims.ax0[0])
-                                iy = int(d.bidims.ay1[0] * yd / 1000.0 + d.bidims.ay0[0])
+                                ix = int(
+                                    d.bidims.ax1[0] * xd / 1000.0
+                                    + d.bidims.ax0[0]
+                                )
+                                iy = int(
+                                    d.bidims.ay1[0] * yd / 1000.0
+                                    + d.bidims.ay0[0]
+                                )
                                 bidim.add(d.bidims.first, ix, iy)
                     elif kind == 'cercle':
                         n_circles = int(f.readline().split()[0])
                         for _ in range(n_circles):
                             vals = f.readline().split()
-                            xc, yc, rc = fortran_float(vals[0]), fortran_float(vals[1]), fortran_float(vals[2])
+                            xc, yc, rc = (
+                                fortran_float(vals[0]),
+                                fortran_float(vals[1]),
+                                fortran_float(vals[2]),
+                            )
                             theta1 = fortran_float(vals[3]) * np.pi / 180.0
                             theta2 = fortran_float(vals[4]) * np.pi / 180.0
                             flag = fortran_float(vals[6])
                             dtheta = (theta2 - theta1) / (n_points - 1.0)
                             if flag < -10.0:
-                                d.traps.circles.append(TrapCircle(xc / 1000.0, yc / 1000.0, rc / 1000.0))
+                                d.traps.circles.append(
+                                    TrapCircle(
+                                        xc / 1000.0, yc / 1000.0, rc / 1000.0
+                                    )
+                                )
                             if flag > -9000.0:
                                 for kk in range(n_points):
                                     theta = theta1 + kk * dtheta
                                     xd = xc + rc * np.cos(theta)
                                     yd = yc + rc * np.sin(theta)
-                                    ix = int(d.bidims.ax1[0] * xd / 1000.0 + d.bidims.ax0[0])
-                                    iy = int(d.bidims.ay1[0] * yd / 1000.0 + d.bidims.ay0[0])
+                                    ix = int(
+                                        d.bidims.ax1[0] * xd / 1000.0
+                                        + d.bidims.ax0[0]
+                                    )
+                                    iy = int(
+                                        d.bidims.ay1[0] * yd / 1000.0
+                                        + d.bidims.ay0[0]
+                                    )
                                     bidim.add(d.bidims.first, ix, iy)
                     else:
                         print(f'marker file: unknown keyword: {kind}')
@@ -360,8 +406,8 @@ def fill_bidims(d, bidim):
             bd.bary_y[bd.bary_count - 1] = yc
             if bd.bary_count == bd.bary_size:
                 bd.bary_count = 0
-                xbary = np.sum(bd.bary_x[:bd.bary_size]) / bd.bary_size
-                ybary = np.sum(bd.bary_y[:bd.bary_size]) / bd.bary_size
+                xbary = np.sum(bd.bary_x[: bd.bary_size]) / bd.bary_size
+                ybary = np.sum(bd.bary_y[: bd.bary_size]) / bd.bary_size
                 ix2 = int(bd.ax1[1] * xbary + bd.ax0[1])
                 iy2 = int(bd.ay1[1] * ybary + bd.ay0[1])
                 if 0 <= ix2 <= 8191 and 0 <= iy2 <= 8191:
@@ -371,21 +417,42 @@ def fill_bidims(d, bidim):
         phase_space_coords(b)
         nbr = b.families[0].size
         i1 = b.families[0].start
-        gamma_ref = np.sqrt(1.0 + b.p[i1]**2)
+        gamma_ref = np.sqrt(1.0 + b.p[i1] ** 2)
         w = b.in_window[:nbr]
-        dphi = (b.ps[4, :nbr] * d.rf.omega / C_LIGHT / b.p[i1] * 180.0 / np.pi * gamma_ref)[w]
+        dphi = (
+            b.ps[4, :nbr]
+            * d.rf.omega
+            / C_LIGHT
+            / b.p[i1]
+            * 180.0
+            / np.pi
+            * gamma_ref
+        )[w]
         dw = (b.ps[5, :nbr] * b.p[i1] / gamma_ref / (gamma_ref - 1.0))[w]
         dr = (b.ps[0, :nbr] * 1000.0)[w]
         dpr = (b.ps[1, :nbr] / b.p[i1] * 1000.0)[w]
         dz = (b.ps[2, :nbr] * 1000.0)[w]
         dpz = (b.ps[3, :nbr] / b.p[i1] * 1000.0)[w]
 
-        for h, u, v in ((3, dphi, dw), (4, dr, dpr), (7, dz, dpz), (5, dr, dphi)):
-            bidim.add_many(bd.first + h, np.clip(_channel(bd.ax1[h] * u + bd.ax0[h]), 0, 8191),
-                           np.clip(_channel(bd.ay1[h] * v + bd.ay0[h]), 0, 8191))
+        for h, u, v in (
+            (3, dphi, dw),
+            (4, dr, dpr),
+            (7, dz, dpz),
+            (5, dr, dphi),
+        ):
+            bidim.add_many(
+                bd.first + h,
+                np.clip(_channel(bd.ax1[h] * u + bd.ax0[h]), 0, 8191),
+                np.clip(_channel(bd.ay1[h] * v + bd.ay0[h]), 0, 8191),
+            )
 
         # Time axis: the same x channel for bidims 6 and 8
-        ix = max(0, min(int(bd.ax1[6] * d.run.step / bd.every + bd.ax0[6]), 8191))
+        ix = max(
+            0, min(int(bd.ax1[6] * d.run.step / bd.every + bd.ax0[6]), 8191)
+        )
         for h, v in ((6, dr), (8, dz)):
-            bidim.add_many(bd.first + h, np.full(len(v), ix),
-                           np.clip(_channel(bd.ay1[h] * v + bd.ay0[h]), 0, 8191))
+            bidim.add_many(
+                bd.first + h,
+                np.full(len(v), ix),
+                np.clip(_channel(bd.ay1[h] * v + bd.ay0[h]), 0, 8191),
+            )

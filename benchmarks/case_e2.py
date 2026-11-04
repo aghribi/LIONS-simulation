@@ -3,6 +3,7 @@
 usage: uv run --group gpu python benchmarks/case_e2.py [outdir] [--device cpu|mps|cuda]
 Writes case_e2.parquet. MPS has no float64: only the float32 variants run there.
 """
+
 import argparse
 import contextlib
 import io
@@ -47,16 +48,20 @@ def make_port(d, dtype, compiled):
 
 def start(d, n, dtype):
     r0 = torch.linspace(0.14, 0.15, n, dtype=torch.float64)
-    return tuple(v.to(DEVICE, dtype) for v in initial(r0, 0.0, d.bunch.p[0], n))
+    return tuple(
+        v.to(DEVICE, dtype) for v in initial(r0, 0.0, d.bunch.p[0], n)
+    )
 
 
 def timed(fn):
     """Median wall time of REPEATS calls after one warm-up (the warm-up time is returned too)."""
+
     def sync():
         if DEVICE == 'cuda':
             torch.cuda.synchronize()
         elif DEVICE == 'mps':
             torch.mps.synchronize()
+
     t0 = time.perf_counter()
     fn()
     sync()
@@ -72,16 +77,26 @@ def timed(fn):
 
 def lions_time(n):
     with contextlib.redirect_stdout(io.StringIO()):
-        syn.write_deck('deck_speed.dat', fhf=syn.revolution_frequency(W, B0), r0=syn.larmor_radius(W, B0), w0=W,
-                       turns=STEPS // 360, npaspt=360, nbrion=n, rmax1=0.001)
+        syn.write_deck(
+            'deck_speed.dat',
+            fhf=syn.revolution_frequency(W, B0),
+            r0=syn.larmor_radius(W, B0),
+            w0=W,
+            turns=STEPS // 360,
+            npaspt=360,
+            nbrion=n,
+            rmax1=0.001,
+        )
         return timed(lambda: lions.run('deck_speed.dat'))
 
 
 def main(outdir):
-    global DEVICE   # the accuracy section runs the CPU reference, then restores the device
+    global DEVICE  # the accuracy section runs the CPU reference, then restores the device
     outdir.mkdir(parents=True, exist_ok=True)
     records, inputs = [], []
-    dtypes = (torch.float32,) if DEVICE == 'mps' else (torch.float64, torch.float32)
+    dtypes = (
+        (torch.float32,) if DEVICE == 'mps' else (torch.float64, torch.float32)
+    )
 
     def add(code, dtype, compiled, mode, n, run):
         """Time run() and record it; a variant that fails (a backend that cannot compile it) is recorded too."""
@@ -91,11 +106,26 @@ def main(outdir):
         except Exception as exc:
             wall = first = None
             error = f'{type(exc).__name__}: {str(exc).strip().splitlines()[0][:300]}'
-            print(f'{code} {dtype} compiled={compiled} {mode} {n}: {error}', file=sys.stderr)
-        records.append({'code': code, 'dtype': dtype, 'compiled': compiled, 'mode': mode, 'particles': n,
-                        'steps': STEPS, 'wall_s': wall, 'first_call_s': first,
-                        'particle_steps_per_s': n * STEPS / wall if wall else None, 'metric': None, 'value': None,
-                        'error': error})
+            print(
+                f'{code} {dtype} compiled={compiled} {mode} {n}: {error}',
+                file=sys.stderr,
+            )
+        records.append(
+            {
+                'code': code,
+                'dtype': dtype,
+                'compiled': compiled,
+                'mode': mode,
+                'particles': n,
+                'steps': STEPS,
+                'wall_s': wall,
+                'first_call_s': first,
+                'particle_steps_per_s': n * STEPS / wall if wall else None,
+                'metric': None,
+                'value': None,
+                'error': error,
+            }
+        )
 
     work = outdir / 'B'
     work.mkdir(exist_ok=True)
@@ -113,20 +143,46 @@ def main(outdir):
                 for n in PARTICLES:
                     state = start(d, n, dtype)
                     with torch.no_grad():
-                        add('torch', name, compiled, 'forward', n,
-                            lambda: timed(lambda: port.run(state, 1.0, STEPS)))
-                    print(f'torch {name} compiled={compiled} {n} done', file=sys.stderr)
+                        add(
+                            'torch',
+                            name,
+                            compiled,
+                            'forward',
+                            n,
+                            lambda: timed(lambda: port.run(state, 1.0, STEPS)),
+                        )
+                    print(
+                        f'torch {name} compiled={compiled} {n} done',
+                        file=sys.stderr,
+                    )
                 state = start(d, BACKWARD_PARTICLES, dtype)
 
                 def fwd_bwd():
-                    s = torch.tensor(1.0, dtype=dtype, device=DEVICE, requires_grad=True)
+                    s = torch.tensor(
+                        1.0, dtype=dtype, device=DEVICE, requires_grad=True
+                    )
                     port.run(state, s, STEPS)[2].sum().backward()
-                add('torch', name, compiled, 'forward+backward', BACKWARD_PARTICLES, lambda: timed(fwd_bwd))
+
+                add(
+                    'torch',
+                    name,
+                    compiled,
+                    'forward+backward',
+                    BACKWARD_PARTICLES,
+                    lambda: timed(fwd_bwd),
+                )
 
     # each device variant against eager float64 on the CPU, cases B0 and B
     device = DEVICE
-    variants = [(torch.float32, False)] if device == 'mps' else [(torch.float64, False), (torch.float64, True),
-                                                                 (torch.float32, False)]
+    variants = (
+        [(torch.float32, False)]
+        if device == 'mps'
+        else [
+            (torch.float64, False),
+            (torch.float64, True),
+            (torch.float32, False),
+        ]
+    )
     for case in ('B0', 'B'):
         cw = outdir / case
         cw.mkdir(exist_ok=True)
@@ -135,37 +191,83 @@ def main(outdir):
             inputs.append(cw / 'bmap.dat')
             d = load(360)
             out = {}
-            for dev, dtype, compiled in [('cpu', torch.float64, False)] + [(device, *v) for v in variants]:
+            for dev, dtype, compiled in [('cpu', torch.float64, False)] + [
+                (device, *v) for v in variants
+            ]:
                 DEVICE = dev
                 with torch.no_grad():
-                    r, _, phase = make_port(d, dtype, compiled).run(start(d, BACKWARD_PARTICLES, dtype), 1.0, STEPS)
-                out[(dev, dtype, compiled)] = r.cpu().double(), phase.cpu().double()
+                    r, _, phase = make_port(d, dtype, compiled).run(
+                        start(d, BACKWARD_PARTICLES, dtype), 1.0, STEPS
+                    )
+                out[(dev, dtype, compiled)] = (
+                    r.cpu().double(),
+                    phase.cpu().double(),
+                )
             DEVICE = device
             ref_r, ref_phase = out[('cpu', torch.float64, False)]
             for (dev, dtype, compiled), (r, phase) in out.items():
                 if (dev, dtype, compiled) == ('cpu', torch.float64, False):
                     continue
                 label = f"{dev}_{str(dtype).removeprefix('torch.')}{'_compiled' if compiled else ''}"
-                for metric, value in ((f'{label}_r_max_rel', ((r - ref_r).abs() / ref_r).max().item()),
-                                      (f'{label}_phase_max_abs_rad', (phase - ref_phase).abs().max().item())):
-                    records.append({'code': 'torch', 'dtype': None, 'compiled': None, 'mode': case,
-                                    'particles': BACKWARD_PARTICLES, 'steps': STEPS, 'wall_s': None,
-                                    'first_call_s': None, 'particle_steps_per_s': None, 'metric': metric,
-                                    'value': value, 'error': None})
+                for metric, value in (
+                    (
+                        f'{label}_r_max_rel',
+                        ((r - ref_r).abs() / ref_r).max().item(),
+                    ),
+                    (
+                        f'{label}_phase_max_abs_rad',
+                        (phase - ref_phase).abs().max().item(),
+                    ),
+                ):
+                    records.append(
+                        {
+                            'code': 'torch',
+                            'dtype': None,
+                            'compiled': None,
+                            'mode': case,
+                            'particles': BACKWARD_PARTICLES,
+                            'steps': STEPS,
+                            'wall_s': None,
+                            'first_call_s': None,
+                            'particle_steps_per_s': None,
+                            'metric': metric,
+                            'value': value,
+                            'error': None,
+                        }
+                    )
 
-    device_name = {'cuda': lambda: torch.cuda.get_device_name(), 'mps': lambda: 'Apple GPU (MPS)',
-                   'cpu': lambda: platform.processor() or platform.machine()}[DEVICE]()
-    meta = {'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, device {DEVICE}', 'device_name': device_name,
-            'torch': torch.__version__,
-            'cpu': platform.processor() or platform.machine(), 'repeats': str(REPEATS),
-            **provenance(*inputs), 'machine': platform.platform(), 'python': platform.python_version()}
-    pq.write_table(pa.Table.from_pylist(records).replace_schema_metadata(meta), outdir / 'case_e2.parquet')
+    device_name = {
+        'cuda': lambda: torch.cuda.get_device_name(),
+        'mps': lambda: 'Apple GPU (MPS)',
+        'cpu': lambda: platform.processor() or platform.machine(),
+    }[DEVICE]()
+    meta = {
+        'case': f'E2: speed spike, {W} MeV protons, {STEPS} steps, device {DEVICE}',
+        'device_name': device_name,
+        'torch': torch.__version__,
+        'cpu': platform.processor() or platform.machine(),
+        'repeats': str(REPEATS),
+        **provenance(*inputs),
+        'machine': platform.platform(),
+        'python': platform.python_version(),
+    }
+    pq.write_table(
+        pa.Table.from_pylist(records).replace_schema_metadata(meta),
+        outdir / 'case_e2.parquet',
+    )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('outdir', nargs='?', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_e2')
-    parser.add_argument('--device', choices=('cpu', 'mps', 'cuda'), default='cpu')
+    parser.add_argument(
+        'outdir',
+        nargs='?',
+        type=Path,
+        default=ROOT / 'benchmarks' / 'runs' / 'case_e2',
+    )
+    parser.add_argument(
+        '--device', choices=('cpu', 'mps', 'cuda'), default='cpu'
+    )
     args = parser.parse_args()
     DEVICE = args.device
     main(args.outdir.resolve())

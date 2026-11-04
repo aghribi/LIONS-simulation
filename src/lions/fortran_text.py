@@ -49,7 +49,7 @@ class FortranFile:
                 j = i + 1
                 while j < len(line) and line[j] != quote:
                     j += 1
-                tokens.append(line[i + 1:j])
+                tokens.append(line[i + 1 : j])
                 i = j + 1
             else:
                 j = i

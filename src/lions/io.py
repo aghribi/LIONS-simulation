@@ -1,12 +1,22 @@
 """Input deck, field maps and potentials; Fortran list-directed reading."""
 
-
 import numpy as np
 
 from .fortran_text import FortranFile, fortran_float, parse_floats
 from .deck import Deck, read_deck
-from .state import (Bunch, DeflectorElement, DipoleElement, GridElement, IonFamily,
-                    CENTRAL_NX, CENTRAL_NY, MAP_NR, MAP_NTHETA, OUTER_NX, OUTER_NY)
+from .state import (
+    Bunch,
+    DeflectorElement,
+    DipoleElement,
+    GridElement,
+    IonFamily,
+    CENTRAL_NX,
+    CENTRAL_NY,
+    MAP_NR,
+    MAP_NTHETA,
+    OUTER_NX,
+    OUTER_NY,
+)
 from .constants import AMU, C_LIGHT, ELECTRON_MASS_U, E_CHARGE, MEV
 from .beam import distribute_bunch
 from .fields import add_harmonics, prepare_hermite
@@ -44,9 +54,13 @@ def read_bfield_map(path):
         rmin, rmax = fortran_float(vals[0]), fortran_float(vals[1])
         nr, ntheta = int(vals[2]), int(vals[3])
         if not (1 < nr <= MAP_NR and 1 < ntheta <= MAP_NTHETA):
-            raise ValueError(f'{path}: map size nr={nr}, ntheta={ntheta} outside '
-                             f'{MAP_NR} x {MAP_NTHETA}')
-        bz, d2bz, dbzdx, dbzdy = (np.zeros((MAP_NR, MAP_NTHETA)) for _ in range(4))
+            raise ValueError(
+                f'{path}: map size nr={nr}, ntheta={ntheta} outside '
+                f'{MAP_NR} x {MAP_NTHETA}'
+            )
+        bz, d2bz, dbzdx, dbzdy = (
+            np.zeros((MAP_NR, MAP_NTHETA)) for _ in range(4)
+        )
         if ntheta != 91:
             print('full field map...')
             for arr in (bz, d2bz, dbzdx, dbzdy):
@@ -61,13 +75,15 @@ def read_bfield_map(path):
                 dbzx_read = _read_block(f, nr, 91)
                 dbzy_read = _read_block(f, nr, 91)
             except (ValueError, IndexError):
-                print('field map without dBz/dx, dBz/dy: Bx = By = 0, motion stays in the median plane')
+                print(
+                    'field map without dBz/dx, dBz/dy: Bx = By = 0, motion stays in the median plane'
+                )
                 dbzx_read = dbzy_read = np.zeros((nr, 91))
             # 8-fold symmetry, as in the Fortran (1-based ranges in comments)
             for arr in (bz, d2bz):
-                arr[:nr, 180:90:-1] = arr[:nr, :90]        # (181:92:-1) = (1:90)
-                arr[:nr, 181:361] = arr[:nr, 1:181]        # (182:361) = (2:181)
-                arr[:nr, 361:721] = arr[:nr, 1:361]        # (362:721) = (2:361)
+                arr[:nr, 180:90:-1] = arr[:nr, :90]  # (181:92:-1) = (1:90)
+                arr[:nr, 181:361] = arr[:nr, 1:181]  # (182:361) = (2:181)
+                arr[:nr, 361:721] = arr[:nr, 1:361]  # (362:721) = (2:361)
             r2 = np.sqrt(2.0) / 2.0
             dbzdx[:nr, 90::-1] = r2 * (dbzx_read + dbzy_read)
             dbzdy[:nr, 90::-1] = r2 * (dbzx_read - dbzy_read)
@@ -79,9 +95,20 @@ def read_bfield_map(path):
             dbzdy[:nr, 361:721] = -dbzdy[:nr, 359::-1]
             dtheta = np.pi / 4.0 / (ntheta - 1.0)
             ntheta_all = 721
-    return {'title': title, 'rmin': rmin, 'rmax': rmax, 'nr': nr, 'ntheta': ntheta,
-            'ntheta_all': ntheta_all, 'dr': (rmax - rmin) / (nr - 1.0), 'dtheta': dtheta,
-            'bz': bz, 'd2bz': d2bz, 'dbzdx': dbzdx, 'dbzdy': dbzdy}
+    return {
+        'title': title,
+        'rmin': rmin,
+        'rmax': rmax,
+        'nr': nr,
+        'ntheta': ntheta,
+        'ntheta_all': ntheta_all,
+        'dr': (rmax - rmin) / (nr - 1.0),
+        'dtheta': dtheta,
+        'bz': bz,
+        'd2bz': d2bz,
+        'dbzdx': dbzdx,
+        'dbzdy': dbzdy,
+    }
 
 
 def read_central_potential(path, swap=False):
@@ -98,8 +125,10 @@ def read_central_potential(path, swap=False):
         nx, ny = (int(v) for v in np.frombuffer(f.read(8), dtype=idtype))
         f.read(4)
         if not (1 < nx <= CENTRAL_NX and 1 < ny <= CENTRAL_NY):
-            raise ValueError(f'{path}: grid nx={nx}, ny={ny} outside {CENTRAL_NX} x {CENTRAL_NY}'
-                             ' (wrong byte order?)')
+            raise ValueError(
+                f'{path}: grid nx={nx}, ny={ny} outside {CENTRAL_NX} x {CENTRAL_NY}'
+                ' (wrong byte order?)'
+            )
         rows = []
         for _ in range(2 * nx):
             f.read(4)
@@ -117,8 +146,16 @@ def read_central_potential(path, swap=False):
         print('central potential without d2pot: Ez = 0 in the central region')
         d2pot = np.zeros((nx, ny))
     xmin, xmax, ymin, ymax = (float(v) / 1000.0 for v in header)
-    return {'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax,
-            'nx': nx, 'ny': ny, 'pot': pot, 'd2pot': d2pot}
+    return {
+        'xmin': xmin,
+        'xmax': xmax,
+        'ymin': ymin,
+        'ymax': ymax,
+        'nx': nx,
+        'ny': ny,
+        'pot': pot,
+        'd2pot': d2pot,
+    }
 
 
 def read_outer_potential(path):
@@ -129,11 +166,21 @@ def read_outer_potential(path):
         xmin, xmax, ymin, ymax = (fortran_float(v) for v in vals[:4])
         nx, ny = int(fortran_float(vals[4])), int(fortran_float(vals[5]))
         if not (1 < nx <= OUTER_NX and 1 < ny <= OUTER_NY):
-            raise ValueError(f'{path}: grid nx={nx}, ny={ny} outside {OUTER_NX} x {OUTER_NY}')
+            raise ValueError(
+                f'{path}: grid nx={nx}, ny={ny} outside {OUTER_NX} x {OUTER_NY}'
+            )
         pot = _read_block(f, nx, ny)
         d2pot = _read_block(f, nx, ny)
-    return {'xmin': xmin, 'xmax': xmax, 'ymin': ymin, 'ymax': ymax,
-            'nx': nx, 'ny': ny, 'pot': pot, 'd2pot': d2pot}
+    return {
+        'xmin': xmin,
+        'xmax': xmax,
+        'ymin': ymin,
+        'ymax': ymax,
+        'nx': nx,
+        'ny': ny,
+        'pot': pot,
+        'd2pot': d2pot,
+    }
 
 
 def load(d, deck):
@@ -160,7 +207,7 @@ def load(d, deck):
     for order, h in enumerate((deck.harmonic1, deck.harmonic2)):
         field.harmonic_n_coef[order] = 0 if h is None else len(h.coefs)
         if h is not None:
-            field.harmonic_coef[:len(h.coefs), order] = h.coefs
+            field.harmonic_coef[: len(h.coefs), order] = h.coefs
             field.harmonic_phase[order] = h.phase_deg
     rf.gap_offset = 0.0
     if deck.gap_offset is not None:
@@ -182,24 +229,52 @@ def load(d, deck):
         else:
             ext.start_step = int(ext.cut_bunch + 0.5)
             print('extraction: the bunch will be kept whole')
-        ext.deflectors = [DeflectorElement(e.r, e.e, e.in_x, e.in_y, e.in_angle_deg * np.pi / 180.0,
-                                           e.out_x, e.out_y, e.out_angle_deg * np.pi / 180.0)
-                          for e in deck.deflectors]
-        ext.dipoles = [DipoleElement(m.r, m.gradient, m.x, m.y, m.in_angle_deg * np.pi / 180.0,
-                                     m.out_angle_deg * np.pi / 180.0) for m in deck.dipoles]
+        ext.deflectors = [
+            DeflectorElement(
+                e.r,
+                e.e,
+                e.in_x,
+                e.in_y,
+                e.in_angle_deg * np.pi / 180.0,
+                e.out_x,
+                e.out_y,
+                e.out_angle_deg * np.pi / 180.0,
+            )
+            for e in deck.deflectors
+        ]
+        ext.dipoles = [
+            DipoleElement(
+                m.r,
+                m.gradient,
+                m.x,
+                m.y,
+                m.in_angle_deg * np.pi / 180.0,
+                m.out_angle_deg * np.pi / 180.0,
+            )
+            for m in deck.dipoles
+        ]
         if ext.grids_on > 0.0:
             print('extraction grids')
             ext.grid_start_step = int(ext.grid_start + 0.5)
             ext.grid_file_prefix = deck.grid_file_prefix
-            ext.grids = [GridElement(g.angle_deg, g.x_mm / 1000.0, g.y_mm / 1000.0,
-                                     g.xc_mm / 1000.0, g.yc_mm / 1000.0,
-                                     f'{deck.grid_file_prefix}.{kg + 1}')
-                         for kg, g in enumerate(deck.grids)]
+            ext.grids = [
+                GridElement(
+                    g.angle_deg,
+                    g.x_mm / 1000.0,
+                    g.y_mm / 1000.0,
+                    g.xc_mm / 1000.0,
+                    g.yc_mm / 1000.0,
+                    f'{deck.grid_file_prefix}.{kg + 1}',
+                )
+                for kg, g in enumerate(deck.grids)
+            ]
             for kg, grid in enumerate(ext.grids):
                 fgrid = open(grid.file, 'w')
                 d.outputs.open[f'grid{kg}'] = fgrid
                 fgrid.write('theta x y xc yc : \n')
-                fgrid.write(f'{grid.angle_deg} {grid.x} {grid.y} {grid.xc} {grid.yc}\n')
+                fgrid.write(
+                    f'{grid.angle_deg} {grid.x} {grid.y} {grid.xc} {grid.yc}\n'
+                )
 
     run.dt = rf.harmonic / rf.frequency / run.steps_per_turn
     rf.omega = 2.0 * np.pi * rf.frequency
@@ -213,8 +288,10 @@ def load(d, deck):
 
     n_particles = deck.total_particles
     if sum(fam.size for fam in deck.families) != n_particles:
-        raise ValueError(f'{run.deck_file}: family sizes add up to '
-                         f'{sum(fam.size for fam in deck.families)}, n = {n_particles}')
+        raise ValueError(
+            f'{run.deck_file}: family sizes add up to '
+            f'{sum(fam.size for fam in deck.families)}, n = {n_particles}'
+        )
     b = d.bunch = Bunch(n_particles)
     b.alive[:] = True
     b.n_alive = n_particles
@@ -223,10 +300,19 @@ def load(d, deck):
     b.w0_mev_per_u = deck.families[0].w0_mev_per_u
     start = 0
     for fam in deck.families:
-        f = IonFamily(start=start, size=fam.size, atomic_mass=fam.atomic_mass,
-                      mass_number=fam.mass_number, charge_state=fam.charge_state,
-                      r0=fam.r0, theta0=fam.theta0_deg * (np.pi / 180.0), z0=fam.z0,
-                      pr0=fam.pr0_mrad * 0.001, pz0=fam.pz0_mrad * 0.001, phi0_deg=fam.phi0_deg)
+        f = IonFamily(
+            start=start,
+            size=fam.size,
+            atomic_mass=fam.atomic_mass,
+            mass_number=fam.mass_number,
+            charge_state=fam.charge_state,
+            r0=fam.r0,
+            theta0=fam.theta0_deg * (np.pi / 180.0),
+            z0=fam.z0,
+            pr0=fam.pr0_mrad * 0.001,
+            pz0=fam.pz0_mrad * 0.001,
+            phi0_deg=fam.phi0_deg,
+        )
         f.w0 = fam.w0_mev_per_u * MEV * f.mass_number
         b.families.append(f)
         i1, i2 = start, start + fam.size
@@ -234,7 +320,9 @@ def load(d, deck):
         b.x[i1:i2] = f.r0 * np.cos(f.theta0)
         b.y[i1:i2] = f.r0 * np.sin(f.theta0)
         b.z[i1:i2] = f.z0
-        b.mass[i1:i2] = AMU * (f.atomic_mass - ELECTRON_MASS_U * f.charge_state)
+        b.mass[i1:i2] = AMU * (
+            f.atomic_mass - ELECTRON_MASS_U * f.charge_state
+        )
         b.mass_c[i1:i2] = b.mass[i1:i2] * C_LIGHT
         b.rest_energy[i1:i2] = b.mass[i1:i2] * C_LIGHT**2
         b.gamma[i1:i2] = 1.0 + f.w0 / b.rest_energy[i1:i2]
@@ -251,7 +339,9 @@ def load(d, deck):
     for kg in range(len(ext.grids)):
         fgrid = d.outputs.open[f'grid{kg}']
         fgrid.write('particles (n A amat q):\n')
-        fgrid.write(f'{n_particles} {f0.mass_number} {f0.atomic_mass} {f0.charge_state}\n')
+        fgrid.write(
+            f'{n_particles} {f0.mass_number} {f0.atomic_mass} {f0.charge_state}\n'
+        )
         fgrid.write('RF (steps per turn, frequency, harmonic):\n')
         fgrid.write(f'{run.steps_per_turn} {rf.frequency} {rf.harmonic}\n')
 
@@ -270,19 +360,30 @@ def load(d, deck):
             d.outputs.open['correlation'].write(
                 'turn     r     theta    dr    ds      dphi'
                 '   epsr    dwsw        wmpa     dw          dwdphi'
-                '       dz     epsz\n')
+                '       dz     epsz\n'
+            )
         if files.matrix != 'no':
             d.outputs.open['matrix'] = open(files.matrix, 'w')
         if files.dc_matrix != 'no':
             d.outputs.open['dc_matrix'] = open(files.dc_matrix, 'w')
             d.outputs.open['dc_matrix'].write(
                 'turn     r     theta   drdc  dsdc  dphidc'
-                ' epsrdc  dwswdc        wmpa   dwdc        dwdphidc\n')
+                ' epsrdc  dwswdc        wmpa   dwdc        dwdphidc\n'
+            )
         # Sigma matrices are read now, the bunch is built after the field map is loaded
         with open(files.sigma) as fsigma:
             for _ in b.families:
-                sigma_matrices.append(np.array([[fortran_float(v) for v in fsigma.readline().split()[:6]]
-                                                for _ in range(6)]))
+                sigma_matrices.append(
+                    np.array(
+                        [
+                            [
+                                fortran_float(v)
+                                for v in fsigma.readline().split()[:6]
+                            ]
+                            for _ in range(6)
+                        ]
+                    )
+                )
 
     run.t0 = f0.phi0_deg * np.pi / 180.0 / rf.omega
     run.t = run.t0
@@ -309,38 +410,55 @@ def load(d, deck):
 
     if d.field.harmonic_n_coef[0] != 0 or d.field.harmonic_n_coef[1] != 0:
         print('field map plus first and/or second harmonic')
-        add_harmonics(d.field.rmin, d.field.rmax, d.field.nr, ntheta_all, d.field.bz, d.field.d2bz,
-             d.field.dbzdx, d.field.dbzdy, d.field.harmonic_n_coef, d.field.harmonic_coef, d.field.harmonic_phase)
+        add_harmonics(
+            d.field.rmin,
+            d.field.rmax,
+            d.field.nr,
+            ntheta_all,
+            d.field.bz,
+            d.field.d2bz,
+            d.field.dbzdx,
+            d.field.dbzdy,
+            d.field.harmonic_n_coef,
+            d.field.harmonic_coef,
+            d.field.harmonic_phase,
+        )
 
     d.field.dr = (d.field.rmax - d.field.rmin) / (d.field.nr - 1.0)
 
     # Without b_factor the map is used as read (as in the Fortran).
     # With b_factor it is scaled to max|Bz| = b_factor (T).
     if d.field.b_factor is not None:
-        bz_max = np.max(np.abs(d.field.bz[:d.field.nr, :ntheta_all]))
+        bz_max = np.max(np.abs(d.field.bz[: d.field.nr, :ntheta_all]))
         if bz_max == 0.0:
-            raise ValueError(f'magnetic field map is zero ({d.files.bfield}): b_factor cannot be applied')
+            raise ValueError(
+                f'magnetic field map is zero ({d.files.bfield}): b_factor cannot be applied'
+            )
         scale = d.field.b_factor / bz_max
         d.field.bz *= scale
         d.field.d2bz *= scale
         d.field.dbzdx *= scale
         d.field.dbzdy *= scale
-        print(f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.field.b_factor:.6f} T')
+        print(
+            f'magnetic field map: Bmax read = {bz_max:.6e} T, B factor = {d.field.b_factor:.6f} T'
+        )
 
     d.field.interpolation = deck.field_interpolation
     d.field.azimuth = deck.field_azimuth
     if d.field.interpolation == 'hermite':
         prepare_hermite(d.field, ntheta_all)
 
-    d.field.bz *= (1.0 + d.field.db_over_b)
-    d.field.d2bz *= (1.0 + d.field.db_over_b)
+    d.field.bz *= 1.0 + d.field.db_over_b
+    d.field.d2bz *= 1.0 + d.field.db_over_b
     if d.field.interpolation == 'hermite':
         # the Hermite surface is Bz itself: its slopes scale with it
         for arr in (d.field.dbzdr, d.field.dbzdtheta, d.field.d2bzdrdtheta):
-            arr *= (1.0 + d.field.db_over_b)
+            arr *= 1.0 + d.field.db_over_b
 
     if d.files.central_potential != 'no':
-        pot = read_central_potential(d.files.central_potential, d.run.swap_bytes == 'y')
+        pot = read_central_potential(
+            d.files.central_potential, d.run.swap_bytes == 'y'
+        )
         d.central.xmin, d.central.xmax = pot['xmin'], pot['xmax']
         d.central.ymin, d.central.ymax = pot['ymin'], pot['ymax']
         nx1, ny1 = pot['nx'], pot['ny']
@@ -348,8 +466,12 @@ def load(d, deck):
         d.central.d2pot[:nx1, :ny1] = pot['d2pot']
     else:
         print('no central region potential file')
-        vals = parse_floats(prompt('central grid: xmin1 xmax1 ymin1 ymax1 nx1 ny1:'))
-        d.central.xmin, d.central.xmax, d.central.ymin, d.central.ymax = vals[:4]
+        vals = parse_floats(
+            prompt('central grid: xmin1 xmax1 ymin1 ymax1 nx1 ny1:')
+        )
+        d.central.xmin, d.central.xmax, d.central.ymin, d.central.ymax = vals[
+            :4
+        ]
         nx1 = int(vals[4])
         ny1 = int(vals[5])
         d.central.pot[:] = 0.0
@@ -370,7 +492,7 @@ def load(d, deck):
 
     distribute_bunch(d, sigma_matrices)
 
-    r = np.sqrt(d.bunch.x[0]**2 + d.bunch.y[0]**2)
+    r = np.sqrt(d.bunch.x[0] ** 2 + d.bunch.y[0] ** 2)
     d.run.theta_deg = np.arccos(d.bunch.x[0] / r)
     if d.bunch.y[0] < 0.0:
         d.run.theta_deg = 2.0 * np.pi - d.run.theta_deg

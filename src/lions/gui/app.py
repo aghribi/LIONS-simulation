@@ -3,9 +3,17 @@
 import sys
 import os
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QDockWidget, QTextEdit,
-    QToolBar, QAction, QProgressBar, QMessageBox,
-    QInputDialog, QStatusBar, QFileDialog
+    QApplication,
+    QMainWindow,
+    QDockWidget,
+    QTextEdit,
+    QToolBar,
+    QAction,
+    QProgressBar,
+    QMessageBox,
+    QInputDialog,
+    QStatusBar,
+    QFileDialog,
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QTextCursor
@@ -153,7 +161,9 @@ class LionsMainWindow(QMainWindow):
         toolbar.addAction(self.action_fields)
 
         self.action_arcade = QAction("Arcade", self)
-        self.action_arcade.setToolTip("ION RUSH: the cyclotron trainer (needs the game extra)")
+        self.action_arcade.setToolTip(
+            "ION RUSH: the cyclotron trainer (needs the game extra)"
+        )
         self.action_arcade.triggered.connect(self.on_open_arcade)
         toolbar.addAction(self.action_arcade)
 
@@ -191,7 +201,8 @@ class LionsMainWindow(QMainWindow):
         self.console.setMaximumHeight(200)
         self.console.setStyleSheet(
             "QTextEdit { background-color: #1e1e2e; color: #e0e0e0; "
-            "border: 1px solid #aab5c8; }")
+            "border: 1px solid #aab5c8; }"
+        )
 
         dock = QDockWidget("Console", self)
         dock.setWidget(self.console)
@@ -213,14 +224,16 @@ class LionsMainWindow(QMainWindow):
     def on_run(self):
         """Start the simulation."""
         if self.worker and self.worker.isRunning():
-            QMessageBox.warning(self, "Warning",
-                                "A simulation is already running.")
+            QMessageBox.warning(
+                self, "Warning", "A simulation is already running."
+            )
             return
 
         ficin = self.input_panel.ficin_edit.text().strip()
         if not ficin:
-            QMessageBox.warning(self, "Missing file",
-                                "Select a data file (ficin).")
+            QMessageBox.warning(
+                self, "Missing file", "Select a data file (ficin)."
+            )
             return
         ficb = self.input_panel.ficb_edit.text().strip()
         ficv2 = self.input_panel.ficv2_edit.text().strip()
@@ -231,10 +244,12 @@ class LionsMainWindow(QMainWindow):
             if not ficv2:
                 missing.append("ficv2 (outer potential)")
             QMessageBox.warning(
-                self, "Missing field files",
+                self,
+                "Missing field files",
                 "The following files are required:\n- "
                 + "\n- ".join(missing)
-                + "\n\nLoad a data file or fill them in by hand.")
+                + "\n\nLoad a data file or fill them in by hand.",
+            )
             return
 
         answers = self.input_panel.get_input_sequence()
@@ -297,7 +312,9 @@ class LionsMainWindow(QMainWindow):
     def on_view_3d(self):
         """Open the 3D window or bring it to the front."""
         if self._3d_window is None:
-            self._3d_window = Plot3DWindow(self.plot_widget.canvas, parent=self)
+            self._3d_window = Plot3DWindow(
+                self.plot_widget.canvas, parent=self
+            )
         self._3d_window.show()
         self._3d_window.raise_()
         self._3d_window.activateWindow()
@@ -308,15 +325,21 @@ class LionsMainWindow(QMainWindow):
     def on_export_plots(self):
         """Export the plots to an image file."""
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export plots", "lions_plots.png",
-            "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)")
+            self,
+            "Export plots",
+            "lions_plots.png",
+            "PNG (*.png);;PDF (*.pdf);;SVG (*.svg)",
+        )
         if path:
-            self.plot_widget.canvas.fig.savefig(path, dpi=150, bbox_inches='tight')
+            self.plot_widget.canvas.fig.savefig(
+                path, dpi=150, bbox_inches='tight'
+            )
             self.statusbar.showMessage(f"Plots exported: {path}")
 
     def on_view_bidims(self):
         """Open the bidim viewer on the .bid files next to the data file."""
         import glob
+
         ficin = self.input_panel.ficin_edit.text()
         search_dir = os.path.dirname(os.path.abspath(ficin)) if ficin else '.'
         bid_files = sorted(glob.glob(os.path.join(search_dir, '*.bid')))
@@ -327,7 +350,11 @@ class LionsMainWindow(QMainWindow):
         try:
             from lions.game.arcade import Arcade
         except ImportError as exc:
-            QMessageBox.warning(self, "Arcade", f"Needs the game extra: uv run --extra game lions-gui ({exc})")
+            QMessageBox.warning(
+                self,
+                "Arcade",
+                f"Needs the game extra: uv run --extra game lions-gui ({exc})",
+            )
             return
         self.arcade = Arcade()
         self.arcade.show()
@@ -340,11 +367,19 @@ class LionsMainWindow(QMainWindow):
 
         def path(edit):
             name = edit.text().strip()
-            return os.path.join(work_dir, name) if name and name != 'no' else ''
+            return (
+                os.path.join(work_dir, name) if name and name != 'no' else ''
+            )
 
         panel = self.input_panel
-        ficb, ficv1, ficv2 = path(panel.ficb_edit), path(panel.ficv1_edit), path(panel.ficv2_edit)
-        dlg = FieldViewerDialog(self, ficb=ficb, ficv1=ficv1, ficv2=ficv2, swap=swap)
+        ficb, ficv1, ficv2 = (
+            path(panel.ficb_edit),
+            path(panel.ficv1_edit),
+            path(panel.ficv2_edit),
+        )
+        dlg = FieldViewerDialog(
+            self, ficb=ficb, ficv1=ficv1, ficv2=ficv2, swap=swap
+        )
         dlg.show()
 
     def on_progress(self, current, total):
@@ -414,4 +449,3 @@ def main():
     window.show()
 
     sys.exit(app.exec_())
-

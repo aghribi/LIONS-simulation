@@ -2,6 +2,7 @@
 
 usage: uv run --extra game --extra rl --group bench python benchmarks/case_t_check.py [--outroot DIR]
 """
+
 import argparse
 import multiprocessing
 import sys
@@ -41,9 +42,20 @@ def classical(job):
     m = mission_by_id(mission)
     m.reset(seed)
     run = t.tune(m, T.CLASSICAL[method], seed)
-    done = verdict(m) if run.reached else {'hold': float('nan'), 'truth': False}
-    return {'mission': mission, 'method': method, 'training_seed': -1, 'condition': seed, 'set': 'held_out', 'in_spec': run.reached is not None,
-            'evals': float(run.reached or 'nan'), 'open_loop': False, **done}
+    done = (
+        verdict(m) if run.reached else {'hold': float('nan'), 'truth': False}
+    )
+    return {
+        'mission': mission,
+        'method': method,
+        'training_seed': -1,
+        'condition': seed,
+        'set': 'held_out',
+        'in_spec': run.reached is not None,
+        'evals': float(run.reached or 'nan'),
+        'open_loop': False,
+        **done,
+    }
 
 
 def rl(job):
@@ -61,12 +73,31 @@ def rl(job):
             actions.append(action.copy())
             return action, state
 
-        run = t.tune(m, t.policy, c, model=type('Recorded', (), {'predict': staticmethod(predict)}))
-        done = verdict(m) if run.reached else {'hold': float('nan'), 'truth': False}
+        run = t.tune(
+            m,
+            t.policy,
+            c,
+            model=type('Recorded', (), {'predict': staticmethod(predict)}),
+        )
+        done = (
+            verdict(m)
+            if run.reached
+            else {'hold': float('nan'), 'truth': False}
+        )
         if run.reached and replay is None:
             replay = actions
-        rows.append({'mission': mission, 'method': 'ppo', 'training_seed': seed, 'condition': c, 'set': 'fresh' if c >= 20000 else 'held_out',
-                     'in_spec': run.reached is not None, 'evals': float(run.reached or 'nan'), **done})
+        rows.append(
+            {
+                'mission': mission,
+                'method': 'ppo',
+                'training_seed': seed,
+                'condition': c,
+                'set': 'fresh' if c >= 20000 else 'held_out',
+                'in_spec': run.reached is not None,
+                'evals': float(run.reached or 'nan'),
+                **done,
+            }
+        )
     for r, c in zip(rows, conditions):
         r['open_loop'] = False
         if replay is not None:
@@ -86,11 +117,28 @@ def rl(job):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--outroot', type=Path, default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift')
+    parser.add_argument(
+        '--outroot',
+        type=Path,
+        default=ROOT / 'benchmarks' / 'runs' / 'case_t_drift',
+    )
     args = parser.parse_args()
     outdir = args.outroot.resolve()
     with multiprocessing.get_context('spawn').Pool(T.WORKERS) as pool:
-        rows = pool.map(classical, [(m, a, s) for m in T.ALL for a in T.CLASSICAL for s in t.HELD_OUT], chunksize=1)
-        jobs = [(m, s, t.HELD_OUT + FRESH, outdir) for m in T.ALL for s in T.RL_SEEDS]
+        rows = pool.map(
+            classical,
+            [
+                (m, a, s)
+                for m in T.ALL
+                for a in T.CLASSICAL
+                for s in t.HELD_OUT
+            ],
+            chunksize=1,
+        )
+        jobs = [
+            (m, s, t.HELD_OUT + FRESH, outdir)
+            for m in T.ALL
+            for s in T.RL_SEEDS
+        ]
         rows += [r for part in pool.map(rl, jobs, chunksize=1) for r in part]
     pq.write_table(pa.Table.from_pylist(rows), outdir / 'check.parquet')

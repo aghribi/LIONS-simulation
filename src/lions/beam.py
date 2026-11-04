@@ -1,6 +1,5 @@
 """Initial 6D distribution and phase-space coordinates relative to particle 0."""
 
-
 import numpy as np
 
 from .apertures import check_box
@@ -13,10 +12,10 @@ def cholesky_upper(m, a):
     r[0, 0] = np.sqrt(a[0, 0])
     r[0, 1:m] = a[0, 1:m] / r[0, 0]
     for i in range(1, m - 1):
-        r[i, i] = np.sqrt(a[i, i] - np.sum(r[:i, i]**2))
-        vec_im = np.sum(r[:i, i].reshape(-1, 1) * r[:i, i+1:m], axis=0)
-        r[i, i+1:m] = (a[i, i+1:m] - vec_im) / r[i, i]
-    r[m-1, m-1] = np.sqrt(a[m-1, m-1] - np.sum(r[:m-1, m-1]**2))
+        r[i, i] = np.sqrt(a[i, i] - np.sum(r[:i, i] ** 2))
+        vec_im = np.sum(r[:i, i].reshape(-1, 1) * r[:i, i + 1 : m], axis=0)
+        r[i, i + 1 : m] = (a[i, i + 1 : m] - vec_im) / r[i, i]
+    r[m - 1, m - 1] = np.sqrt(a[m - 1, m - 1] - np.sum(r[: m - 1, m - 1] ** 2))
     return r
 
 
@@ -49,9 +48,9 @@ def sample_unit_ball(m, n_part):
 
     ps[0, :] = ps[0, :] / tr[0, 0]
     for i in range(1, m):
-        ps[i, :] = (ps[i, :] - np.sum(
-            tr[i, :i].reshape(-1, 1) * ps[:i, :], axis=0
-        )) / tr[i, i]
+        ps[i, :] = (
+            ps[i, :] - np.sum(tr[i, :i].reshape(-1, 1) * ps[:i, :], axis=0)
+        ) / tr[i, i]
 
     return ps
 
@@ -65,43 +64,82 @@ def phase_space_coords(bunch):
         nbr = bunch.families[k].size
         i1 = bunch.families[k].start
         i2 = i1 + nbr
-        bunch.p[i1] = np.sqrt(bunch.px[i1]**2 + bunch.py[i1]**2 + bunch.pz[i1]**2)
+        bunch.p[i1] = np.sqrt(
+            bunch.px[i1] ** 2 + bunch.py[i1] ** 2 + bunch.pz[i1] ** 2
+        )
         rc = -bunch.mass_c[k] * bunch.p[i1] / bunch.charge[i1] / bunch.bz[i1]
         bunch.ps_cartesian[0, :nbr] = bunch.x[i1:i2] - bunch.x[i1]
         bunch.ps_cartesian[4, :nbr] = bunch.y[i1:i2] - bunch.y[i1]
-        r_ref = np.sqrt(bunch.x[i1]**2 + bunch.y[i1]**2)
+        r_ref = np.sqrt(bunch.x[i1] ** 2 + bunch.y[i1] ** 2)
         theta_ref = np.arccos(bunch.x[i1] / r_ref)
         if bunch.y[i1] < 0.0:
             theta_ref = 2.0 * np.pi - theta_ref
-        pr_ref = (bunch.x[i1] * bunch.px[i1] + bunch.y[i1] * bunch.py[i1]) / r_ref
+        pr_ref = (
+            bunch.x[i1] * bunch.px[i1] + bunch.y[i1] * bunch.py[i1]
+        ) / r_ref
         pr_angle_ref = np.arcsin(pr_ref / bunch.p[i1])
         co = np.cos(theta_ref - pr_angle_ref)
         si = np.sin(theta_ref - pr_angle_ref)
-        vec[:nbr] = bunch.ps_cartesian[0, :nbr] * co + bunch.ps_cartesian[4, :nbr] * si
-        bunch.ps_cartesian[4, :nbr] = -bunch.ps_cartesian[0, :nbr] * si + bunch.ps_cartesian[4, :nbr] * co
+        vec[:nbr] = (
+            bunch.ps_cartesian[0, :nbr] * co + bunch.ps_cartesian[4, :nbr] * si
+        )
+        bunch.ps_cartesian[4, :nbr] = (
+            -bunch.ps_cartesian[0, :nbr] * si
+            + bunch.ps_cartesian[4, :nbr] * co
+        )
         bunch.ps_cartesian[0, :nbr] = vec[:nbr]
         for ii in range(nbr):
-            bunch.ps[4, ii] = rc * np.arctan(bunch.ps_cartesian[4, ii] / (rc + bunch.ps_cartesian[0, ii]))
-        vec[:nbr] = np.sin(bunch.ps[4, :nbr] / 2.0 / rc)**2
-        bunch.ps[0, :nbr] = (bunch.ps_cartesian[0, :nbr] + 2.0 * rc * vec[:nbr]) / (1.0 - 2.0 * vec[:nbr])
+            bunch.ps[4, ii] = rc * np.arctan(
+                bunch.ps_cartesian[4, ii] / (rc + bunch.ps_cartesian[0, ii])
+            )
+        vec[:nbr] = np.sin(bunch.ps[4, :nbr] / 2.0 / rc) ** 2
+        bunch.ps[0, :nbr] = (
+            bunch.ps_cartesian[0, :nbr] + 2.0 * rc * vec[:nbr]
+        ) / (1.0 - 2.0 * vec[:nbr])
         vec1[:nbr] = np.cos(bunch.ps[4, :nbr] / rc)
         vec2[:nbr] = np.sin(bunch.ps[4, :nbr] / rc)
-        bunch.ps_cartesian[1, :nbr] = bunch.px[i1:i2] - bunch.px[i1] * vec1[:nbr] + bunch.py[i1] * vec2[:nbr]
-        bunch.ps_cartesian[5, :nbr] = bunch.py[i1:i2] - bunch.px[i1] * vec2[:nbr] - bunch.py[i1] * vec1[:nbr]
-        vec[:nbr] = bunch.ps_cartesian[1, :nbr] * co + bunch.ps_cartesian[5, :nbr] * si
-        bunch.ps_cartesian[5, :nbr] = -bunch.ps_cartesian[1, :nbr] * si + bunch.ps_cartesian[5, :nbr] * co
+        bunch.ps_cartesian[1, :nbr] = (
+            bunch.px[i1:i2]
+            - bunch.px[i1] * vec1[:nbr]
+            + bunch.py[i1] * vec2[:nbr]
+        )
+        bunch.ps_cartesian[5, :nbr] = (
+            bunch.py[i1:i2]
+            - bunch.px[i1] * vec2[:nbr]
+            - bunch.py[i1] * vec1[:nbr]
+        )
+        vec[:nbr] = (
+            bunch.ps_cartesian[1, :nbr] * co + bunch.ps_cartesian[5, :nbr] * si
+        )
+        bunch.ps_cartesian[5, :nbr] = (
+            -bunch.ps_cartesian[1, :nbr] * si
+            + bunch.ps_cartesian[5, :nbr] * co
+        )
         bunch.ps_cartesian[1, :nbr] = vec[:nbr]
-        bunch.ps[1, :nbr] = bunch.ps_cartesian[1, :nbr] * vec1[:nbr] + bunch.ps_cartesian[5, :nbr] * vec2[:nbr]
-        bunch.ps[5, :nbr] = -bunch.ps_cartesian[1, :nbr] * vec2[:nbr] + bunch.ps_cartesian[5, :nbr] * vec1[:nbr]
+        bunch.ps[1, :nbr] = (
+            bunch.ps_cartesian[1, :nbr] * vec1[:nbr]
+            + bunch.ps_cartesian[5, :nbr] * vec2[:nbr]
+        )
+        bunch.ps[5, :nbr] = (
+            -bunch.ps_cartesian[1, :nbr] * vec2[:nbr]
+            + bunch.ps_cartesian[5, :nbr] * vec1[:nbr]
+        )
         bunch.ps[2, :nbr] = bunch.z[i1:i2] - bunch.z[i1]
         bunch.ps[3, :nbr] = bunch.pz[i1:i2] - bunch.pz[i1]
-        bunch.ps[5, :nbr] = np.sqrt(
-            (bunch.p[i1] + bunch.ps[5, :nbr])**2 +
-            bunch.ps[1, :nbr]**2 + bunch.ps[3, :nbr]**2) - bunch.p[i1]
+        bunch.ps[5, :nbr] = (
+            np.sqrt(
+                (bunch.p[i1] + bunch.ps[5, :nbr]) ** 2
+                + bunch.ps[1, :nbr] ** 2
+                + bunch.ps[3, :nbr] ** 2
+            )
+            - bunch.p[i1]
+        )
 
         for i in range(6):
             for j in range(6):
-                bunch.sigma[i, j] = np.sum(bunch.ps[i, :nbr] * bunch.ps[j, :nbr]) / nbr
+                bunch.sigma[i, j] = (
+                    np.sum(bunch.ps[i, :nbr] * bunch.ps[j, :nbr]) / nbr
+                )
 
         bunch.dc_transform[:] = 0.0
         bunch.dc_transform[0, 0] = -1.0
@@ -110,7 +148,9 @@ def phase_space_coords(bunch):
             bunch.dc_transform[i, i] = 1.0
         bunch.dc_transform[0, 5] = r_ref / bunch.p[i1]
         bunch.dc_transform[4, 1] = -bunch.dc_transform[0, 5]
-        bunch.sigma_dc = bunch.dc_transform @ bunch.sigma @ bunch.dc_transform.T
+        bunch.sigma_dc = (
+            bunch.dc_transform @ bunch.sigma @ bunch.dc_transform.T
+        )
 
 
 def project_on_radial_line(bunch, rf, run):
@@ -126,34 +166,71 @@ def project_on_radial_line(bunch, rf, run):
         nbr = bunch.families[k].size
         i1 = bunch.families[k].start
         i2 = i1 + nbr
-        bunch.p[i1:i2] = np.sqrt(bunch.px[i1:i2]**2 + bunch.py[i1:i2]**2 + bunch.pz[i1:i2]**2)
-        vec[:nbr] = -bunch.mass_c[k] * bunch.p[i1:i2] / bunch.charge[i1:i2] / bunch.bz[i1]
-        vec1[i1:i2] = bunch.x[i1:i2] + bunch.py[i1:i2] * run.dt / bunch.boris_e_coef[i1] / bunch.bz[i1]
-        vec2[i1:i2] = bunch.y[i1:i2] - bunch.px[i1:i2] * run.dt / bunch.boris_e_coef[i1] / bunch.bz[i1]
+        bunch.p[i1:i2] = np.sqrt(
+            bunch.px[i1:i2] ** 2 + bunch.py[i1:i2] ** 2 + bunch.pz[i1:i2] ** 2
+        )
+        vec[:nbr] = (
+            -bunch.mass_c[k]
+            * bunch.p[i1:i2]
+            / bunch.charge[i1:i2]
+            / bunch.bz[i1]
+        )
+        vec1[i1:i2] = (
+            bunch.x[i1:i2]
+            + bunch.py[i1:i2] * run.dt / bunch.boris_e_coef[i1] / bunch.bz[i1]
+        )
+        vec2[i1:i2] = (
+            bunch.y[i1:i2]
+            - bunch.px[i1:i2] * run.dt / bunch.boris_e_coef[i1] / bunch.bz[i1]
+        )
         ux = (bunch.x[i1] - vec1[i1]) / vec[0]
         uy = (bunch.y[i1] - vec2[i1]) / vec[0]
-        vec3[i1:i2] = ((bunch.x[i1] - vec1[i1:i2]) * ux +
-                         (bunch.y[i1] - vec2[i1:i2]) * uy)
-        vec4[i1:i2] = ((bunch.x[i1] - vec1[i1:i2])**2 +
-                         (bunch.y[i1] - vec2[i1:i2])**2 - vec[:nbr]**2)
-        bunch.proj_offset[i1:i2] = -vec3[i1:i2] + np.sqrt(np.abs(vec3[i1:i2]**2 - vec4[i1:i2]))
+        vec3[i1:i2] = (bunch.x[i1] - vec1[i1:i2]) * ux + (
+            bunch.y[i1] - vec2[i1:i2]
+        ) * uy
+        vec4[i1:i2] = (
+            (bunch.x[i1] - vec1[i1:i2]) ** 2
+            + (bunch.y[i1] - vec2[i1:i2]) ** 2
+            - vec[:nbr] ** 2
+        )
+        bunch.proj_offset[i1:i2] = -vec3[i1:i2] + np.sqrt(
+            np.abs(vec3[i1:i2] ** 2 - vec4[i1:i2])
+        )
         bunch.proj_x[i1:i2] = bunch.x[i1] + bunch.proj_offset[i1:i2] * ux
         bunch.proj_y[i1:i2] = bunch.y[i1] + bunch.proj_offset[i1:i2] * uy
-        vec3[i1:i2] = np.sqrt((bunch.proj_x[i1:i2] - vec1[i1:i2])**2 +
-                                (bunch.proj_y[i1:i2] - vec2[i1:i2])**2)
-        vec4[i1:i2] = np.sqrt((bunch.proj_x[i1:i2] - vec1[i1])**2 +
-                                (bunch.proj_y[i1:i2] - vec2[i1])**2)
+        vec3[i1:i2] = np.sqrt(
+            (bunch.proj_x[i1:i2] - vec1[i1:i2]) ** 2
+            + (bunch.proj_y[i1:i2] - vec2[i1:i2]) ** 2
+        )
+        vec4[i1:i2] = np.sqrt(
+            (bunch.proj_x[i1:i2] - vec1[i1]) ** 2
+            + (bunch.proj_y[i1:i2] - vec2[i1]) ** 2
+        )
         vec5[i1:i2] = (
-            (bunch.proj_x[i1:i2] - vec1[i1:i2]) * (bunch.proj_y[i1:i2] - vec2[i1]) -
-            (bunch.proj_y[i1:i2] - vec2[i1:i2]) * (bunch.proj_x[i1:i2] - vec1[i1])
-        ) / vec3[i1:i2] / vec4[i1:i2]
+            (
+                (bunch.proj_x[i1:i2] - vec1[i1:i2])
+                * (bunch.proj_y[i1:i2] - vec2[i1])
+                - (bunch.proj_y[i1:i2] - vec2[i1:i2])
+                * (bunch.proj_x[i1:i2] - vec1[i1])
+            )
+            / vec3[i1:i2]
+            / vec4[i1:i2]
+        )
         bunch.proj_angle[i1:i2] = np.arcsin(vec5[i1:i2])
-        vec4[i1:i2] = np.sqrt((bunch.x[i1:i2] - vec1[i1:i2])**2 +
-                                (bunch.y[i1:i2] - vec2[i1:i2])**2)
+        vec4[i1:i2] = np.sqrt(
+            (bunch.x[i1:i2] - vec1[i1:i2]) ** 2
+            + (bunch.y[i1:i2] - vec2[i1:i2]) ** 2
+        )
         vec6[i1:i2] = (
-            (bunch.proj_x[i1:i2] - vec1[i1:i2]) * (bunch.y[i1:i2] - vec2[i1:i2]) -
-            (bunch.proj_y[i1:i2] - vec2[i1:i2]) * (bunch.x[i1:i2] - vec1[i1:i2])
-        ) / vec3[i1:i2] / vec4[i1:i2]
+            (
+                (bunch.proj_x[i1:i2] - vec1[i1:i2])
+                * (bunch.y[i1:i2] - vec2[i1:i2])
+                - (bunch.proj_y[i1:i2] - vec2[i1:i2])
+                * (bunch.x[i1:i2] - vec1[i1:i2])
+            )
+            / vec3[i1:i2]
+            / vec4[i1:i2]
+        )
         bunch.proj_phase[i1:i2] = rf.harmonic * np.arcsin(vec6[i1:i2])
     return vec
 
@@ -166,7 +243,9 @@ def projected_phase_space(bunch, rf, run):
     bunch.ps_projected[1, :nbr] = bunch.proj_angle[:nbr] * bunch.p[0]
     bunch.ps_projected[2, :nbr] = bunch.ps[2, :nbr]
     bunch.ps_projected[3, :nbr] = bunch.ps[3, :nbr]
-    bunch.ps_projected[4, :nbr] = bunch.proj_phase[:nbr] * vec[:nbr] / rf.harmonic
+    bunch.ps_projected[4, :nbr] = (
+        bunch.proj_phase[:nbr] * vec[:nbr] / rf.harmonic
+    )
     bunch.ps_projected[5, :nbr] = bunch.ps[5, :nbr]
 
 
@@ -199,25 +278,50 @@ def distribute_bunch(d, sigma_matrices):
 
             i1 = d.bunch.families[k].start
             i2 = i1 + d.bunch.families[k].size
-            rc = -d.bunch.mass_c[k] * d.bunch.p[i1] / d.bunch.charge[i1] / d.bunch.bz[i1]
+            rc = (
+                -d.bunch.mass_c[k]
+                * d.bunch.p[i1]
+                / d.bunch.charge[i1]
+                / d.bunch.bz[i1]
+            )
 
             if d.bunch.families[k].r0 > d.central.rmax:
                 print('sqrt(cos(phi)) correction applied')
-                vec4[:nbr] = np.sqrt(np.cos(d.rf.harmonic * d.bunch.ps[4, :nbr] / rc))
-                d.bunch.ps[0, :nbr] = d.bunch.ps[0, :nbr] * vec4[:nbr] - rc * (1.0 - vec4[:nbr])
+                vec4[:nbr] = np.sqrt(
+                    np.cos(d.rf.harmonic * d.bunch.ps[4, :nbr] / rc)
+                )
+                d.bunch.ps[0, :nbr] = d.bunch.ps[0, :nbr] * vec4[:nbr] - rc * (
+                    1.0 - vec4[:nbr]
+                )
             else:
                 print('no sqrt(cos(phi)) correction')
 
             vec1[:nbr] = np.cos(d.bunch.ps[4, :nbr] / rc)
             vec2[:nbr] = np.sin(d.bunch.ps[4, :nbr] / rc)
-            vec3[:nbr] = np.sin(d.bunch.ps[4, :nbr] / rc / 2.0)**2
-            d.bunch.ps_cartesian[0, :nbr] = d.bunch.ps[0, :nbr] - 2.0 * (rc + d.bunch.ps[0, :nbr]) * vec3[:nbr]
-            d.bunch.ps[5, :nbr] = np.sqrt(
-                (d.bunch.p[i1] + d.bunch.ps[5, :nbr])**2 -
-                d.bunch.ps[1, :nbr]**2 - d.bunch.ps[3, :nbr]**2) - d.bunch.p[i1]
-            d.bunch.ps_cartesian[4, :nbr] = (rc + d.bunch.ps[0, :nbr]) * vec2[:nbr]
-            d.bunch.ps_cartesian[1, :nbr] = d.bunch.ps[1, :nbr] * vec1[:nbr] - d.bunch.ps[5, :nbr] * vec2[:nbr]
-            d.bunch.ps_cartesian[5, :nbr] = d.bunch.ps[1, :nbr] * vec2[:nbr] + d.bunch.ps[5, :nbr] * vec1[:nbr]
+            vec3[:nbr] = np.sin(d.bunch.ps[4, :nbr] / rc / 2.0) ** 2
+            d.bunch.ps_cartesian[0, :nbr] = (
+                d.bunch.ps[0, :nbr]
+                - 2.0 * (rc + d.bunch.ps[0, :nbr]) * vec3[:nbr]
+            )
+            d.bunch.ps[5, :nbr] = (
+                np.sqrt(
+                    (d.bunch.p[i1] + d.bunch.ps[5, :nbr]) ** 2
+                    - d.bunch.ps[1, :nbr] ** 2
+                    - d.bunch.ps[3, :nbr] ** 2
+                )
+                - d.bunch.p[i1]
+            )
+            d.bunch.ps_cartesian[4, :nbr] = (rc + d.bunch.ps[0, :nbr]) * vec2[
+                :nbr
+            ]
+            d.bunch.ps_cartesian[1, :nbr] = (
+                d.bunch.ps[1, :nbr] * vec1[:nbr]
+                - d.bunch.ps[5, :nbr] * vec2[:nbr]
+            )
+            d.bunch.ps_cartesian[5, :nbr] = (
+                d.bunch.ps[1, :nbr] * vec2[:nbr]
+                + d.bunch.ps[5, :nbr] * vec1[:nbr]
+            )
             d.bunch.ps_cartesian[2:4, :nbr] = d.bunch.ps[2:4, :nbr]
 
             co = np.cos(d.bunch.families[k].theta0 - d.bunch.families[k].pr0)
@@ -241,8 +345,14 @@ def distribute_bunch(d, sigma_matrices):
 
             d.bunch.x[i1:i2] += d.bunch.ps_cartesian[0, :nbr]
             d.bunch.y[i1:i2] += d.bunch.ps_cartesian[4, :nbr]
-            vec[:nbr] = d.bunch.px[i1:i2] * vec1[:nbr] - d.bunch.py[i1:i2] * vec2[:nbr]
-            d.bunch.py[i1:i2] = d.bunch.px[i1:i2] * vec2[:nbr] + d.bunch.py[i1:i2] * vec1[:nbr] + d.bunch.ps_cartesian[5, :nbr]
+            vec[:nbr] = (
+                d.bunch.px[i1:i2] * vec1[:nbr] - d.bunch.py[i1:i2] * vec2[:nbr]
+            )
+            d.bunch.py[i1:i2] = (
+                d.bunch.px[i1:i2] * vec2[:nbr]
+                + d.bunch.py[i1:i2] * vec1[:nbr]
+                + d.bunch.ps_cartesian[5, :nbr]
+            )
             d.bunch.px[i1:i2] = vec[:nbr] + d.bunch.ps_cartesian[1, :nbr]
             if d.bunch.phase_space[:2] in ('3d', '6d'):
                 d.bunch.z[i1:i2] += d.bunch.ps_cartesian[2, :nbr]

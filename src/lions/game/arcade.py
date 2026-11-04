@@ -1,4 +1,5 @@
 """ION RUSH: the arcade front end of the trainer. Draws the stages of lions.game.stages; the physics is all there."""
+
 import math
 import random
 import subprocess
@@ -15,19 +16,33 @@ from lions.game.coach import KNOB_HELP, coach_for
 from lions.game.runlog import Store
 from lions.game.missions import BUDGET, Mission
 from lions.game.stages import Action, load_scenario
-from lions.game.tuners import METHODS, RL_STEPS, Tuning, policy, policy_path, policy_report
+from lions.game.tuners import (
+    METHODS,
+    RL_STEPS,
+    Tuning,
+    policy,
+    policy_path,
+    policy_report,
+)
 
-W, H = 960, 720    # virtual screen, scaled to the window
+W, H = 960, 720  # virtual screen, scaled to the window
 DT = 1 / 60
 LIVES = 3
-CYAN, MAGENTA, YELLOW, GREEN, RED, WHITE = (QColor(c) for c in ('#27e8ff', '#ff3df2', '#ffe14d', '#3dff7a', '#ff4d4d', '#e8f0ff'))
+CYAN, MAGENTA, YELLOW, GREEN, RED, WHITE = (
+    QColor(c)
+    for c in ('#27e8ff', '#ff3df2', '#ffe14d', '#3dff7a', '#ff4d4d', '#e8f0ff')
+)
 DIM = QColor('#3a4a78')
 BACK = QColor('#05060f')
 FONT = 'Menlo'
-CONTROLS = {'larmor': 'UP DOWN: FIELD B   LEFT RIGHT: ENERGY   SPACE: FIRE', 'dee_beat': 'LEFT RIGHT: RF FREQUENCY',
-            'trim_coils': 'UP DOWN: FIELD TRIM', 'fallout': 'TAP UP DOWN: CORRECTOR KICK',
-            'thomas': 'UP DOWN: FLUTTER F   LEFT RIGHT: SPIRAL XI'}
-REPLAY_FRAMES = 5    # frames per pass replayed from a tuning method
+CONTROLS = {
+    'larmor': 'UP DOWN: FIELD B   LEFT RIGHT: ENERGY   SPACE: FIRE',
+    'dee_beat': 'LEFT RIGHT: RF FREQUENCY',
+    'trim_coils': 'UP DOWN: FIELD TRIM',
+    'fallout': 'TAP UP DOWN: CORRECTOR KICK',
+    'thomas': 'UP DOWN: FLUTTER F   LEFT RIGHT: SPIRAL XI',
+}
+REPLAY_FRAMES = 5  # frames per pass replayed from a tuning method
 MISSION_CONTROLS = 'UP DOWN: PICK A KNOB   LEFT RIGHT: TURN IT   SHIFT: FINE   HOLD SPACE: BEAM ON'
 
 
@@ -53,7 +68,12 @@ class Arcade(QWidget):
         self.stages = self.level0
         self.keys, self.rows = set(), []
         self.tutorial, self.coach, self.advice = False, None, None
-        self.tuning, self.training, self.behind, self.method_line = None, None, None, 0
+        self.tuning, self.training, self.behind, self.method_line = (
+            None,
+            None,
+            None,
+            0,
+        )
         self.training_failed = False
         self.clock, self.state = 0.0, 'attract'
         self.seed_source = random.Random()
@@ -90,14 +110,23 @@ class Arcade(QWidget):
         self.state = 'menu'
 
     def menu_items(self):
-        return [('LEVEL 0', 'HOW A CYCLOTRON WORKS', self.level0), *((m.mission_id, m.title, [m]) for m in self.missions)]
+        return [
+            ('LEVEL 0', 'HOW A CYCLOTRON WORKS', self.level0),
+            *((m.mission_id, m.title, [m]) for m in self.missions),
+        ]
 
     def choose(self):
         self.stages, self.index = self.menu_items()[self.choice][2], 0
         self.state = 'brief'
 
     def current_stage(self):
-        return getattr(self, 'stage', None) if self.state in ('play', 'tuning', 'clear', 'lost') else self.stages[self.index] if self.state in ('brief', 'walkthrough', 'pick', 'training') else None
+        return (
+            getattr(self, 'stage', None)
+            if self.state in ('play', 'tuning', 'clear', 'lost')
+            else self.stages[self.index]
+            if self.state in ('brief', 'walkthrough', 'pick', 'training')
+            else None
+        )
 
     def show_behind(self):
         if self.behind is None:
@@ -119,7 +148,10 @@ class Arcade(QWidget):
         """The list of methods. Same machine: the hidden errors stay, to compare methods on one condition."""
         self.end_tuning()
         if new_machine:
-            self.machine_seed, self.tuned = self.seed_source.randrange(2**31), {}
+            self.machine_seed, self.tuned = (
+                self.seed_source.randrange(2**31),
+                {},
+            )
         self.state = 'pick'
 
     def end_tuning(self):
@@ -137,17 +169,33 @@ class Arcade(QWidget):
         method = METHODS[self.method_line]
         if method.missing():
             return
-        if method.fn is policy and not policy_path(self.stages[self.index].mission_id).exists():
+        if (
+            method.fn is policy
+            and not policy_path(self.stages[self.index].mission_id).exists()
+        ):
             self.training_start = time.monotonic()
             self.training_failed = False
-            self.training = subprocess.Popen([sys.executable, '-m', 'lions.game.train', self.stages[self.index].mission_id],
-                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.training = subprocess.Popen(
+                [
+                    sys.executable,
+                    '-m',
+                    'lions.game.train',
+                    self.stages[self.index].mission_id,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             self.state = 'training'
             return
         self.stage = self.stages[self.index]
         self.tutorial, self.stage.tutorial, self.coach = True, True, None
         self.stage.reset(self.machine_seed)
-        self.tuning, self.replayed, self.replay_clock, self.tuning_over = Tuning(self.stage, method, self.machine_seed), 0, 0, False
+        self.tuning, self.replayed, self.replay_clock, self.tuning_over = (
+            Tuning(self.stage, method, self.machine_seed),
+            0,
+            0,
+            False,
+        )
         self.state = 'tuning'
 
     def watch_training(self):
@@ -161,7 +209,9 @@ class Arcade(QWidget):
             self.training_failed, self.state = True, 'pick'
 
     def training_progress(self):
-        path = policy_path(self.stages[self.index].mission_id).with_suffix('.progress')
+        path = policy_path(self.stages[self.index].mission_id).with_suffix(
+            '.progress'
+        )
         try:
             return float(path.read_text())
         except (OSError, ValueError):
@@ -178,11 +228,17 @@ class Arcade(QWidget):
             self.replayed += 1
         elif t.finished():
             self.tuning_over = True
-            if t.run and t.run.reached is None:     # out of budget: the best setting found stays on the machine
+            if (
+                t.run and t.run.reached is None
+            ):  # out of budget: the best setting found stays on the machine
                 self.stage.knobs.update(t.run.best_knobs)
                 self.stage.refresh()
             if t.run:
-                self.tuned[t.method.name] = (t.run.reached, t.run.best, self.stage.ready())
+                self.tuned[t.method.name] = (
+                    t.run.reached,
+                    t.run.best,
+                    self.stage.ready(),
+                )
 
     def apply_pass(self, record):
         s = self.stage
@@ -211,7 +267,15 @@ class Arcade(QWidget):
         ay = (Qt.Key_Up in self.keys) - (Qt.Key_Down in self.keys)
         action = Action(ax, ay, Qt.Key_Space in self.keys)
         observation, _, done = self.stage.step(action, DT)
-        self.rows.append({'step': self.stage.steps, 'action_x': ax, 'action_y': ay, 'action_fire': action.fire, **observation})
+        self.rows.append(
+            {
+                'step': self.stage.steps,
+                'action_x': ax,
+                'action_y': ay,
+                'action_fire': action.fire,
+                **observation,
+            }
+        )
         if done:
             if self.tutorial:
                 self.stage.points = 0
@@ -232,7 +296,9 @@ class Arcade(QWidget):
         elif state == 'brief':
             self.start_stage()
         elif state == 'clear':
-            if self.tutorial:     # practice done: back to the same brief, for the scored run
+            if (
+                self.tutorial
+            ):  # practice done: back to the same brief, for the scored run
                 self.state = 'brief'
                 return
             self.index += 1
@@ -240,7 +306,11 @@ class Arcade(QWidget):
                 self.state = 'brief'
             else:
                 self.completed.add(self.menu_items()[self.choice][0])
-                self.state = 'won' if len(self.completed) == len(self.menu_items()) else 'menu'
+                self.state = (
+                    'won'
+                    if len(self.completed) == len(self.menu_items())
+                    else 'menu'
+                )
         elif state == 'menu':
             self.choose()
         elif state == 'pick':
@@ -286,21 +356,43 @@ class Arcade(QWidget):
         elif self.state == 'tuning' and key == Qt.Key_O:
             self.open_pick(new_machine=False)
         elif self.state == 'pick' and key in (Qt.Key_Up, Qt.Key_Down):
-            self.method_line = (self.method_line + (1 if key == Qt.Key_Down else -1)) % len(METHODS)
-        elif self.state == 'walkthrough' and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_T):
+            self.method_line = (
+                self.method_line + (1 if key == Qt.Key_Down else -1)
+            ) % len(METHODS)
+        elif self.state == 'walkthrough' and key in (
+            Qt.Key_Return,
+            Qt.Key_Enter,
+            Qt.Key_Space,
+            Qt.Key_T,
+        ):
             self.start_stage(tutorial=True)
         elif self.state == 'menu' and key in (Qt.Key_Up, Qt.Key_Down):
-            self.choice = (self.choice + (1 if key == Qt.Key_Down else -1)) % len(self.menu_items())
-        elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_A) or (key == Qt.Key_Space and self.state != 'play'):
+            self.choice = (
+                self.choice + (1 if key == Qt.Key_Down else -1)
+            ) % len(self.menu_items())
+        elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_A) or (
+            key == Qt.Key_Space and self.state != 'play'
+        ):
             self.press_start()
-        elif key == Qt.Key_Escape and self.state in ('pick', 'tuning', 'training'):
+        elif key == Qt.Key_Escape and self.state in (
+            'pick',
+            'tuning',
+            'training',
+        ):
             self.end_training()
             if self.state == 'tuning':
                 self.open_pick(new_machine=False)
             else:
                 self.state = 'menu' if self.state == 'pick' else 'pick'
         elif key == Qt.Key_Escape:
-            self.state = 'over' if self.state == 'menu' else 'menu' if self.state in ('brief', 'walkthrough', 'play', 'lost', 'clear') else 'attract'
+            self.state = (
+                'over'
+                if self.state == 'menu'
+                else 'menu'
+                if self.state
+                in ('brief', 'walkthrough', 'play', 'lost', 'clear')
+                else 'attract'
+            )
 
     def keyReleaseEvent(self, event):
         if not event.isAutoRepeat():
@@ -309,7 +401,9 @@ class Arcade(QWidget):
     def edit_initials(self, key):
         letter = ord(self.initials[self.letter]) - 65
         if key in (Qt.Key_Up, Qt.Key_Down):
-            self.initials[self.letter] = chr(65 + (letter + (1 if key == Qt.Key_Up else -1)) % 26)
+            self.initials[self.letter] = chr(
+                65 + (letter + (1 if key == Qt.Key_Up else -1)) % 26
+            )
         elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_Right):
             self.letter += 1
             if self.letter == 3:
@@ -323,7 +417,9 @@ class Arcade(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), BACK)
         scale = min(self.width() / W, self.height() / H)
-        p.translate((self.width() - W * scale) / 2, (self.height() - H * scale) / 2)
+        p.translate(
+            (self.width() - W * scale) / 2, (self.height() - H * scale) / 2
+        )
         p.scale(scale, scale)
         p.setClipRect(QRectF(0, 0, W, H))
         self.p = p
@@ -336,7 +432,11 @@ class Arcade(QWidget):
         font = QFont(FONT, size, QFont.Bold)
         font.setStyleHint(QFont.Monospace)
         p.setFont(font)
-        flag = {'center': Qt.AlignHCenter, 'left': Qt.AlignLeft, 'right': Qt.AlignRight}[align]
+        flag = {
+            'center': Qt.AlignHCenter,
+            'left': Qt.AlignLeft,
+            'right': Qt.AlignRight,
+        }[align]
         left = {'center': x - W, 'left': x, 'right': x - 2 * W}[align]
         rect = QRectF(left, y, 2 * W, size * 2)
         glow = QColor(color)
@@ -363,10 +463,16 @@ class Arcade(QWidget):
         draw()
 
     def line(self, x1, y1, x2, y2, color, width=2):
-        self.neon(lambda: self.p.drawLine(QPointF(x1, y1), QPointF(x2, y2)), color, width)
+        self.neon(
+            lambda: self.p.drawLine(QPointF(x1, y1), QPointF(x2, y2)),
+            color,
+            width,
+        )
 
     def circle(self, x, y, r, color, width=2):
-        self.neon(lambda: self.p.drawEllipse(QPointF(x, y), r, r), color, width)
+        self.neon(
+            lambda: self.p.drawEllipse(QPointF(x, y), r, r), color, width
+        )
 
     def ion(self, x, y, color=WHITE):
         glow = QColor(color)
@@ -382,15 +488,35 @@ class Arcade(QWidget):
         self.p.setPen(QPen(DIM, 2))
         self.p.setBrush(Qt.NoBrush)
         self.p.drawRect(QRectF(x, y, width, height))
-        self.p.fillRect(QRectF(x + 2, y + 2, (width - 4) * min(max(fraction, 0), 1), height - 4), color)
+        self.p.fillRect(
+            QRectF(
+                x + 2,
+                y + 2,
+                (width - 4) * min(max(fraction, 0), 1),
+                height - 4,
+            ),
+            color,
+        )
         if label:
             self.text(x, y - 24, label, 13, color, 'left')
 
     def hud(self):
         s = self.stage
-        label = 'TUNING METHOD' if self.tuning else 'TUTORIAL' if self.tutorial else f'SCORE {self.total + s.points:07d}'
+        label = (
+            'TUNING METHOD'
+            if self.tuning
+            else 'TUTORIAL'
+            if self.tutorial
+            else f'SCORE {self.total + s.points:07d}'
+        )
         self.text(16, 8, label, 18, YELLOW if self.tutorial else CYAN, 'left')
-        self.text(W / 2, 8, f'{self.index + 1}/{len(self.stages)} {s.title}', 18, YELLOW)
+        self.text(
+            W / 2,
+            8,
+            f'{self.index + 1}/{len(self.stages)} {s.title}',
+            18,
+            YELLOW,
+        )
         self.text(W - 16, 8, 'ION ' * self.lives, 18, MAGENTA, 'right')
         if self.coach:
             self.helper()
@@ -403,7 +529,9 @@ class Arcade(QWidget):
         if not steps:
             return ''
         for i, step in enumerate(steps):
-            if advice.knob in step['knobs'] or (not step['knobs'] and not advice.knob):
+            if advice.knob in step['knobs'] or (
+                not step['knobs'] and not advice.knob
+            ):
                 return f'STEP {i + 1}/{len(steps)}: '
         return ''
 
@@ -412,22 +540,55 @@ class Arcade(QWidget):
         if not mission:
             self.advice = self.coach.advise()
         advice, left = self.advice, 345 if mission else 16
-        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(20, 18, 5, 215))
-        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(255, 225, 77, 34))
-        self.text(left + 10, H - 72, f'{self.step_label(advice)}{advice.text}', 15, YELLOW, 'left')
+        self.p.fillRect(
+            QRectF(left, H - 74, W - left - 10, 70), QColor(20, 18, 5, 215)
+        )
+        self.p.fillRect(
+            QRectF(left, H - 74, W - left - 10, 70), QColor(255, 225, 77, 34)
+        )
+        self.text(
+            left + 10,
+            H - 72,
+            f'{self.step_label(advice)}{advice.text}',
+            15,
+            YELLOW,
+            'left',
+        )
         width = 80 if mission else 118
         lines = wrapped(advice.why, width)[:2]
         if mission:
-            lines = [*lines[:1], *wrapped(KNOB_HELP[advice.knob or self.stage.specs[self.stage.selected]['key']], width)[:1]]
+            lines = [
+                *lines[:1],
+                *wrapped(
+                    KNOB_HELP[
+                        advice.knob
+                        or self.stage.specs[self.stage.selected]['key']
+                    ],
+                    width,
+                )[:1],
+            ]
         for i, line in enumerate(lines):
-            self.text(left + 10, H - 46 + 18 * i, line, 10, WHITE if i == 0 or not mission else CYAN, 'left')
+            self.text(
+                left + 10,
+                H - 46 + 18 * i,
+                line,
+                10,
+                WHITE if i == 0 or not mission else CYAN,
+                'left',
+            )
 
     # ---------- screens
 
     def draw_attract(self):
         self.spiral(W / 2, 300, 135)
         self.text(W / 2, 40, 'ION RUSH', 58, CYAN)
-        self.text(W / 2, 128, 'A CYCLOTRON ARCADE. CLOSED-FORM MODELS. B: WHAT RUNS BEHIND', 14, MAGENTA)
+        self.text(
+            W / 2,
+            128,
+            'A CYCLOTRON ARCADE. CLOSED-FORM MODELS. B: WHAT RUNS BEHIND',
+            14,
+            MAGENTA,
+        )
         y = 450
         self.text(W / 2, y, 'HIGH SCORES', 18, YELLOW)
         for row in self.store.scores()[:5]:
@@ -446,59 +607,147 @@ class Arcade(QWidget):
         self.neon(lambda: self.p.drawPath(path), DIM, 1.5)
         at = (self.clock * 0.08) % 1
         a, r = 2 * math.pi * turns * at, radius * math.sqrt(at)
-        self.ion(cx + r * math.cos(a), cy + r * math.sin(a), MAGENTA if phase < 0.5 else CYAN)
+        self.ion(
+            cx + r * math.cos(a),
+            cy + r * math.sin(a),
+            MAGENTA if phase < 0.5 else CYAN,
+        )
 
     def draw_consent(self):
         self.text(W / 2, 170, 'HELP THE RESEARCH?', 32, CYAN)
-        y = self.block(270, 'Log your runs on this machine: knobs, readings, scores, with a random id. No name and no initials. '
-                            'They can be used to compare human tuning with optimisers and policies.', 56)
+        y = self.block(
+            270,
+            'Log your runs on this machine: knobs, readings, scores, with a random id. No name and no initials. '
+            'They can be used to compare human tuning with optimisers and policies.',
+            56,
+        )
         self.text(W / 2, y + 60, 'Y: YES     N: NO', 24, GREEN)
 
     def draw_menu(self):
         self.text(W / 2, 50, 'THE SHIFT', 40, CYAN)
-        self.text(W / 2, 110, f'SCORE {self.total:07d}   IONS {self.lives}', 16, MAGENTA)
+        self.text(
+            W / 2,
+            110,
+            f'SCORE {self.total:07d}   IONS {self.lives}',
+            16,
+            MAGENTA,
+        )
         y = 150
         for i, (key, title, stages) in enumerate(self.menu_items()):
             selected = i == self.choice
-            color = GREEN if key in self.completed else YELLOW if selected else WHITE
+            color = (
+                GREEN
+                if key in self.completed
+                else YELLOW
+                if selected
+                else WHITE
+            )
             if selected:
-                self.p.fillRect(QRectF(90, y - 6, W - 180, 44), QColor(255, 225, 77, 26))
+                self.p.fillRect(
+                    QRectF(90, y - 6, W - 180, 44), QColor(255, 225, 77, 26)
+                )
             self.text(110, y, key, 18, color, 'left')
             self.text(260, y, title, 18, color, 'left')
             if key in self.completed:
                 self.text(W - 110, y, 'DONE', 16, GREEN, 'right')
             y += 46
         request = self.menu_items()[self.choice][2][0]
-        client = getattr(request, 'client', request.brief if self.choice else 'Five stages, from the Lorentz force to Thomas focusing.')
+        client = getattr(
+            request,
+            'client',
+            request.brief
+            if self.choice
+            else 'Five stages, from the Lorentz force to Thomas focusing.',
+        )
         self.block(H - 216, client, 66, 13, CYAN)
         name = self.menu_items()[self.choice][1]
         self.text(W / 2, H - 138, f'T: TUTORIAL ON {name}', 16, GREEN)
         if self.choice:
-            self.text(W / 2, H - 108, f'O: LET A TUNING METHOD TRY {name}', 15, MAGENTA)
+            self.text(
+                W / 2,
+                H - 108,
+                f'O: LET A TUNING METHOD TRY {name}',
+                15,
+                MAGENTA,
+            )
         self.text(W / 2, H - 78, f'ENTER: PLAY {name}', 15, YELLOW)
-        self.text(W / 2, H - 36, 'UP DOWN: CHOOSE A LINE   B: WHAT RUNS BEHIND   ESC: END THE SHIFT', 12, DIM)
+        self.text(
+            W / 2,
+            H - 36,
+            'UP DOWN: CHOOSE A LINE   B: WHAT RUNS BEHIND   ESC: END THE SHIFT',
+            12,
+            DIM,
+        )
 
     def draw_pick(self):
         s = self.stages[self.index]
         self.text(W / 2, 24, f'WHO TUNES {s.title}?', 30, CYAN)
-        self.text(W / 2, 76, f'EACH METHOD SAME MACHINE, {BUDGET} PASSES AT MOST. NO POINTS, NO LIVES', 13, MAGENTA)
+        self.text(
+            W / 2,
+            76,
+            f'EACH METHOD SAME MACHINE, {BUDGET} PASSES AT MOST. NO POINTS, NO LIVES',
+            13,
+            MAGENTA,
+        )
         y = 116
         for i, method in enumerate(METHODS):
             selected = i == self.method_line
             if selected:
-                self.p.fillRect(QRectF(50, y - 4, W - 100, 38), QColor(255, 225, 77, 26))
-            self.text(66, y, method.name, 16, DIM if method.missing() else YELLOW if selected else WHITE, 'left')
-            self.text(W - 66, y + 2, self.method_state(method, s), 13, GREEN if self.tuned.get(method.name, (None, None, False))[2] else WHITE, 'right')
+                self.p.fillRect(
+                    QRectF(50, y - 4, W - 100, 38), QColor(255, 225, 77, 26)
+                )
+            self.text(
+                66,
+                y,
+                method.name,
+                16,
+                DIM if method.missing() else YELLOW if selected else WHITE,
+                'left',
+            )
+            self.text(
+                W - 66,
+                y + 2,
+                self.method_state(method, s),
+                13,
+                GREEN
+                if self.tuned.get(method.name, (None, None, False))[2]
+                else WHITE,
+                'right',
+            )
             y += 44
         method = METHODS[self.method_line]
         y = self.block(y + 16, method.what, 74, 14, CYAN) + 8
         if method.missing():
-            self.text(W / 2, y, f'NEEDS THE {method.extra.upper()} EXTRA: uv run --extra game --extra {method.extra} lions-arcade', 13, RED)
+            self.text(
+                W / 2,
+                y,
+                f'NEEDS THE {method.extra.upper()} EXTRA: uv run --extra game --extra {method.extra} lions-arcade',
+                13,
+                RED,
+            )
         elif self.training_failed and method.fn is policy:
-            self.text(W / 2, y, f'TRAINING FAILED. TRY: uv run --extra game --extra rl python -m lions.game.train {s.mission_id}', 11, RED)
+            self.text(
+                W / 2,
+                y,
+                f'TRAINING FAILED. TRY: uv run --extra game --extra rl python -m lions.game.train {s.mission_id}',
+                11,
+                RED,
+            )
         elif method.fn is policy and not policy_path(s.mission_id).exists():
-            self.text(W / 2, y, 'NO POLICY FOR THIS CHALLENGE. ENTER TRAINS ONE, SEED 0', 13, YELLOW)
-        self.text(W / 2, H - 66, 'UP DOWN: CHOOSE   ENTER: RUN IT ON THIS MACHINE', 15, GREEN)
+            self.text(
+                W / 2,
+                y,
+                'NO POLICY FOR THIS CHALLENGE. ENTER TRAINS ONE, SEED 0',
+                13,
+                YELLOW,
+            )
+        self.text(
+            W / 2,
+            H - 66,
+            'UP DOWN: CHOOSE   ENTER: RUN IT ON THIS MACHINE',
+            15,
+            GREEN,
+        )
         self.text(W / 2, H - 34, 'B: WHAT RUNS BEHIND   ESC: BACK', 12, DIM)
 
     def method_state(self, method, s):
@@ -507,19 +756,40 @@ class Arcade(QWidget):
             reached, best, true = self.tuned[method.name]
             if not reached:
                 return f'NOT IN SPEC, BEST {best:.2f}'
-            return f'IN SPEC, {reached} PASSES' if true else f'READS IN SPEC, {reached} PASSES. TRUE BEAM OUT'
+            return (
+                f'IN SPEC, {reached} PASSES'
+                if true
+                else f'READS IN SPEC, {reached} PASSES. TRUE BEAM OUT'
+            )
         if method.missing():
             return 'NOT INSTALLED'
         if method.fn is policy:
             report = policy_report(s.mission_id)
-            return f"HELD-OUT {report['in_spec']}/{report['conditions']}" if report else 'NOT TRAINED'
+            return (
+                f"HELD-OUT {report['in_spec']}/{report['conditions']}"
+                if report
+                else 'NOT TRAINED'
+            )
         return ''
 
     def draw_training(self):
         s = self.stages[self.index]
         self.text(W / 2, 170, f'TRAINING PPO ON {s.title}', 30, CYAN)
-        self.bar(150, 290, W - 300, 26, self.training_progress(), GREEN, f'{100 * self.training_progress():.0f}% OF {RL_STEPS["ppo"]} PASSES, {time.monotonic() - self.training_start:.0f} S')
-        self.block(360, f'A policy pays up front: {RL_STEPS["ppo"]} passes on other conditions here, against {BUDGET} per run for the other methods.', 60, 15)
+        self.bar(
+            150,
+            290,
+            W - 300,
+            26,
+            self.training_progress(),
+            GREEN,
+            f'{100 * self.training_progress():.0f}% OF {RL_STEPS["ppo"]} PASSES, {time.monotonic() - self.training_start:.0f} S',
+        )
+        self.block(
+            360,
+            f'A policy pays up front: {RL_STEPS["ppo"]} passes on other conditions here, against {BUDGET} per run for the other methods.',
+            60,
+            15,
+        )
         self.text(W / 2, H - 50, 'ESC: STOP', 14, DIM)
 
     def draw_tuning(self):
@@ -528,22 +798,70 @@ class Arcade(QWidget):
         t = self.tuning
         record = t.passes[self.replayed - 1] if self.replayed else None
         left = 345
-        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(20, 5, 20, 225))
-        self.p.fillRect(QRectF(left, H - 74, W - left - 10, 70), QColor(255, 61, 242, 34))
-        status = f'PASS {self.replayed}/{BUDGET}' + (f"   SCORE {record['score']:.2f}   BEST {record['best']:.2f}" if record else '')
-        self.text(left + 10, H - 72, f'{t.method.name}   {status}', 14, MAGENTA, 'left')
+        self.p.fillRect(
+            QRectF(left, H - 74, W - left - 10, 70), QColor(20, 5, 20, 225)
+        )
+        self.p.fillRect(
+            QRectF(left, H - 74, W - left - 10, 70), QColor(255, 61, 242, 34)
+        )
+        status = f'PASS {self.replayed}/{BUDGET}' + (
+            f"   SCORE {record['score']:.2f}   BEST {record['best']:.2f}"
+            if record
+            else ''
+        )
+        self.text(
+            left + 10,
+            H - 72,
+            f'{t.method.name}   {status}',
+            14,
+            MAGENTA,
+            'left',
+        )
         if not self.tuning_over:
-            waiting = 'THE METHOD IS THINKING' if t.passes and self.replayed >= len(t.passes) else 'THE METHOD IS TURNING THE KNOBS'
+            waiting = (
+                'THE METHOD IS THINKING'
+                if t.passes and self.replayed >= len(t.passes)
+                else 'THE METHOD IS TURNING THE KNOBS'
+            )
             self.text(left + 10, H - 46, waiting, 11, WHITE, 'left')
-            self.text(left + 10, H - 26, 'O: OTHER METHOD, SAME MACHINE   ESC: STOP', 11, CYAN, 'left')
+            self.text(
+                left + 10,
+                H - 26,
+                'O: OTHER METHOD, SAME MACHINE   ESC: STOP',
+                11,
+                CYAN,
+                'left',
+            )
             return
         if t.error:
-            self.text(left + 10, H - 46, wrapped(t.error, 80)[0], 11, RED, 'left')
+            self.text(
+                left + 10, H - 46, wrapped(t.error, 80)[0], 11, RED, 'left'
+            )
         else:
             reached, true = t.run.reached, self.stage.ready()
-            result = f'NOT IN SPEC AFTER {t.run.evals} PASSES. BEST SETTING LEFT ON' if not reached else f'IN SPEC AFTER {reached} PASSES' if true else f'READS IN SPEC AFTER {reached} PASSES. TRUE BEAM OUT OF SPEC'
-            self.text(left + 10, H - 46, result, 12, GREEN if reached and true else RED, 'left')
-        self.text(left + 10, H - 26, 'ENTER: YOU TAKE THE BEAM   O: OTHER METHOD, SAME MACHINE', 11, CYAN, 'left')
+            result = (
+                f'NOT IN SPEC AFTER {t.run.evals} PASSES. BEST SETTING LEFT ON'
+                if not reached
+                else f'IN SPEC AFTER {reached} PASSES'
+                if true
+                else f'READS IN SPEC AFTER {reached} PASSES. TRUE BEAM OUT OF SPEC'
+            )
+            self.text(
+                left + 10,
+                H - 46,
+                result,
+                12,
+                GREEN if reached and true else RED,
+                'left',
+            )
+        self.text(
+            left + 10,
+            H - 26,
+            'ENTER: YOU TAKE THE BEAM   O: OTHER METHOD, SAME MACHINE',
+            11,
+            CYAN,
+            'left',
+        )
 
     def draw_walkthrough(self):
         s = self.stages[self.index]
@@ -557,19 +875,49 @@ class Arcade(QWidget):
                 y += 19
             y += 4
         self.text(W / 2, H - 56, MISSION_CONTROLS, 12, CYAN)
-        self.text(W / 2, H - 30, 'ENTER: START, THE HELPER GUIDES YOU   ESC: BACK', 14, GREEN)
+        self.text(
+            W / 2,
+            H - 30,
+            'ENTER: START, THE HELPER GUIDES YOU   ESC: BACK',
+            14,
+            GREEN,
+        )
 
     def draw_brief(self):
         s = self.stages[self.index]
         mission = isinstance(s, Mission)
-        self.text(W / 2, 100, s.mission_id if mission else f'STAGE {self.index + 1}', 20, MAGENTA)
+        self.text(
+            W / 2,
+            100,
+            s.mission_id if mission else f'STAGE {self.index + 1}',
+            20,
+            MAGENTA,
+        )
         self.text(W / 2, 140, s.title, 40, CYAN)
         y = self.block(230, s.client, 56, 17, YELLOW) + 18 if mission else 250
         y = self.block(y, s.brief, 56, 16)
-        self.text(W / 2, y + 40, MISSION_CONTROLS if mission else CONTROLS[s.key], 13, GREEN)
-        self.text(W / 2, y + 80, 'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE', 14, YELLOW)
+        self.text(
+            W / 2,
+            y + 40,
+            MISSION_CONTROLS if mission else CONTROLS[s.key],
+            13,
+            GREEN,
+        )
+        self.text(
+            W / 2,
+            y + 80,
+            'T: TUTORIAL, A HELPER TELLS YOU WHAT TO DO. NO CLOCK, NO SCORE',
+            14,
+            YELLOW,
+        )
         if mission:
-            self.text(W / 2, y + 110, 'O: LET A TUNING METHOD TRY IT   B: WHAT RUNS BEHIND', 14, MAGENTA)
+            self.text(
+                W / 2,
+                y + 110,
+                'O: LET A TUNING METHOD TRY IT   B: WHAT RUNS BEHIND',
+                14,
+                MAGENTA,
+            )
         if int(self.clock * 2) % 2:
             self.text(W / 2, H - 80, 'PRESS ENTER', 22, GREEN)
 
@@ -596,14 +944,26 @@ class Arcade(QWidget):
     def draw_won(self):
         self.text(W / 2, 170, 'LEVEL 0 CLEAR', 46, GREEN)
         self.text(W / 2, 280, f'SCORE {self.total:07d}', 26, CYAN)
-        self.block(370, 'Next: the real machine. Central region, deflector, the CIME layout. Needs the CIME map.', 54, 16, YELLOW)
+        self.block(
+            370,
+            'Next: the real machine. Central region, deflector, the CIME layout. Needs the CIME map.',
+            54,
+            16,
+            YELLOW,
+        )
         self.text(W / 2, H - 80, 'PRESS ENTER', 20, GREEN)
 
     def draw_initials(self):
         self.text(W / 2, 170, 'NEW HIGH SCORE', 38, YELLOW)
         self.text(W / 2, 250, f'{self.total:07d}', 28, CYAN)
         for i, letter in enumerate(self.initials):
-            self.text(W / 2 + (i - 1) * 70, 340, letter, 48, GREEN if i == self.letter else WHITE)
+            self.text(
+                W / 2 + (i - 1) * 70,
+                340,
+                letter,
+                48,
+                GREEN if i == self.letter else WHITE,
+            )
         self.text(W / 2, 480, 'UP DOWN: LETTER   SPACE: NEXT', 16, DIM)
 
     def draw_play(self):
@@ -620,20 +980,59 @@ class Arcade(QWidget):
         if self.coach:
             self.advice = self.coach.advise()
         self.knob_panel(s)
-        self.plot(350, 62, 580, 110, s.beam.probe_r, s.beam.probe, CYAN, 'RADIAL PROBE, CURRENT AGAINST RADIUS', 0)
-        self.plot(350, 192, 580, 90, s.beam.probe_r, s.beam.phase, MAGENTA, 'PHASE PROBE, -90 TO +90 DEG', -90, 90, s.beam.probe > 0)
+        self.plot(
+            350,
+            62,
+            580,
+            110,
+            s.beam.probe_r,
+            s.beam.probe,
+            CYAN,
+            'RADIAL PROBE, CURRENT AGAINST RADIUS',
+            0,
+        )
+        self.plot(
+            350,
+            192,
+            580,
+            90,
+            s.beam.probe_r,
+            s.beam.phase,
+            MAGENTA,
+            'PHASE PROBE, -90 TO +90 DEG',
+            -90,
+            90,
+            s.beam.probe > 0,
+        )
         r = s.readings
         y = 300
-        for label, value, color in (('CURRENT', self.current_text(r['extracted_uA']), CYAN), ('ENERGY', f"{r['w_MeV']:.2f} MEV", WHITE),
-                                    ('TRANSMISSION', f"{100 * r['transmission']:.1f}%", GREEN), ('LOST', f"{1e3 * r['lost_kW']:.1f} W", RED)):
+        for label, value, color in (
+            ('CURRENT', self.current_text(r['extracted_uA']), CYAN),
+            ('ENERGY', f"{r['w_MeV']:.2f} MEV", WHITE),
+            ('TRANSMISSION', f"{100 * r['transmission']:.1f}%", GREEN),
+            ('LOST', f"{1e3 * r['lost_kW']:.1f} W", RED),
+        ):
             self.text(30, y + 325, label, 11, color, 'left')
             self.text(326, y + 323, value, 13, WHITE, 'right')
             y += 22
         self.bar(350, 300, 180, 16, s.heat, RED, '')
         self.text(350, 318, 'INTERLOCK', 11, RED, 'left')
-        self.text(W - 30, 298, 'BEAM ON' if s.beam_on else 'BEAM OFF', 18, RED if s.beam_on else DIM, 'right')
+        self.text(
+            W - 30,
+            298,
+            'BEAM ON' if s.beam_on else 'BEAM OFF',
+            18,
+            RED if s.beam_on else DIM,
+            'right',
+        )
         if not self.tutorial:
-            self.text(W / 2 + 120, 298, f'TIME {max(s.p["time_limit"] - s.time, 0):.0f}', 16, YELLOW)
+            self.text(
+                W / 2 + 120,
+                298,
+                f'TIME {max(s.p["time_limit"] - s.time, 0):.0f}',
+                16,
+                YELLOW,
+            )
         getattr(self, f'panel_{s.key}')(s, 350, 345, 580, 320)
 
     @staticmethod
@@ -647,25 +1046,74 @@ class Arcade(QWidget):
             selected = i == s.selected
             color = YELLOW if selected else WHITE
             if selected:
-                self.p.fillRect(QRectF(16, y - 4, 318, row - 2), QColor(255, 225, 77, 28))
+                self.p.fillRect(
+                    QRectF(16, y - 4, 318, row - 2), QColor(255, 225, 77, 28)
+                )
             if self.coach and self.advice.knob == spec['key']:
-                self.p.fillRect(QRectF(16, y - 4, 318, row - 2), QColor(61, 255, 122, 50))
-                self.text(180, y - 2, '<<<' if self.advice.direction < 0 else '>>>', 12, GREEN, 'left')
+                self.p.fillRect(
+                    QRectF(16, y - 4, 318, row - 2), QColor(61, 255, 122, 50)
+                )
+                self.text(
+                    180,
+                    y - 2,
+                    '<<<' if self.advice.direction < 0 else '>>>',
+                    12,
+                    GREEN,
+                    'left',
+                )
             value = s.knobs[spec['key']]
-            digits = 3 if spec['unit'] in ('MHz', 'T') else 5 if spec['max'] < 0.1 else 2
+            digits = (
+                3
+                if spec['unit'] in ('MHz', 'T')
+                else 5
+                if spec['max'] < 0.1
+                else 2
+            )
             self.text(24, y - 2, spec['label'], 12, color, 'left')
-            self.text(326, y - 2, f"{value:.{digits}f} {spec['unit'] if spec['unit'] != '1' else ''}".strip(), 13, color, 'right')
-            self.bar(24, y + 22, 302, 8, (value - spec['min']) / (spec['max'] - spec['min']), CYAN if selected else DIM)
+            self.text(
+                326,
+                y - 2,
+                f"{value:.{digits}f} {spec['unit'] if spec['unit'] != '1' else ''}".strip(),
+                13,
+                color,
+                'right',
+            )
+            self.bar(
+                24,
+                y + 22,
+                302,
+                8,
+                (value - spec['min']) / (spec['max'] - spec['min']),
+                CYAN if selected else DIM,
+            )
             y += row
 
-    def plot(self, x, y, width, height, xs, ys, color, title, low=None, high=None, mask=None):
+    def plot(
+        self,
+        x,
+        y,
+        width,
+        height,
+        xs,
+        ys,
+        color,
+        title,
+        low=None,
+        high=None,
+        mask=None,
+    ):
         self.p.setPen(QPen(DIM, 1))
         self.p.setBrush(Qt.NoBrush)
         self.p.drawRect(QRectF(x, y, width, height))
         self.text(x + 6, y + 2, title, 10, DIM, 'left')
         top = max(ys.max(), 1e-12) if high is None else high
         bottom = 0 if low is None else low
-        pos = lambda u, v: QPointF(x + width * (u - xs[0]) / (xs[-1] - xs[0]), y + height * (1 - (min(max(v, bottom), top) - bottom) / (top - bottom)))  # noqa: E731
+        pos = lambda u, v: QPointF(
+            x + width * (u - xs[0]) / (xs[-1] - xs[0]),
+            y
+            + height
+            * (1 - (min(max(v, bottom), top) - bottom) / (top - bottom)),
+        )  # noqa: E731
         path, started = QPainterPath(), False
         for i, (u, v) in enumerate(zip(xs, ys)):
             if mask is not None and not mask[i]:
@@ -687,7 +1135,9 @@ class Arcade(QWidget):
             return
         px, py = s.readings['x_mm'] * scale, s.readings['y_mm'] * scale
         px, py = max(min(px, radius), -radius), max(min(py, radius), -radius)
-        self.circle(x + px, y - py, max((spot or s.spot()) * scale, 3), MAGENTA, 1.5)
+        self.circle(
+            x + px, y - py, max((spot or s.spot()) * scale, 3), MAGENTA, 1.5
+        )
         self.ion(x + px, y - py, YELLOW)
         self.text(x, y - radius - 24, title, 11, CYAN)
 
@@ -706,54 +1156,226 @@ class Arcade(QWidget):
         w = width - 200
         low = x + w * (p['depth_cm'] - p['half_width_cm'] - d0) / (d1 - d0)
         high = x + w * (p['depth_cm'] + p['half_width_cm'] - d0) / (d1 - d0)
-        self.p.fillRect(QRectF(low, y, max(high - low, 2), 150), QColor(61, 255, 122, 70))
-        self.plot(x, y, w, 150, s.depth_axis, s.bragg, YELLOW, 'DOSE AGAINST DEPTH IN WATER; GREEN: TUMOUR')
-        self.text(x, y + 154, f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   SPOT {s.spot():.1f} MM', 13, WHITE, 'left')
-        self.crosshair(x + width - 90, y + 90, 80, s, p['lateral_mm'], 'LATERAL')
-        self.bar(x, y + 206, width, 20, s.delivered / (p['dose_gy'] * (1 + p['dose_tolerance'])), GREEN,
-                 f"TUMOUR {s.delivered:.1f} / {p['dose_gy']:.1f} GY   RATE {s.rate:.2f} GY/S")
+        self.p.fillRect(
+            QRectF(low, y, max(high - low, 2), 150), QColor(61, 255, 122, 70)
+        )
+        self.plot(
+            x,
+            y,
+            w,
+            150,
+            s.depth_axis,
+            s.bragg,
+            YELLOW,
+            'DOSE AGAINST DEPTH IN WATER; GREEN: TUMOUR',
+        )
+        self.text(
+            x,
+            y + 154,
+            f'PEAK {s.peak:.2f} CM   TUMOUR {p["depth_cm"]:.1f} CM   SPOT {s.spot():.1f} MM',
+            13,
+            WHITE,
+            'left',
+        )
+        self.crosshair(
+            x + width - 90, y + 90, 80, s, p['lateral_mm'], 'LATERAL'
+        )
+        self.bar(
+            x,
+            y + 206,
+            width,
+            20,
+            s.delivered / (p['dose_gy'] * (1 + p['dose_tolerance'])),
+            GREEN,
+            f"TUMOUR {s.delivered:.1f} / {p['dose_gy']:.1f} GY   RATE {s.rate:.2f} GY/S",
+        )
         ok = x + width * (1 - p['dose_tolerance']) / (1 + p['dose_tolerance'])
         self.line(ok, y + 202, ok, y + 230, YELLOW)
-        self.bar(x, y + 258, width, 14, s.healthy / p['healthy_limit_gy'], RED, f'OUTSIDE THE TUMOUR {s.healthy:.2f} GY')
+        self.bar(
+            x,
+            y + 258,
+            width,
+            14,
+            s.healthy / p['healthy_limit_gy'],
+            RED,
+            f'OUTSIDE THE TUMOUR {s.healthy:.2f} GY',
+        )
 
     def panel_isotope(self, s, x, y, width, height):
         p = s.p
-        self.bar(x, y + 28, width - 200, 24, s.activity / p['activity_gbq'], GREEN, f"F-18 {s.activity:.1f} / {p['activity_gbq']:.0f} GBQ")
-        self.bar(x, y + 92, width - 200, 18, s.target_kw / p['target_kw'], RED if s.target_kw > 0.9 * p['target_kw'] else CYAN,
-                 f"POWER ON THE WATER {s.target_kw:.2f} / {p['target_kw']:.1f} KW")
+        self.bar(
+            x,
+            y + 28,
+            width - 200,
+            24,
+            s.activity / p['activity_gbq'],
+            GREEN,
+            f"F-18 {s.activity:.1f} / {p['activity_gbq']:.0f} GBQ",
+        )
+        self.bar(
+            x,
+            y + 92,
+            width - 200,
+            18,
+            s.target_kw / p['target_kw'],
+            RED if s.target_kw > 0.9 * p['target_kw'] else CYAN,
+            f"POWER ON THE WATER {s.target_kw:.2f} / {p['target_kw']:.1f} KW",
+        )
         limit = s.machine.max_lost_kw
-        self.bar(x, y + 150, width - 200, 18, s.beam.lost_kw / limit, RED, f'LOST IN THE MACHINE {s.beam.lost_kw:.2f} / {limit:.1f} KW')
-        self.text(x, y + 190, f"SATURATION {p['yield_gbq_ua']:.0f} GBQ/UA AT {p['w_ref']:.0f} MEV", 12, DIM, 'left')
-        self.crosshair(x + width - 90, y + 90, 80, s, p['window_mm'], 'TARGET WINDOW', spot=None)
+        self.bar(
+            x,
+            y + 150,
+            width - 200,
+            18,
+            s.beam.lost_kw / limit,
+            RED,
+            f'LOST IN THE MACHINE {s.beam.lost_kw:.2f} / {limit:.1f} KW',
+        )
+        self.text(
+            x,
+            y + 190,
+            f"SATURATION {p['yield_gbq_ua']:.0f} GBQ/UA AT {p['w_ref']:.0f} MEV",
+            12,
+            DIM,
+            'left',
+        )
+        self.crosshair(
+            x + width - 90,
+            y + 90,
+            80,
+            s,
+            p['window_mm'],
+            'TARGET WINDOW',
+            spot=None,
+        )
 
     def panel_experiment(self, s, x, y, width, height):
         p, b = s.p, s.beam
-        energy = abs(b.w_mean / p['w_target'] - 1) <= p['w_tolerance'] if b.w_mean else False
-        self.lights(x, y, ((f"ENERGY {b.w_mean / s.ion.mass_number:.3f} MEV/U, WANT {p['w_target'] / s.ion.mass_number:.2f}", energy),
-                           (f"SPREAD {100 * b.w_spread:.2f}%, MAX {100 * p['spread_max']:.1f}%", b.w_mean > 0 and b.w_spread <= p['spread_max']),
-                           (f"CURRENT {b.extracted_ua:.2f} UA, {p['current_min']:.1f} TO {p['current_max']:.1f}", p['current_min'] <= b.extracted_ua <= p['current_max']),
-                           (f"ON AXIS {math.hypot(b.x, b.y):.1f} MM, MAX {p['position_mm']:.0f}", math.hypot(b.x, b.y) <= p['position_mm']),
-                           (f"SPOT {b.spot:.1f} MM, MAX {p['spot_max']:.1f}", b.spot <= p['spot_max'])))
-        self.crosshair(x + width - 90, y + 90, 80, s, p['position_mm'], 'ON TARGET')
-        self.bar(x, y + 190, width, 22, s.delivered / p['hold_s'], GREEN, f"BEAM IN SPEC {s.delivered:.1f} / {p['hold_s']:.0f} S   {s.ion.name}   HARMONIC {b.harmonic}")
+        energy = (
+            abs(b.w_mean / p['w_target'] - 1) <= p['w_tolerance']
+            if b.w_mean
+            else False
+        )
+        self.lights(
+            x,
+            y,
+            (
+                (
+                    f"ENERGY {b.w_mean / s.ion.mass_number:.3f} MEV/U, WANT {p['w_target'] / s.ion.mass_number:.2f}",
+                    energy,
+                ),
+                (
+                    f"SPREAD {100 * b.w_spread:.2f}%, MAX {100 * p['spread_max']:.1f}%",
+                    b.w_mean > 0 and b.w_spread <= p['spread_max'],
+                ),
+                (
+                    f"CURRENT {b.extracted_ua:.2f} UA, {p['current_min']:.1f} TO {p['current_max']:.1f}",
+                    p['current_min'] <= b.extracted_ua <= p['current_max'],
+                ),
+                (
+                    f"ON AXIS {math.hypot(b.x, b.y):.1f} MM, MAX {p['position_mm']:.0f}",
+                    math.hypot(b.x, b.y) <= p['position_mm'],
+                ),
+                (
+                    f"SPOT {b.spot:.1f} MM, MAX {p['spot_max']:.1f}",
+                    b.spot <= p['spot_max'],
+                ),
+            ),
+        )
+        self.crosshair(
+            x + width - 90, y + 90, 80, s, p['position_mm'], 'ON TARGET'
+        )
+        self.bar(
+            x,
+            y + 190,
+            width,
+            22,
+            s.delivered / p['hold_s'],
+            GREEN,
+            f"BEAM IN SPEC {s.delivered:.1f} / {p['hold_s']:.0f} S   {s.ion.name}   HARMONIC {b.harmonic}",
+        )
 
     def panel_qualification(self, s, x, y, width, height):
         p = s.p
         beam = s.has_beam()
-        self.lights(x, y, ((f"ON SAMPLE {s.w_sample():.1f} MEV, WANT {p['w_sample']:.0f}", beam and abs(s.w_sample() / p['w_sample'] - 1) <= p['w_sample_tolerance']),
-                           (f"FLUX {s.flux():.1e}, {p['flux_min']:.0e} TO {p['flux_max']:.0e} /CM2/S", beam and p['flux_min'] <= s.flux() <= p['flux_max']),
-                           (f"EDGE OVER CENTRE {s.edge_ratio():.2f}, MIN {p['uniformity']:.2f}", beam and s.edge_ratio() >= p['uniformity']),
-                           (f"SPOT {s.spot():.1f} MM ON A {2 * p['sample_radius_mm']:.0f} MM SAMPLE", beam)))
-        self.crosshair(x + width - 90, y + 90, 80, s, p['sample_radius_mm'], 'SAMPLE')
-        self.bar(x, y + 190, width, 22, s.delivered / p['fluence_goal'], GREEN, f"FLUENCE {s.delivered:.2e} / {p['fluence_goal']:.0e} /CM2")
-        self.bar(x, y + 250, width, 14, s.spoiled / (0.2 * p['fluence_goal']), RED, f'OUT OF SPEC ON THE SAMPLE {s.spoiled:.2e} /CM2')
+        self.lights(
+            x,
+            y,
+            (
+                (
+                    f"ON SAMPLE {s.w_sample():.1f} MEV, WANT {p['w_sample']:.0f}",
+                    beam
+                    and abs(s.w_sample() / p['w_sample'] - 1)
+                    <= p['w_sample_tolerance'],
+                ),
+                (
+                    f"FLUX {s.flux():.1e}, {p['flux_min']:.0e} TO {p['flux_max']:.0e} /CM2/S",
+                    beam and p['flux_min'] <= s.flux() <= p['flux_max'],
+                ),
+                (
+                    f"EDGE OVER CENTRE {s.edge_ratio():.2f}, MIN {p['uniformity']:.2f}",
+                    beam and s.edge_ratio() >= p['uniformity'],
+                ),
+                (
+                    f"SPOT {s.spot():.1f} MM ON A {2 * p['sample_radius_mm']:.0f} MM SAMPLE",
+                    beam,
+                ),
+            ),
+        )
+        self.crosshair(
+            x + width - 90, y + 90, 80, s, p['sample_radius_mm'], 'SAMPLE'
+        )
+        self.bar(
+            x,
+            y + 190,
+            width,
+            22,
+            s.delivered / p['fluence_goal'],
+            GREEN,
+            f"FLUENCE {s.delivered:.2e} / {p['fluence_goal']:.0e} /CM2",
+        )
+        self.bar(
+            x,
+            y + 250,
+            width,
+            14,
+            s.spoiled / (0.2 * p['fluence_goal']),
+            RED,
+            f'OUT OF SPEC ON THE SAMPLE {s.spoiled:.2e} /CM2',
+        )
 
     def panel_isol(self, s, x, y, width, height):
         p = s.p
-        self.bar(x, y + 28, width - 200, 22, s.delivered / p['energy_goal_kws'], GREEN, f"ON TARGET {s.delivered:.1f} / {p['energy_goal_kws']:.0f} KJ")
-        self.bar(x, y + 90, width - 200, 18, s.power() / p['power_limit_kw'], CYAN, f"POWER {s.power():.2f} / {p['power_limit_kw']:.1f} KW")
-        self.bar(x, y + 148, width - 200, 18, s.density() / p['density_limit'], RED, f"POWER DENSITY {1e3 * s.density():.1f} / {1e3 * p['density_limit']:.0f} W/MM2")
-        self.crosshair(x + width - 90, y + 90, 80, s, p['target_radius_mm'], 'TARGET')
+        self.bar(
+            x,
+            y + 28,
+            width - 200,
+            22,
+            s.delivered / p['energy_goal_kws'],
+            GREEN,
+            f"ON TARGET {s.delivered:.1f} / {p['energy_goal_kws']:.0f} KJ",
+        )
+        self.bar(
+            x,
+            y + 90,
+            width - 200,
+            18,
+            s.power() / p['power_limit_kw'],
+            CYAN,
+            f"POWER {s.power():.2f} / {p['power_limit_kw']:.1f} KW",
+        )
+        self.bar(
+            x,
+            y + 148,
+            width - 200,
+            18,
+            s.density() / p['density_limit'],
+            RED,
+            f"POWER DENSITY {1e3 * s.density():.1f} / {1e3 * p['density_limit']:.0f} W/MM2",
+        )
+        self.crosshair(
+            x + width - 90, y + 90, 80, s, p['target_radius_mm'], 'TARGET'
+        )
 
     # ---------- stage views
 
@@ -764,13 +1386,21 @@ class Arcade(QWidget):
         self.circle(cx, cy, r, GREEN, 2)
         self.p.setPen(QPen(GREEN, 2))
         tip = s.target_rotation * 0.35
-        self.arrow(cx + r * math.cos(tip), cy - r * math.sin(tip), tip + s.target_rotation * math.pi / 2, GREEN)
+        self.arrow(
+            cx + r * math.cos(tip),
+            cy - r * math.sin(tip),
+            tip + s.target_rotation * math.pi / 2,
+            GREEN,
+        )
         if s.shot_radius is not None:
             rs = s.shot_radius * scale
             fraction = 1 if s.flight is None else s.flight
             span = int(s.shot_rotation * fraction * 360 * 16)
             rect = QRectF(cx - rs, cy - rs, 2 * rs, 2 * rs)
-            self.neon(lambda: self.p.drawArc(rect, 0, span), MAGENTA if s.flight is not None else DIM)
+            self.neon(
+                lambda: self.p.drawArc(rect, 0, span),
+                MAGENTA if s.flight is not None else DIM,
+            )
             if s.flight is not None:
                 a = s.shot_rotation * 2 * math.pi * s.flight
                 self.ion(cx + rs * math.cos(a), cy - rs * math.sin(a), MAGENTA)
@@ -789,7 +1419,13 @@ class Arcade(QWidget):
 
     def arrow(self, x, y, angle, color):
         for side in (2.6, -2.6):
-            self.line(x, y, x + 16 * math.cos(angle + side), y - 16 * math.sin(angle + side), color)
+            self.line(
+                x,
+                y,
+                x + 16 * math.cos(angle + side),
+                y - 16 * math.sin(angle + side),
+                color,
+            )
 
     def gap_view(self, reference_radius):
         s = self.stage
@@ -798,7 +1434,12 @@ class Arcade(QWidget):
         for sign, color in ((-1, CYAN), (1, MAGENTA)):
             path = QPainterPath(QPointF(cx - radius - 12, cy + sign * 8))
             path.lineTo(cx + radius + 12, cy + sign * 8)
-            rect = QRectF(cx - radius - 12, cy - radius - 12 + sign * 8, 2 * radius + 24, 2 * radius + 24)
+            rect = QRectF(
+                cx - radius - 12,
+                cy - radius - 12 + sign * 8,
+                2 * radius + 24,
+                2 * radius + 24,
+            )
             path.arcTo(rect, 0, sign * -180)
             path.closeSubpath()
             dim = QColor(color)
@@ -808,7 +1449,12 @@ class Arcade(QWidget):
         visible = s.arcs[-90:]
         for i, (x0, x1) in enumerate(visible):
             n = at - len(visible) + 1 + i
-            rect = QRectF(cx + scale * min(x0, x1), cy - scale * abs(x1 - x0) / 2, scale * abs(x1 - x0), scale * abs(x1 - x0))
+            rect = QRectF(
+                cx + scale * min(x0, x1),
+                cy - scale * abs(x1 - x0) / 2,
+                scale * abs(x1 - x0),
+                scale * abs(x1 - x0),
+            )
             shade = QColor(WHITE)
             shade.setAlpha(40 + int(180 * i / len(visible)))
             self.p.setPen(QPen(shade, 1.2))
@@ -819,7 +1465,11 @@ class Arcade(QWidget):
         progress = s.frac * math.pi
         side = -1 if at % 2 == 0 else 1
         a = progress if x1 < x0 else math.pi - progress
-        self.ion(cx + scale * (c + r * math.cos(a)), cy + side * scale * r * math.sin(a), YELLOW)
+        self.ion(
+            cx + scale * (c + r * math.cos(a)),
+            cy + side * scale * r * math.sin(a),
+            YELLOW,
+        )
 
     def phase_dial(self, x, y, ghost=None):
         s = self.stage
@@ -827,11 +1477,36 @@ class Arcade(QWidget):
         self.circle(x, y, r, DIM)
         crest = math.degrees(math.acos(s.p['crest_cos']))
         rect = QRectF(x - r, y - r, 2 * r, 2 * r)
-        self.neon(lambda: self.p.drawArc(rect, int((90 - crest) * 16), int(2 * crest * 16)), GREEN, 4)
+        self.neon(
+            lambda: self.p.drawArc(
+                rect, int((90 - crest) * 16), int(2 * crest * 16)
+            ),
+            GREEN,
+            4,
+        )
         if ghost is not None:
-            self.line(x, y, x + r * 0.8 * math.sin(ghost), y - r * 0.8 * math.cos(ghost), DIM)
-        color = GREEN if math.cos(s.phi) >= s.p['crest_cos'] else RED if math.cos(s.phi) < 0 else YELLOW
-        self.line(x, y, x + r * 0.9 * math.sin(s.phi), y - r * 0.9 * math.cos(s.phi), color, 3)
+            self.line(
+                x,
+                y,
+                x + r * 0.8 * math.sin(ghost),
+                y - r * 0.8 * math.cos(ghost),
+                DIM,
+            )
+        color = (
+            GREEN
+            if math.cos(s.phi) >= s.p['crest_cos']
+            else RED
+            if math.cos(s.phi) < 0
+            else YELLOW
+        )
+        self.line(
+            x,
+            y,
+            x + r * 0.9 * math.sin(s.phi),
+            y - r * 0.9 * math.cos(s.phi),
+            color,
+            3,
+        )
         self.text(x, y - r - 30, 'RF PHASE', 14, CYAN)
 
     def view_dee_beat(self):
@@ -843,13 +1518,23 @@ class Arcade(QWidget):
         self.text(x, 302, f'{s.f / 1e6:.3f} MHZ', 20)
         self.text(x, 370, 'COMBO', 14, YELLOW)
         self.text(x, 392, f'x{min(s.combo, 20)}', 26, YELLOW)
-        self.bar(x - 110, 490, 220, 22, s.w / s.p['w_target'], GREEN, f'{s.w:.2f} MEV')
+        self.bar(
+            x - 110,
+            490,
+            220,
+            22,
+            s.w / s.p['w_target'],
+            GREEN,
+            f'{s.w:.2f} MEV',
+        )
         if not self.tutorial:
             self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
 
     def view_trim_coils(self):
         s = self.stage
-        gamma_ratio = physics.gamma(s.p['w_target']) / physics.gamma(s.p['w_start'])
+        gamma_ratio = physics.gamma(s.p['w_target']) / physics.gamma(
+            s.p['w_start']
+        )
         self.gap_view(physics.radius(s.p['w_target'], s.p['b'] * gamma_ratio))
         x = W - 150
         self.phase_dial(x, 170, s.ghost_phi)
@@ -858,7 +1543,15 @@ class Arcade(QWidget):
         self.text(x, 322, f'{100 * s.delta:+.2f}%', 24)
         self.text(x, 370, 'GAMMA', 14, MAGENTA)
         self.text(x, 392, f'{physics.gamma(s.w):.3f}', 24)
-        self.bar(x - 110, 490, 220, 22, s.w / s.p['w_target'], GREEN, f'{s.w:.1f} MEV')
+        self.bar(
+            x - 110,
+            490,
+            220,
+            22,
+            s.w / s.p['w_target'],
+            GREEN,
+            f'{s.w:.1f} MEV',
+        )
         if not self.tutorial:
             self.text(x, 540, f"TIME {s.p['time_limit'] - s.time:.0f}", 15)
 
@@ -869,11 +1562,20 @@ class Arcade(QWidget):
             self.line(40, y, W - 40, y, CYAN, 3)
         self.line(40, mid, W - 40, mid, DIM, 1)
         if s.trail:
-            path = QPainterPath(QPointF(W - 120 - len(s.trail), mid - s.trail[0] * scale))
+            path = QPainterPath(
+                QPointF(W - 120 - len(s.trail), mid - s.trail[0] * scale)
+            )
             for i, z in enumerate(s.trail):
-                path.lineTo(W - 120 - len(s.trail) + i, mid - max(min(z, s.p['gap']), -s.p['gap']) * scale)
+                path.lineTo(
+                    W - 120 - len(s.trail) + i,
+                    mid - max(min(z, s.p['gap']), -s.p['gap']) * scale,
+                )
             self.neon(lambda: self.p.drawPath(path), MAGENTA)
-        self.ion(W - 120, mid - max(min(s.z, s.p['gap']), -s.p['gap']) * scale, YELLOW)
+        self.ion(
+            W - 120,
+            mid - max(min(s.z, s.p['gap']), -s.p['gap']) * scale,
+            YELLOW,
+        )
 
     def view_fallout(self):
         s = self.stage
@@ -881,19 +1583,53 @@ class Arcade(QWidget):
         k = physics.isochronous_index(s.w)
         self.text(60, 505, f'QZ^2 = -K = {-k:+.3f}', 18, RED, 'left')
         self.text(60, 540, f'{s.w:.1f} MEV', 18, WHITE, 'left')
-        self.text(W / 2, 505, f"TURN {s.turns:.1f}/{s.p['turns_target']}", 18, YELLOW)
+        self.text(
+            W / 2, 505, f"TURN {s.turns:.1f}/{s.p['turns_target']}", 18, YELLOW
+        )
         self.text(W - 60, 505, 'CHARGES', 15, CYAN, 'right')
         self.bar(W - 280, 535, 220, 22, s.charges / s.p['charges'], CYAN)
 
     def view_thomas(self):
         s = self.stage
         self.tunnel()
-        self.bar(60, 535, 200, 20, s.flutter / s.p['f_max'], CYAN, f'FLUTTER F {s.flutter:.2f}')
-        self.bar(60, 600, 200, 20, s.xi_deg / s.p['xi_max'], MAGENTA, f'SPIRAL XI {s.xi_deg:.0f} DEG')
-        self.bar(W - 260, 535, 200, 20, s.w / s.p['w_target'], GREEN, f'{s.w:.0f} MEV')
+        self.bar(
+            60,
+            535,
+            200,
+            20,
+            s.flutter / s.p['f_max'],
+            CYAN,
+            f'FLUTTER F {s.flutter:.2f}',
+        )
+        self.bar(
+            60,
+            600,
+            200,
+            20,
+            s.xi_deg / s.p['xi_max'],
+            MAGENTA,
+            f'SPIRAL XI {s.xi_deg:.0f} DEG',
+        )
+        self.bar(
+            W - 260,
+            535,
+            200,
+            20,
+            s.w / s.p['w_target'],
+            GREEN,
+            f'{s.w:.0f} MEV',
+        )
         x0, x1, y, top = 330, 680, 600, 1.3
         at = lambda q: x0 + (x1 - x0) * min(q, top) / top  # noqa: E731
-        self.p.fillRect(QRectF(at(s.p['band_low']), y - 4, at(s.p['band_high']) - at(s.p['band_low']), 24), QColor(61, 255, 122, 70))
+        self.p.fillRect(
+            QRectF(
+                at(s.p['band_low']),
+                y - 4,
+                at(s.p['band_high']) - at(s.p['band_low']),
+                24,
+            ),
+            QColor(61, 255, 122, 70),
+        )
         self.line(x0, y + 8, x1, y + 8, DIM)
         for q, color in ((0.5, RED), (1.0, RED)):
             self.line(at(q), y - 10, at(q), y + 26, color)
@@ -904,7 +1640,9 @@ class Arcade(QWidget):
         else:
             self.line(x0, y - 14, x0, y + 30, RED, 3)
             label = 'QZ^2 < 0: DEFOCUSING'
-        self.text((x0 + x1) / 2, y - 50, label, 16, YELLOW if s.qz2 > 0 else RED)
+        self.text(
+            (x0 + x1) / 2, y - 50, label, 16, YELLOW if s.qz2 > 0 else RED
+        )
 
 
 def main():

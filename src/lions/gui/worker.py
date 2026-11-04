@@ -23,7 +23,9 @@ class InputQueue:
         self.q = queue.Queue()
         for a in answers:
             self.q.put(a)
-        self.fallback_signal = None  # pyqtSignal(str) emitted when the answers run out
+        self.fallback_signal = (
+            None  # pyqtSignal(str) emitted when the answers run out
+        )
         self.response_queue = queue.Queue()
 
     def __call__(self, prompt=''):
@@ -63,12 +65,12 @@ class OutputInterceptor(io.TextIOBase):
 class SimulationWorker(QThread):
     """Runs the LIONS simulation with GUI hooks."""
 
-    progress = pyqtSignal(int, int)          # (iteration, total)
-    iteration_data = pyqtSignal(dict)        # plot data
-    console_output = pyqtSignal(str)         # console text
-    simulation_finished = pyqtSignal()       # normal end
-    simulation_error = pyqtSignal(str)       # error message
-    input_needed = pyqtSignal(str)           # unexpected input() prompt
+    progress = pyqtSignal(int, int)  # (iteration, total)
+    iteration_data = pyqtSignal(dict)  # plot data
+    console_output = pyqtSignal(str)  # console text
+    simulation_finished = pyqtSignal()  # normal end
+    simulation_error = pyqtSignal(str)  # error message
+    input_needed = pyqtSignal(str)  # unexpected input() prompt
 
     def __init__(self, input_answers, work_dir=None):
         super().__init__()
@@ -127,10 +129,20 @@ class SimulationWorker(QThread):
         """lions.cli.track hook: progress, plot data, stop request."""
         ite = d.run.step
         # About 200 progress signals per run, to keep the Qt event loop responsive.
-        if ite % max(1, d.run.n_steps // 200) == 0 or ite == 1 or ite == d.run.n_steps:
+        if (
+            ite % max(1, d.run.n_steps // 200) == 0
+            or ite == 1
+            or ite == d.run.n_steps
+        ):
             self.progress.emit(ite, d.run.n_steps)
-        if ite == 0 or (d.run.output_every > 0 and
-                        (ite % d.run.output_every == 0 or ite == 1 or ite == d.run.n_steps)):
+        if ite == 0 or (
+            d.run.output_every > 0
+            and (
+                ite % d.run.output_every == 0
+                or ite == 1
+                or ite == d.run.n_steps
+            )
+        ):
             self._emit_data(d)
         if self.stop_flag:
             print(f'\n--- Simulation stopped at step {ite + 1} ---')
@@ -143,16 +155,30 @@ class SimulationWorker(QThread):
             nbrfam = len(d.bunch.families)
             for k in range(nbrfam):
                 i1 = d.bunch.families[k].start
-                rr = np.sqrt(d.bunch.x[i1]**2 + d.bunch.y[i1]**2)
-                wmevpa = d.bunch.rest_energy[i1] * (d.bunch.gamma[i1] - 1.0) / MEV / d.bunch.families[k].mass_number
-                ppp = np.sqrt(d.bunch.px[i1]**2 + d.bunch.py[i1]**2 + d.bunch.pz[i1]**2)
+                rr = np.sqrt(d.bunch.x[i1] ** 2 + d.bunch.y[i1] ** 2)
+                wmevpa = (
+                    d.bunch.rest_energy[i1]
+                    * (d.bunch.gamma[i1] - 1.0)
+                    / MEV
+                    / d.bunch.families[k].mass_number
+                )
+                ppp = np.sqrt(
+                    d.bunch.px[i1] ** 2
+                    + d.bunch.py[i1] ** 2
+                    + d.bunch.pz[i1] ** 2
+                )
                 tpz = 0.0
                 if ppp > 0:
-                    tpz = np.arcsin(np.clip(d.bunch.pz[i1] / ppp, -1.0, 1.0)) * 1000.0
+                    tpz = (
+                        np.arcsin(np.clip(d.bunch.pz[i1] / ppp, -1.0, 1.0))
+                        * 1000.0
+                    )
 
                 # Azimuth of the reference particle, in degrees.
                 if rr > 0:
-                    tetnew_k = np.arccos(np.clip(d.bunch.x[i1] / rr, -1.0, 1.0))
+                    tetnew_k = np.arccos(
+                        np.clip(d.bunch.x[i1] / rr, -1.0, 1.0)
+                    )
                     if d.bunch.y[i1] < 0.0:
                         tetnew_k = 2.0 * np.pi - tetnew_k
                     tetnew_k = 180.0 / np.pi * tetnew_k
@@ -205,13 +231,20 @@ class SimulationWorker(QThread):
                     pz_a = d.bunch.pz[idx_s:idx_e][ok_k]
                     ppp_a = np.sqrt(px_a**2 + py_a**2 + pz_a**2)
                     safe_p = np.where(ppp_a > 0, ppp_a, 1.0)
-                    tpz_a = np.arcsin(np.clip(pz_a / safe_p, -1.0, 1.0)) * 1000.0
+                    tpz_a = (
+                        np.arcsin(np.clip(pz_a / safe_p, -1.0, 1.0)) * 1000.0
+                    )
                     tpz_a[ppp_a == 0] = 0.0
 
                     # Energy (MeV/A)
                     ga_a = d.bunch.gamma[idx_s:idx_e][ok_k]
                     am0c2_a = d.bunch.rest_energy[idx_s:idx_e][ok_k]
-                    wmevpa_a = am0c2_a * (ga_a - 1.0) / MEV / d.bunch.families[k].mass_number
+                    wmevpa_a = (
+                        am0c2_a
+                        * (ga_a - 1.0)
+                        / MEV
+                        / d.bunch.families[k].mass_number
+                    )
 
                     # dphi (deg)
                     tetall_a = theta_a + 360.0 * (d.run.turn - 1)
