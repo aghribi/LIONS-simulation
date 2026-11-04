@@ -25,11 +25,11 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_p as P  # noqa: E402
-import case_v as V  # noqa: E402
+import case_p  # noqa: E402
+import case_v  # noqa: E402
 import synthetic as syn  # noqa: E402
 from lions.game import machine as mc  # noqa: E402
-from lions.game import reduced as R  # noqa: E402
+from lions.game import reduced  # noqa: E402
 from provenance import provenance  # noqa: E402
 
 TABLE = (
@@ -38,12 +38,12 @@ TABLE = (
     / 'lions'
     / 'game'
     / 'scenarios'
-    / f'{P.MISSION.lower()}_synthetic_orbits.parquet'
+    / f'{case_p.MISSION.lower()}_synthetic_orbits.parquet'
 )
 R_MIN = 0.005  # m, end of the map grid, as the verdict
-NEON = P.MISSION == 'NEON'
+NEON = case_p.MISSION == 'NEON'
 THRESHOLD = {
-    'transmission': 1 / V.N,
+    'transmission': 1 / case_v.N,
     'energy': 0.003 if NEON else 0.005,
     'spread': 0.001 if NEON else 0.005,
     'phase_deg': 6.91 if NEON else 5.06,
@@ -56,11 +56,11 @@ START_MEV, EXTRACTION, PHASE_RMS_DEG = (
 
 def orbit_job(job):
     workdir, w, guess = job
-    return P.lions_check((workdir, w, guess))
+    return case_p.lions_check((workdir, w, guess))
 
 
 def tables(mapdir, workers):
-    mp = V.Map(mapdir, START_MEV, EXTRACTION)
+    mp = case_v.Map(mapdir, START_MEV, EXTRACTION)
     rec = [
         r
         for r in pq.read_table(mapdir / 'case_p_orbits.parquet').to_pylist()
@@ -81,17 +81,17 @@ def tables(mapdir, workers):
     ]
     lnw, per_kv = (
         np.log([g['w_mev'] for g in gains]),
-        np.array([g['gain_amp_mev'] for g in gains]) / P.DEE_KV,
+        np.array([g['gain_amp_mev'] for g in gains]) / case_p.DEE_KV,
     )
     out = []
     for r, b in zip(rows, rec):
         w = r['w_mev']
-        g = 1 + w * P.A / V.REST_MEV
+        g = 1 + w * case_p.A / case_v.REST_MEV
         p = np.sqrt(g * g - 1)
-        f = P.F0 * (1 + r['f_rel_error'])
+        f = case_p.F0 * (1 + r['f_rel_error'])
         out.append(
             {
-                'w_mev': w * P.A,
+                'w_mev': w * case_p.A,
                 'p': float(p),
                 'path_m': float(p / g * syn.C / f),
                 'f_hz': float(f),
@@ -112,19 +112,21 @@ def tables(mapdir, workers):
             flush=True,
         )
     meta = {
-        'case': f'synthetic {P.MISSION}, closed orbits of LIONS Hermite, no RF',
+        'case': f'synthetic {case_p.MISSION}, closed orbits of LIONS Hermite, no RF',
         'label': 'SYNTHETIC',
-        'registration': P.REGISTRATION,
+        'registration': case_p.REGISTRATION,
         **provenance(*mp.inputs),
         'machine': platform.platform(),
         'units': 'w_mev MeV, p beta gamma, path_m m, f_hz Hz, r_section_m m at theta = 0, gain_mev_per_kv MeV/kV peak per turn; below w_start the gain is held, not measured',
-        'rest_mev': str(V.REST_MEV),
-        'w_start_mev': str(mp.w0 * P.A),
+        'rest_mev': str(case_v.REST_MEV),
+        'w_start_mev': str(mp.w0 * case_p.A),
         'crest_deg': str(mp.crest_deg),
         'r_ext_m': str(mp.r_ext),
         'r_min_m': str(R_MIN),
-        'b0_nominal_t': str(mc.nominal(P.MACHINE, P.ION, P.W_EXT * P.A)[0]),
-        'harmonic': str(P.HARMONIC),
+        'b0_nominal_t': str(
+            mc.nominal(case_p.MACHINE, case_p.ION, case_p.W_EXT * case_p.A)[0]
+        ),
+        'harmonic': str(case_p.HARMONIC),
     }
     TABLE.parent.mkdir(parents=True, exist_ok=True)
     pq.write_table(
@@ -141,7 +143,7 @@ class Scaled:
 
 
 def check(mapdir):
-    t = R.Tables(TABLE)
+    t = reduced.Tables(TABLE)
     data = pq.read_table(TABLE).to_pydict()
     # Interpolation of the path length: drop every other energy, predict
     # it.
@@ -157,11 +159,11 @@ def check(mapdir):
     )
     # f_rev(p, s) = v(p) / L(p / s) against Boris closed orbits in a
     # scaled field.
-    field = P.load_field(mapdir)
+    field = case_p.load_field(mapdir)
     for s in (0.997, 1.002):
-        for w in (P.W_EXT / 18, P.W_EXT / 1.8):
-            p = P.momentum(w)
-            f = P.closed_orbit(
+        for w in (case_p.W_EXT / 18, case_p.W_EXT / 1.8):
+            p = case_p.momentum(w)
+            f = case_p.closed_orbit(
                 Scaled(field, s),
                 w,
                 float(
@@ -172,14 +174,14 @@ def check(mapdir):
                     )
                 ),
             )[1]
-            g = 1 + w * P.A / V.REST_MEV
+            g = 1 + w * case_p.A / case_v.REST_MEV
             predicted = (p / g) * syn.C / t.path(np.log(p / s))
             print(
                 f'scale {s}, w {w} MeV: f_rev Boris {f:.1f} Hz, rule {predicted:.1f} Hz, relative {predicted / f - 1:+.2e}',
                 flush=True,
             )
     # Gain linear in the dee voltage: LIONS, one turn on the crest.
-    mp = V.Map(mapdir, START_MEV, EXTRACTION)
+    mp = case_v.Map(mapdir, START_MEV, EXTRACTION)
     work = mp.workdir(mapdir / 'check_r')
     gains = [
         g
@@ -191,13 +193,13 @@ def check(mapdir):
         for r in pq.read_table(mapdir / 'case_p_orbits.parquet').to_pylist()
         if r['code'] == 'boris_analytic'
     }
-    keep = P.DEE_KV
+    keep = case_p.DEE_KV
     for g in (gains[1], gains[min(3, len(gains) - 1)]):
         out = []
         for kv in (40.0, 60.0):
-            P.DEE_KV = kv
+            case_p.DEE_KV = kv
             out.append(
-                P.accelerate(
+                case_p.accelerate(
                     work,
                     g['w_mev'],
                     orb[g['w_mev']],
@@ -211,7 +213,7 @@ def check(mapdir):
             f"gain at {g['w_mev']:.3f} MeV: 40 kV {out[0]:.5f}, 60 kV {out[1]:.5f} MeV; ratio {out[1] / out[0]:.4f} against 1.5",
             flush=True,
         )
-    P.DEE_KV = keep
+    case_p.DEE_KV = keep
     # Betatron action against the off-axis tracks of case P. The tracks
     # start at the start energy of the gate, not of this table.
     orbit_rows = {
@@ -219,8 +221,8 @@ def check(mapdir):
         for r in pq.read_table(mapdir / 'case_p_orbits.parquet').to_pylist()
         if r['code'] == 'boris_analytic'
     }
-    p0 = P.momentum(
-        P.start_energy(
+    p0 = case_p.momentum(
+        case_p.start_energy(
             pq.read_table(mapdir / 'case_p_gain.parquet').to_pylist(),
             orbit_rows,
         )
@@ -234,14 +236,19 @@ def check(mapdir):
         )
         for lo, hi in (
             np.array(((0.15, 0.5), (0.5, 2), (2, 6), (6, 12), (12, 18)))
-            * P.W_EXT
+            * case_p.W_EXT
             / 18
         ):
             on = (w >= lo) & (w < hi)
-            p = P.momentum(w[on].mean())
-            j = lambda q: (
-                np.interp(np.log(q), t.qz_lnp, t.qz) * q / t.path(np.log(q))
-            )  # noqa: E731
+            p = case_p.momentum(w[on].mean())
+
+            def j(q):
+                return (
+                    np.interp(np.log(q), t.qz_lnp, t.qz)
+                    * q
+                    / t.path(np.log(q))
+                )  # noqa: E731
+
             print(
                 f'{tag} {lo} to {hi} MeV/u: envelope of |z| {z[on].max():.3f} mm, action rule {z0 * np.sqrt(j(p0) / j(p)):.3f} mm',
                 flush=True,
@@ -259,20 +266,20 @@ def errors_of(curves_lions, phase_model, probe):
 
 
 def compare(verdict, outdir):
-    model = R.Reduced(TABLE, PHASE_RMS_DEG)
+    model = reduced.Reduced(TABLE, PHASE_RMS_DEG)
     rows = pq.read_table(verdict / 'case_v_tunes.parquet').to_pylist()
     parts = pq.read_table(verdict / 'case_v_particles.parquet').to_pylist()
     curves = pq.read_table(verdict / 'case_v_curves.parquet').to_pylist()
     out, by_particle, times = [], [], []
     for row in rows:
-        if row.get('harmonic', P.HARMONIC) != P.HARMONIC:
+        if row.get('harmonic', case_p.HARMONIC) != case_p.HARMONIC:
             continue
-        m = V.of_tune(row)
+        m = case_v.of_tune(row)
         lions = sorted(
             (p for p in parts if p['tune'] == row['tune']),
             key=lambda p: p['particle'],
         )
-        extracted = np.array([p['fate'] == V.EXTRACTED for p in lions])
+        extracted = np.array([p['fate'] == case_v.EXTRACTED for p in lions])
         w_ext = np.array([p['w_extraction_mev'] for p in lions])[extracted]
         none = not len(w_ext)
         c = sorted(
@@ -280,7 +287,7 @@ def compare(verdict, outdir):
             key=lambda x: x['bin'],
         )
         counts = (
-            np.array([x['lions_probe'] for x in c]) * V.N * V.N
+            np.array([x['lions_probe'] for x in c]) * case_v.N * case_v.N
         )  # the tables hold counts / N^2
         phase_lions = np.array([x['lions_phase_deg'] for x in c])
         # Beam.energies holds what the slit keeps, and the LIONS columns
@@ -318,7 +325,7 @@ def compare(verdict, outdir):
             e = beam.energies
             rec |= {
                 f'{name}_extracted': len(e),
-                f'{name}_transmission': len(e) / V.N,
+                f'{name}_transmission': len(e) / case_v.N,
                 f'{name}_w_mev': float(e.mean()) if len(e) else float('nan'),
                 f'{name}_spread': float(e.std() / e.mean())
                 if len(e) > 1
@@ -340,9 +347,9 @@ def compare(verdict, outdir):
         )
         by_particle += particle_rows(model, m, lions, row)
     meta = {
-        'case': f'synthetic {P.MISSION}, reduced model against LIONS and T0',
+        'case': f'synthetic {case_p.MISSION}, reduced model against LIONS and T0',
         'label': 'SYNTHETIC',
-        'registration': P.REGISTRATION,
+        'registration': case_p.REGISTRATION,
         'start_phase_law': str(PHASE_RMS_DEG),
         'extraction': EXTRACTION,
         **provenance(TABLE),
@@ -456,7 +463,10 @@ def report(rows, particles):
     )
     fate = np.array(
         [
-            (p['lions_fate'] == V.EXTRACTED, p['reduced_fate'] == V.EXTRACTED)
+            (
+                p['lions_fate'] == case_v.EXTRACTED,
+                p['reduced_fate'] == case_v.EXTRACTED,
+            )
             for p in particles
         ]
     )
@@ -504,12 +514,22 @@ def report(rows, particles):
         'fates',
         {
             f: int(sum(p['reduced_fate'] == f for p in particles))
-            for f in (V.EXTRACTED, V.Z_APERTURE, V.OUT_OF_MAP, V.TURN_LIMIT)
+            for f in (
+                case_v.EXTRACTED,
+                case_v.Z_APERTURE,
+                case_v.OUT_OF_MAP,
+                case_v.TURN_LIMIT,
+            )
         },
         'LIONS',
         {
             f: int(sum(p['lions_fate'] == f for p in particles))
-            for f in (V.EXTRACTED, V.Z_APERTURE, V.OUT_OF_MAP, V.TURN_LIMIT)
+            for f in (
+                case_v.EXTRACTED,
+                case_v.Z_APERTURE,
+                case_v.OUT_OF_MAP,
+                case_v.TURN_LIMIT,
+            )
         },
     )
 

@@ -237,9 +237,9 @@ class FieldViewerDialog(QDialog):
         # Polar grid (r, theta) to Cartesian (x, y) in mm.
         r_arr = np.linspace(d['rmin'], d['rmax'], d['nr']) * 1000.0
         theta_arr = np.linspace(0, 2 * np.pi, d['ntheta_all'])
-        R, Theta = np.meshgrid(r_arr, theta_arr, indexing='ij')
-        X = R * np.cos(Theta)
-        Y = R * np.sin(Theta)
+        r_grid, theta_grid = np.meshgrid(r_arr, theta_arr, indexing='ij')
+        x_grid = r_grid * np.cos(theta_grid)
+        y_grid = r_grid * np.sin(theta_grid)
 
         if is_3d:
             ax = fig.add_subplot(111, projection='3d')
@@ -247,8 +247,8 @@ class FieldViewerDialog(QDialog):
             step_r = max(1, d['nr'] // 80)
             step_t = max(1, d['ntheta_all'] // 180)
             ax.plot_surface(
-                X[::step_r, ::step_t],
-                Y[::step_r, ::step_t],
+                x_grid[::step_r, ::step_t],
+                y_grid[::step_r, ::step_t],
                 data[::step_r, ::step_t],
                 cmap=cmap,
                 alpha=0.9,
@@ -260,7 +260,9 @@ class FieldViewerDialog(QDialog):
             ax.set_zlabel(names[field_idx])
         else:
             ax = fig.add_subplot(111)
-            im = ax.pcolormesh(X, Y, data, cmap=cmap, shading='gouraud')
+            im = ax.pcolormesh(
+                x_grid, y_grid, data, cmap=cmap, shading='gouraud'
+            )
             fig.colorbar(im, ax=ax, label=names[field_idx])
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')
@@ -292,7 +294,7 @@ class FieldViewerDialog(QDialog):
         d = data_dict
         x_arr = np.linspace(d['xmin'], d['xmax'], d['nx']) * 1000.0
         y_arr = np.linspace(d['ymin'], d['ymax'], d['ny']) * 1000.0
-        X, Y = np.meshgrid(x_arr, y_arr, indexing='ij')
+        x_grid, y_grid = np.meshgrid(x_arr, y_arr, indexing='ij')
         data = d['pot']
 
         if is_3d:
@@ -300,8 +302,8 @@ class FieldViewerDialog(QDialog):
             step_x = max(1, d['nx'] // 80)
             step_y = max(1, d['ny'] // 80)
             ax.plot_surface(
-                X[::step_x, ::step_y],
-                Y[::step_x, ::step_y],
+                x_grid[::step_x, ::step_y],
+                y_grid[::step_x, ::step_y],
                 data[::step_x, ::step_y],
                 cmap=cmap,
                 alpha=0.9,
@@ -313,7 +315,7 @@ class FieldViewerDialog(QDialog):
             ax.set_zlabel('V')
         else:
             ax = fig.add_subplot(111)
-            im = ax.pcolormesh(X, Y, data, cmap=cmap, shading='auto')
+            im = ax.pcolormesh(x_grid, y_grid, data, cmap=cmap, shading='auto')
             fig.colorbar(im, ax=ax, label='V')
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')
@@ -346,7 +348,7 @@ class FieldViewerDialog(QDialog):
         d = data_dict
         x_arr = np.linspace(d['xmin'], d['xmax'], d['nx']) * 1000.0
         y_arr = np.linspace(d['ymin'], d['ymax'], d['ny']) * 1000.0
-        X, Y = np.meshgrid(x_arr, y_arr, indexing='ij')
+        x_grid, y_grid = np.meshgrid(x_arr, y_arr, indexing='ij')
         data = d['d2pot']
 
         if is_3d:
@@ -354,8 +356,8 @@ class FieldViewerDialog(QDialog):
             step_x = max(1, d['nx'] // 80)
             step_y = max(1, d['ny'] // 80)
             ax.plot_surface(
-                X[::step_x, ::step_y],
-                Y[::step_x, ::step_y],
+                x_grid[::step_x, ::step_y],
+                y_grid[::step_x, ::step_y],
                 data[::step_x, ::step_y],
                 cmap=cmap,
                 alpha=0.9,
@@ -367,7 +369,7 @@ class FieldViewerDialog(QDialog):
             ax.set_zlabel(name)
         else:
             ax = fig.add_subplot(111)
-            im = ax.pcolormesh(X, Y, data, cmap=cmap, shading='auto')
+            im = ax.pcolormesh(x_grid, y_grid, data, cmap=cmap, shading='auto')
             fig.colorbar(im, ax=ax, label=name)
             ax.set_xlabel('X (mm)')
             ax.set_ylabel('Y (mm)')

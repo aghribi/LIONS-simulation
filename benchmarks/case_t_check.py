@@ -11,14 +11,13 @@ import multiprocessing
 import sys
 from pathlib import Path
 
-import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_t as T  # noqa: E402
+import case_t  # noqa: E402
 from lions.game import tuners as t  # noqa: E402
 from lions.game.env import MissionEnv, mission_by_id  # noqa: E402
 from lions.game.missions import STEP_S  # noqa: E402
@@ -44,7 +43,7 @@ def classical(job):
     mission, method, seed = job
     m = mission_by_id(mission)
     m.reset(seed)
-    run = t.tune(m, T.CLASSICAL[method], seed)
+    run = t.tune(m, case_t.CLASSICAL[method], seed)
     done = (
         verdict(m) if run.reached else {'hold': float('nan'), 'truth': False}
     )
@@ -127,21 +126,21 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     outdir = args.outroot.resolve()
-    with multiprocessing.get_context('spawn').Pool(T.WORKERS) as pool:
+    with multiprocessing.get_context('spawn').Pool(case_t.WORKERS) as pool:
         rows = pool.map(
             classical,
             [
                 (m, a, s)
-                for m in T.ALL
-                for a in T.CLASSICAL
+                for m in case_t.ALL
+                for a in case_t.CLASSICAL
                 for s in t.HELD_OUT
             ],
             chunksize=1,
         )
         jobs = [
             (m, s, t.HELD_OUT + FRESH, outdir)
-            for m in T.ALL
-            for s in T.RL_SEEDS
+            for m in case_t.ALL
+            for s in case_t.RL_SEEDS
         ]
         rows += [r for part in pool.map(rl, jobs, chunksize=1) for r in part]
     pq.write_table(pa.Table.from_pylist(rows), outdir / 'check.parquet')

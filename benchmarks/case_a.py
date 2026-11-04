@@ -173,7 +173,7 @@ STOP;
 
 
 def run_rftrack(n, pos, mom, mass_kg):
-    import RF_Track as rft
+    import RF_Track as rft  # noqa: N813 (external name)
 
     mass_mev = mass_kg * syn.C**2 / syn.QE / 1e6
     length = 1.0
@@ -220,7 +220,7 @@ def run_rftrack(n, pos, mom, mass_kg):
 
 def main(outdir):
     outdir.mkdir(parents=True, exist_ok=True)
-    import RF_Track as rft
+    import RF_Track as rft  # noqa: N813 (external name)
 
     versions = {
         'lions': importlib.metadata.version('lions'),

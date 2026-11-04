@@ -136,7 +136,7 @@ class Arcade(QWidget):
         self.behind.show()
         self.behind.raise_()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event):  # noqa: N802 (Qt)
         self.end_tuning()
         self.end_training()
         if self.behind:
@@ -335,7 +335,7 @@ class Arcade(QWidget):
             else:
                 self.state = 'attract'
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event):  # noqa: N802 (Qt)
         key = event.key()
         if event.isAutoRepeat():
             return
@@ -402,7 +402,7 @@ class Arcade(QWidget):
                 else 'attract'
             )
 
-    def keyReleaseEvent(self, event):
+    def keyReleaseEvent(self, event):  # noqa: N802 (Qt)
         if not event.isAutoRepeat():
             self.keys.discard(event.key())
 
@@ -420,7 +420,7 @@ class Arcade(QWidget):
 
     # ---------- drawing tools
 
-    def paintEvent(self, _):
+    def paintEvent(self, _):  # noqa: N802 (Qt)
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), BACK)
@@ -1116,12 +1116,15 @@ class Arcade(QWidget):
         self.text(x + 6, y + 2, title, 10, DIM, 'left')
         top = max(ys.max(), 1e-12) if high is None else high
         bottom = 0 if low is None else low
-        pos = lambda u, v: QPointF(
-            x + width * (u - xs[0]) / (xs[-1] - xs[0]),
-            y
-            + height
-            * (1 - (min(max(v, bottom), top) - bottom) / (top - bottom)),
-        )  # noqa: E731
+
+        def pos(u, v):
+            return QPointF(
+                x + width * (u - xs[0]) / (xs[-1] - xs[0]),
+                y
+                + height
+                * (1 - (min(max(v, bottom), top) - bottom) / (top - bottom)),
+            )  # noqa: E731
+
         path, started = QPainterPath(), False
         for i, (u, v) in enumerate(zip(xs, ys)):
             if mask is not None and not mask[i]:

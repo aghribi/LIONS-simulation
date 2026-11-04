@@ -25,7 +25,7 @@ from scipy.interpolate import CubicSpline
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_v as V  # noqa: E402
+import case_v  # noqa: E402
 
 WINDOW, MIN_CROSSINGS = (
     60,
@@ -47,7 +47,7 @@ SUPPORTED, REFUTED = (
 PHASE_BINS = (-180, -120, -90, -60, -30, 0, 30, 60, 90, 180)
 
 
-class Recorded(V.Pass):
+class Recorded(case_v.Pass):
     def __init__(self, *args, **kwargs):
         self.history, self.z_prev = [], None
         super().__init__(*args, **kwargs)
@@ -62,14 +62,14 @@ class Recorded(V.Pass):
         f = -yp[c] / (b.y[c] - yp[c])
         when = tp + f * (d.run.t - tp)
         zp = b.z if self.z_prev is None else self.z_prev
-        phi = V.t0_phase(d.rf.omega * when, self.mp.crest_deg)
+        phi = case_v.t0_phase(d.rf.omega * when, self.mp.crest_deg)
         self.history.append(
             (
                 c.copy(),
                 self.turns[c] + 1,
                 when,
                 xp[c] + f * (b.x[c] - xp[c]),
-                (gp[c] + f * (b.gamma[c] - gp[c]) - 1) * V.REST_MEV,
+                (gp[c] + f * (b.gamma[c] - gp[c]) - 1) * case_v.REST_MEV,
                 np.degrees(phi),
                 zp[c] + f * (b.z[c] - zp[c]),
             )
@@ -82,10 +82,10 @@ def one(job):
     path = parts / f"{row['tune']:03d}.pkl"
     if path.exists():
         return row['tune']
-    mp = V.Map(mapdir, start_mev)
+    mp = case_v.Map(mapdir, start_mev)
     work = mp.workdir(parts / f"work_{row['tune']:03d}")
-    ref = V.reference_orbit(work, mp)
-    m = V.of_tune(row)
+    ref = case_v.reference_orbit(work, mp)
+    m = case_v.of_tune(row)
     p = Recorded(work, mp, ref, m.knobs, m.errors, m.draws)
     h = [np.concatenate(column) for column in zip(*p.history)]
     b = p.beam()
@@ -97,7 +97,7 @@ def one(job):
         'limit_turns': p.limit,
         'w_mean_mev': float(b.w_mean),
         'w_spread': float(b.w_spread),
-        'n_extracted': int((p.fate == V.EXTRACTED).sum()),
+        'n_extracted': int((p.fate == case_v.EXTRACTED).sum()),
     }
     particles = [
         {
@@ -108,10 +108,10 @@ def one(job):
             'fate': str(p.fate[i]),
             'turns': int(p.turns[i]),
             'w_extraction_mev': float(p.w_last[i])
-            if p.fate[i] == V.EXTRACTED
+            if p.fate[i] == case_v.EXTRACTED
             else float('nan'),
         }
-        for i in range(V.N)
+        for i in range(case_v.N)
     ]
     with open(path, 'wb') as f:
         pickle.dump((tune, particles, h), f)
@@ -164,7 +164,7 @@ def record(outdir, mp, tunes, workers, start_mev):
         for t, _, h in done
     ]
     history = pa.concat_tables(tables)
-    V.write([], outdir / 'empty.parquet', 'x', mp, UNITS)
+    case_v.write([], outdir / 'empty.parquet', 'x', mp, UNITS)
     meta = pq.read_schema(outdir / 'empty.parquet').metadata
     (outdir / 'empty.parquet').unlink()
     pq.write_table(
@@ -174,14 +174,14 @@ def record(outdir, mp, tunes, workers, start_mev):
         outdir / 'case_o_history.parquet',
         compression='zstd',
     )
-    V.write(
+    case_v.write(
         [d[0] for d in done],
         outdir / 'case_o_tunes.parquet',
         'radial motion per tune',
         mp,
         UNITS,
     )
-    V.write(
+    case_v.write(
         [p for d in done for p in d[1]],
         outdir / 'case_o_particles.parquet',
         'radial motion per particle',
@@ -193,7 +193,7 @@ def record(outdir, mp, tunes, workers, start_mev):
 
 
 def momentum(w):
-    return np.sqrt((1 + w / V.REST_MEV) ** 2 - 1)
+    return np.sqrt((1 + w / case_v.REST_MEV) ** 2 - 1)
 
 
 def closed_orbit(mp):
@@ -235,11 +235,14 @@ def fit(n, x):
 
 def analyse(outdir, mp, reference):
     orbit = closed_orbit(mp)
-    grid = np.linspace(momentum(mp.w0), momentum(V.P.W_EXT) * 1.15, 40000)
+    grid = np.linspace(momentum(mp.w0), momentum(case_v.P.W_EXT) * 1.15, 40000)
     r_grid = orbit(grid)
-    w_of = lambda r, s: (
-        (np.sqrt(1 + (s * np.interp(r, r_grid, grid)) ** 2) - 1) * V.REST_MEV
-    )  # noqa: E731
+
+    def w_of(r, s):
+        return (
+            np.sqrt(1 + (s * np.interp(r, r_grid, grid)) ** 2) - 1
+        ) * case_v.REST_MEV  # noqa: E731
+
     tunes = {
         r['tune']: r
         for r in pq.read_table(outdir / 'case_o_tunes.parquet').to_pylist()
@@ -285,7 +288,7 @@ def analyse(outdir, mp, reference):
     )
     fits = []
     for q in particles:
-        if q['fate'] != V.EXTRACTED:
+        if q['fate'] != case_v.EXTRACTED:
             continue
         first, last = groups[(q['tune'], q['particle'])]
         s = tunes[q['tune']]['field_scale']
@@ -338,7 +341,7 @@ def analyse(outdir, mp, reference):
                     w_early_mev=float(w[e].mean()),
                 )
         fits.append(out)
-    V.write(
+    case_v.write(
         fits,
         outdir / 'case_o_fits.parquet',
         'radial oscillation fits per extracted particle',
@@ -566,7 +569,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     outdir = args.outroot.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
-    mp_ = V.Map(args.mapdir, args.start_mev)
+    mp_ = case_v.Map(args.mapdir, args.start_mev)
     if args.step == 'record':
         record(outdir, mp_, args.tunes.resolve(), args.workers, args.start_mev)
     else:

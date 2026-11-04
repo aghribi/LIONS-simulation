@@ -276,7 +276,7 @@ def compute_fields(d):
     ik = ivec + np.arange(2)[:, None, None]
     jk = jvec + np.arange(2)[None, :, None]
     c1, c2, c3, c4 = vecd1 * vecd2, veca * vecd2, veca * vecb, vecd1 * vecb
-    B, D = d.field.bz[ik, jk], d.field.d2bz[ik, jk]
+    bz_node, d2_node = d.field.bz[ik, jk], d.field.d2bz[ik, jk]
     if d.field.interpolation == 'hermite':
         # Bz and its gradient from one C1 surface; the z^2 term stays
         # bilinear
@@ -286,17 +286,22 @@ def compute_fields(d):
         d.bunch.bz[:] = (
             bz
             - vecz
-            * (c1 * D[0, 0] - c2 * D[1, 0] + c3 * D[1, 1] - c4 * D[0, 1])
+            * (
+                c1 * d2_node[0, 0]
+                - c2 * d2_node[1, 0]
+                + c3 * d2_node[1, 1]
+                - c4 * d2_node[0, 1]
+            )
             * hrhtetm1
         )
         d.bunch.bx[:] = gx * d.bunch.z
         d.bunch.by[:] = gy * d.bunch.z
     else:
         d.bunch.bz[:] = (
-            c1 * (B[0, 0] - vecz * D[0, 0])
-            - c2 * (B[1, 0] - vecz * D[1, 0])
-            + c3 * (B[1, 1] - vecz * D[1, 1])
-            - c4 * (B[0, 1] - vecz * D[0, 1])
+            c1 * (bz_node[0, 0] - vecz * d2_node[0, 0])
+            - c2 * (bz_node[1, 0] - vecz * d2_node[1, 0])
+            + c3 * (bz_node[1, 1] - vecz * d2_node[1, 1])
+            - c4 * (bz_node[0, 1] - vecz * d2_node[0, 1])
         ) * hrhtetm1
         for out, g in (
             (d.bunch.bx, d.field.dbzdx[ik, jk]),
@@ -345,39 +350,79 @@ def compute_fields(d):
         # 4x4 stencil around (i, j): P[a, b] = pot[i + a - 1, j + b - 1]
         ik = ivec[m_c] + np.arange(-1, 3)[:, None, None]
         jk = jvec[m_c] + np.arange(-1, 3)[None, :, None]
-        P, D = d.central.pot[ik, jk], d.central.d2pot[ik, jk]
+        pot_node, d2_node = d.central.pot[ik, jk], d.central.d2pot[ik, jk]
         vz, dx, dy = vecz[m_c], d.central.dx, d.central.dy
         vecb1[m_c], vecb2[m_c], vecb3[m_c], vecb4[m_c] = (
-            D[1, 1],
-            D[2, 1],
-            D[2, 2],
-            D[1, 2],
+            d2_node[1, 1],
+            d2_node[2, 1],
+            d2_node[2, 2],
+            d2_node[1, 2],
         )
         # Centred differences at the four corners, in the same operation
         # order as the Fortran
         vex1[m_c] = (
-            (-(P[2, 1] - P[0, 1]) + vz * (D[2, 1] - D[0, 1])) * 0.5 / dx
+            (
+                -(pot_node[2, 1] - pot_node[0, 1])
+                + vz * (d2_node[2, 1] - d2_node[0, 1])
+            )
+            * 0.5
+            / dx
         )
         vex2[m_c] = (
-            (-(P[3, 1] - P[1, 1]) + vz * (D[3, 1] - D[1, 1])) * 0.5 / dx
+            (
+                -(pot_node[3, 1] - pot_node[1, 1])
+                + vz * (d2_node[3, 1] - d2_node[1, 1])
+            )
+            * 0.5
+            / dx
         )
         vex3[m_c] = (
-            (-(P[3, 2] - P[1, 2]) + vz * (D[3, 2] - D[1, 2])) * 0.5 / dx
+            (
+                -(pot_node[3, 2] - pot_node[1, 2])
+                + vz * (d2_node[3, 2] - d2_node[1, 2])
+            )
+            * 0.5
+            / dx
         )
         vex4[m_c] = (
-            (-(P[2, 2] - P[0, 2]) + vz * (D[2, 2] - D[0, 2])) * 0.5 / dx
+            (
+                -(pot_node[2, 2] - pot_node[0, 2])
+                + vz * (d2_node[2, 2] - d2_node[0, 2])
+            )
+            * 0.5
+            / dx
         )
         vey1[m_c] = (
-            (-(P[1, 2] - P[1, 0]) + vz * (D[1, 2] - D[1, 0])) * 0.5 / dy
+            (
+                -(pot_node[1, 2] - pot_node[1, 0])
+                + vz * (d2_node[1, 2] - d2_node[1, 0])
+            )
+            * 0.5
+            / dy
         )
         vey2[m_c] = (
-            (-(P[2, 2] - P[2, 0]) + vz * (D[2, 2] - D[2, 0])) * 0.5 / dy
+            (
+                -(pot_node[2, 2] - pot_node[2, 0])
+                + vz * (d2_node[2, 2] - d2_node[2, 0])
+            )
+            * 0.5
+            / dy
         )
         vey3[m_c] = (
-            (-(P[2, 3] - P[2, 1]) + vz * (D[2, 3] - D[2, 1])) * 0.5 / dy
+            (
+                -(pot_node[2, 3] - pot_node[2, 1])
+                + vz * (d2_node[2, 3] - d2_node[2, 1])
+            )
+            * 0.5
+            / dy
         )
         vey4[m_c] = (
-            (-(P[1, 3] - P[1, 1]) + vz * (D[1, 3] - D[1, 1])) * 0.5 / dy
+            (
+                -(pot_node[1, 3] - pot_node[1, 1])
+                + vz * (d2_node[1, 3] - d2_node[1, 1])
+            )
+            * 0.5
+            / dy
         )
 
         n_periods = int(d.rf.omega * d.run.t / (2.0 * np.pi))
@@ -471,18 +516,18 @@ def compute_fields(d):
 
             ik = ivec[m_p] + np.arange(2)[:, None, None]
             jk = jvec[m_p] + np.arange(2)[None, :, None]
-            P, D = d.outer.pot[ik, jk], d.outer.d2pot[ik, jk]
+            pot_node, d2_node = d.outer.pot[ik, jk], d.outer.d2pot[ik, jk]
             vec1[m_p], vec2[m_p], vec3[m_p], vec4[m_p] = (
-                P[0, 0],
-                P[1, 0],
-                P[1, 1],
-                P[0, 1],
+                pot_node[0, 0],
+                pot_node[1, 0],
+                pot_node[1, 1],
+                pot_node[0, 1],
             )
             vecb1[m_p], vecb2[m_p], vecb3[m_p], vecb4[m_p] = (
-                D[0, 0],
-                D[1, 0],
-                D[1, 1],
-                D[0, 1],
+                d2_node[0, 0],
+                d2_node[1, 0],
+                d2_node[1, 1],
+                d2_node[0, 1],
             )
 
             d.bunch.ex[m_p] = (
@@ -710,31 +755,31 @@ def compute_bfield(bunch, field):
 
     ik = ivec[mask] + np.arange(2)[:, None, None]
     jk = jvec[mask] + np.arange(2)[None, :, None]
-    B, D = field.bz[ik, jk], -vecz[mask] * field.d2bz[ik, jk]
-    X, Y = field.dbzdx[ik, jk], field.dbzdy[ik, jk]
+    bz_node, d2_node = field.bz[ik, jk], -vecz[mask] * field.d2bz[ik, jk]
+    dbzdx_node, dbzdy_node = field.dbzdx[ik, jk], field.dbzdy[ik, jk]
     vecb1[mask], vecb2[mask], vecb3[mask], vecb4[mask] = (
-        B[0, 0],
-        B[1, 0],
-        B[1, 1],
-        B[0, 1],
+        bz_node[0, 0],
+        bz_node[1, 0],
+        bz_node[1, 1],
+        bz_node[0, 1],
     )
     vec1[mask], vec2[mask], vec3[mask], vec4[mask] = (
-        D[0, 0],
-        D[1, 0],
-        D[1, 1],
-        D[0, 1],
+        d2_node[0, 0],
+        d2_node[1, 0],
+        d2_node[1, 1],
+        d2_node[0, 1],
     )
     vecx1[mask], vecx2[mask], vecx3[mask], vecx4[mask] = (
-        X[0, 0],
-        X[1, 0],
-        X[1, 1],
-        X[0, 1],
+        dbzdx_node[0, 0],
+        dbzdx_node[1, 0],
+        dbzdx_node[1, 1],
+        dbzdx_node[0, 1],
     )
     vecy1[mask], vecy2[mask], vecy3[mask], vecy4[mask] = (
-        Y[0, 0],
-        Y[1, 0],
-        Y[1, 1],
-        Y[0, 1],
+        dbzdy_node[0, 0],
+        dbzdy_node[1, 0],
+        dbzdy_node[1, 1],
+        dbzdy_node[0, 1],
     )
 
     if field.interpolation == 'hermite':

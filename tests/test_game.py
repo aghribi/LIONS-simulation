@@ -9,7 +9,6 @@ import pytest
 
 pytest.importorskip('yaml')
 
-import lions  # noqa: E402
 import synthetic as syn  # noqa: E402
 from lions.game import physics  # noqa: E402
 from lions.game.stages import Action, load_scenario  # noqa: E402

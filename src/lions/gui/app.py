@@ -435,7 +435,7 @@ class LionsMainWindow(QMainWindow):
         elif self.worker:
             self.worker.provide_input("0")
 
-    def closeEvent(self, event):
+    def closeEvent(self, event):  # noqa: N802 (Qt)
         if self.worker and self.worker.isRunning():
             self.worker.stop_flag = True
             self.worker.wait(5000)

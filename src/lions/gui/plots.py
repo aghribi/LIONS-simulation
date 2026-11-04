@@ -48,7 +48,7 @@ except ImportError:
 class IntegerAxis(pg.AxisItem):
     """Axis with integer tick labels."""
 
-    def tickStrings(self, values, scale, spacing):
+    def tickStrings(self, values, scale, spacing):  # noqa: N802 (Qt)
         return [f'{int(round(v))}' for v in values]
 
 
@@ -499,9 +499,9 @@ class PlotCanvas(QWidget):
                 )
 
                 # Decimate to keep redraws fast.
-                MAX_SCAT = 200000
-                if len(sx) > MAX_SCAT:
-                    idx = np.linspace(0, len(sx) - 1, MAX_SCAT, dtype=int)
+                max_scat = 200000
+                if len(sx) > max_scat:
+                    idx = np.linspace(0, len(sx) - 1, max_scat, dtype=int)
                     sx, sy, sz = sx[idx], sy[idx], sz[idx]
                     sr, stheta, spz, sdph = (
                         sr[idx],
@@ -1243,9 +1243,9 @@ class Plot3DWindow(QDialog):
                 sz = np.concatenate(fd['scatter_z']) * self.z_scale
 
                 # WebGL stays responsive up to about 100k points.
-                MAX_SCAT = 80000
-                if len(sx) > MAX_SCAT:
-                    idx = np.random.choice(len(sx), MAX_SCAT, replace=False)
+                max_scat = 80000
+                if len(sx) > max_scat:
+                    idx = np.random.choice(len(sx), max_scat, replace=False)
                     idx.sort()
                     sx, sy, sz = sx[idx], sy[idx], sz[idx]
 

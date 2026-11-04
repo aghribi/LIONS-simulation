@@ -899,17 +899,17 @@ class InputFormPanel(QWidget):
             is_pos = [True, False, True, False, True, False]
             # Floor sigma^2 above 0: the Cholesky decomposition needs a
             # positive definite matrix
-            EPS_POS = 1e-30  # m^2 (~ 1e-12 mm)
-            EPS_MOM = 1e-30  # (bg)^2
+            eps_pos = 1e-30  # m^2 (~ 1e-12 mm)
+            eps_mom = 1e-30  # (bg)^2
             sig2 = []
             for i, s in enumerate(sig_gui):
                 if is_pos[i]:
                     s_m = s * 1e-3  # mm -> m
-                    sig2.append(max(s_m * s_m, EPS_POS))
+                    sig2.append(max(s_m * s_m, eps_pos))
                 else:
                     # mrad -> bg : sig_bg = sig_mrad * 1e-3 * bg_total
                     s_bg = s * 1e-3 * bg_total if bg_total > 0 else s
-                    sig2.append(max(s_bg * s_bg, EPS_MOM))
+                    sig2.append(max(s_bg * s_bg, eps_mom))
             with open(sig_path, 'w') as f:
                 for i in range(6):
                     row = []

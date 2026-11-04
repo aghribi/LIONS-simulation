@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import RF_Track as rft
+import RF_Track as rft  # noqa: N813 (external name)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))

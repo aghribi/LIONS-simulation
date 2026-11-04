@@ -331,7 +331,7 @@ class Coach:
         )
 
     def steps_isol(self):
-        m, p, b = self.m, self.m.p, self.m.beam
+        m, p = self.m, self.m.p
         step = self.loss_steps()
         if step:
             return step

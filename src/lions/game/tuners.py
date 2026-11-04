@@ -36,7 +36,7 @@ class Run:
     raises Done when in spec or out of budget.
     """
 
-    class Done(Exception):
+    class Done(Exception):  # noqa: N818 (control flow, not an error)
         pass
 
     def __init__(self, m, budget=BUDGET, on_pass=None, box=None, stop=None):

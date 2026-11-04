@@ -383,7 +383,6 @@ def case_a():
         lw=0.7,
         label=r'$(2\pi)^6/(144 n^5)$',
     )
-    wdt = 2 * np.pi / n
     nn = np.geomspace(90, 1440, 50)
     x = 2 * np.pi / nn
     axes[1].loglog(
@@ -439,7 +438,6 @@ def case_b():
     d = table('case_b/case_b.parquet')
     b0 = d[d.case == 'B0']
     exact = b0[b0.code == 'exact'].set_index(['energy_mev', 'metric']).value
-    rows = []
     fig, ax = plt.subplots(figsize=(4.2, 2.8))
     for (code, integ), g in b0[
         (b0.code != 'exact') & (b0.metric == 'r_eo')
@@ -587,17 +585,20 @@ def case_b():
     # steps) and r_eo spread across steps, per energy
     full_b = d[(d.case == 'B') & (d.map_dtheta_deg == 1.0)]
     grad = b2[b2.case == 'B-gradient']
-    cond = lambda x: (
-        x[
-            (x.code == 'lions')
-            & (x.steps_per_turn == 1440)
-            & (x.metric == 'qr')
-        ]
-        .set_index(  # noqa: E731
-            'energy_mev'
+
+    def cond(x):
+        return (
+            x[
+                (x.code == 'lions')
+                & (x.steps_per_turn == 1440)
+                & (x.metric == 'qr')
+            ]
+            .set_index(  # noqa: E731
+                'energy_mev'
+            )
+            .value.pipe(lambda q: 4 * np.sin(np.pi * q) ** 2)
         )
-        .value.pipe(lambda q: 4 * np.sin(np.pi * q) ** 2)
-    )
+
     c_ratio = cond(grad) / cond(full_b)
     num('BTwoCondMin', c_ratio.min())
     num('BTwoCondMax', c_ratio.max())
@@ -612,13 +613,16 @@ def case_b():
     )
     num('BRfQz', sm['qz'], 3)
     num('BRfQr', sm['qr'], 3)
-    spread = lambda x: (
-        x[(x.metric == 'r_eo') & x.code.isin(['lions', 'opal'])]
-        .groupby(  # noqa: E731
-            ['code', 'integrator', 'energy_mev']
+
+    def spread(x):
+        return (
+            x[(x.metric == 'r_eo') & x.code.isin(['lions', 'opal'])]
+            .groupby(  # noqa: E731
+                ['code', 'integrator', 'energy_mev']
+            )
+            .value.agg(np.ptp)
         )
-        .value.agg(np.ptp)
-    )
+
     s_ratio = (
         (spread(full_b) / spread(grad))
         .groupby(level=[0, 1])
@@ -818,7 +822,7 @@ def case_e2():
             .particle_steps_per_s.max()
         )
         best32 = torch[
-            (torch.dtype == 'float32') & (torch.compiled == True)
+            (torch.dtype == 'float32') & (torch.compiled == True)  # noqa: E712 (column)
         ].set_index('particles')  # noqa: E712
         if len(best64):
             ax.loglog(
@@ -839,12 +843,17 @@ def case_e2():
         ax.loglog(base.index, base.values, 'x--', color=color, lw=0.7)
         fb = d[
             (d['mode'] == 'forward+backward')
-            & (d.compiled == True)
+            & (d.compiled == True)  # noqa: E712 (column)
             & (d.dtype == 'float64')
         ]  # noqa: E712
-        cell = lambda n: (
-            f'{best64[n] / base[n]:.3g}' if n in best64.index else 'no float64'
-        )  # noqa: E731
+
+        def cell(n):
+            return (
+                f'{best64[n] / base[n]:.3g}'
+                if n in best64.index
+                else 'no float64'
+            )  # noqa: E731
+
         rows.append(
             [
                 label,
@@ -866,7 +875,7 @@ def case_e2():
             (a100['mode'] == 'forward')
             & (a100.code == 'torch')
             & (a100.dtype == 'float64')
-            & (a100.compiled == True)
+            & (a100.compiled == True)  # noqa: E712 (column)
         ]
         .set_index('particles')
         .wall_s
@@ -973,7 +982,6 @@ def g1():
                     color=color,
                     label=f'Boris, {interp} spline',
                 )
-            n = np.array([360, 1440])
             ax.set_title(f'{name}, 1/3 deg', fontsize=8)
             ax.set_ylabel(
                 r'$|\Delta Q_r|$'
@@ -1119,9 +1127,14 @@ def g2():
     axes[1].set_xlabel('kinetic energy [MeV]')
     axes[0].legend(fontsize=6, ncol=2)
     save(fig, 'g2_tunes')
-    interior = lambda d: d[
-        (d.energy_mev > 80) & (d.energy_mev < 520) & ~d.qr_half_integer_band
-    ]  # noqa: E731
+
+    def interior(d):
+        return d[
+            (d.energy_mev > 80)
+            & (d.energy_mev < 520)
+            & ~d.qr_half_integer_band
+        ]  # noqa: E731
+
     rows = []
     e3 = sorted(s3[s3.code == 'opal'].energy_mev.unique())
     for code, d, label in (
@@ -1181,14 +1194,17 @@ def g2():
     c = table('case_g2/step2c/case_g2_step2c.parquet')
     rows = []
     for e in sorted(b.energy_mev.unique()):
-        cell = lambda d, code: sci(
-            d[
-                (d.code == code)
-                & (d.energy_mev == e)
-                & (d.metric == 'det_r_block')  # noqa: E731
-                & (d.jacobian_step_m == 1e-6)
-            ].value.iloc[0]
-        )  # stored as det - 1
+
+        def cell(d, code):
+            return sci(
+                d[
+                    (d.code == code)
+                    & (d.energy_mev == e)
+                    & (d.metric == 'det_r_block')  # noqa: E731
+                    & (d.jacobian_step_m == 1e-6)
+                ].value.iloc[0]
+            )  # stored as det - 1
+
         rows.append(
             [
                 f'{e:.0f}',

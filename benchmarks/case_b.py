@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / 'benchmarks'))
 import lions  # noqa: E402
 import lions.apertures  # noqa: E402
 import lions.fields  # noqa: E402
-import RF_Track as rft  # noqa: E402
+import RF_Track as rft  # noqa: N813 (external name)
 import synthetic as syn  # noqa: E402
 from provenance import provenance  # noqa: E402
 import orbits  # noqa: E402
@@ -98,9 +98,12 @@ def exact_b0(p, mass_kg, charge):
     a = 1 + K * R0
     r = (a - np.sqrt(a**2 - 4 * K * rigidity / abs(B0))) / (2 * K)
     n = K * r / (1 - K * (r - R0))
-    fold = lambda q: (
-        np.arccos(np.cos(2 * np.pi * q)) / (2 * np.pi)
-    )  # range of the trace and the FFT
+
+    def fold(q):
+        return np.arccos(np.cos(2 * np.pi * q)) / (
+            2 * np.pi
+        )  # range of the trace and the FFT
+
     return {
         'r_eo': (r, 'm'),
         'qr': (fold(np.sqrt(1 - n)), '1'),

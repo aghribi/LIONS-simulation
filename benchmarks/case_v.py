@@ -41,7 +41,7 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_p as P  # noqa: E402
+import case_p  # noqa: E402
 import lions  # noqa: E402
 import lions.cli  # noqa: E402
 import orbits  # noqa: E402
@@ -52,7 +52,7 @@ from lions.game import tuners as t  # noqa: E402
 from lions.game.env import mission_by_id  # noqa: E402
 from provenance import provenance  # noqa: E402
 
-MISSION = P.MISSION
+MISSION = case_p.MISSION
 MODEL = install_from_env()
 TUNERS = {
     'coach': t.coach,
@@ -63,7 +63,7 @@ TUNERS = {
 N = mc.MACROPARTICLES
 PPO_SEED = 0
 MAP_FILES = ('bmap.dat', 'pot1.bin', 'pot2.dat')
-REST_MEV = P.MASS_KG * syn.C**2 / syn.MEV
+REST_MEV = case_p.MASS_KG * syn.C**2 / syn.MEV
 DEFLECTOR_DEG, DEFLECTOR_R = (
     250.0,
     1.513,
@@ -123,7 +123,7 @@ class Map:
         by_energy = [(r['w_mev'], r['r_co_m']) for r in rec]
         table = dict(by_energy)
         self.w0 = (
-            P.start_energy(gains, table)
+            case_p.start_energy(gains, table)
             if start_mev is None
             else min(a[0] for a in by_energy if a[0] >= start_mev)
         )
@@ -135,14 +135,14 @@ class Map:
         )
         self.r_ext = float(
             np.interp(
-                P.MACHINE.radius,
+                case_p.MACHINE.radius,
                 [r['rbar_m'] for r in rec],
                 [r['r_co_m'] for r in rec],
             )
             if extraction == 'mean'
             else np.interp(
-                P.momentum(P.W_EXT),
-                P.momentum(np.array([r['w_mev'] for r in rec])),
+                case_p.momentum(case_p.W_EXT),
+                case_p.momentum(np.array([r['w_mev'] for r in rec])),
                 [r['r_co_m'] for r in rec],
             )
         )
@@ -167,10 +167,10 @@ class Map:
 def load(deck_args):
     syn.write_deck(
         'deck.dat',
-        npaspt=P.STEPS,
-        teta1=P.MACHINE.dee_angle_deg / 2,
-        species=P.SPECIES,
-        tail=orbits.deck_tail(P.OPTIONS),
+        npaspt=case_p.STEPS,
+        teta1=case_p.MACHINE.dee_angle_deg / 2,
+        species=case_p.SPECIES,
+        tail=orbits.deck_tail(case_p.OPTIONS),
         **deck_args,
     )
     d = lions.State()
@@ -192,12 +192,12 @@ def reference_orbit(workdir, mp):
     with contextlib.chdir(workdir), contextlib.redirect_stdout(io.StringIO()):
         d = load(
             dict(
-                fhf=P.HARMONIC * P.F0,
+                fhf=case_p.HARMONIC * case_p.F0,
                 r0=mp.r0,
                 w0=mp.w0,
                 turns=1,
                 v_dee=0.0,
-                harm=float(P.HARMONIC),
+                harm=float(case_p.HARMONIC),
             )
         )
         lions.cli.check_box(d.bunch, d.field, d.box)
@@ -230,17 +230,17 @@ class Pass:
         factors=(),
         phase_rms_deg=None,
     ):
-        machine, ion = P.MACHINE, P.ION
+        machine, ion = case_p.MACHINE, case_p.ION
         self.mp, self.knobs, self.errors = mp, knobs, errors
         self.b0 = knobs['b0'] * (1 + errors.field)
-        self.s = self.b0 / mc.nominal(machine, ion, P.W_EXT * P.A)[0]
+        self.s = self.b0 / mc.nominal(machine, ion, case_p.W_EXT * case_p.A)[0]
         w_inj = machine.w_injection * ion.mass_number
         self.g0 = ion.gamma(w_inj)
         f_rf = knobs['rf_mhz'] * 1e6
         self.h = max(round(f_rf / ion.f_rev(w_inj, self.b0)), 1)
-        if self.h != P.HARMONIC:
+        if self.h != case_p.HARMONIC:
             raise ValueError(
-                f'harmonic {self.h}: the map is built for {P.HARMONIC}'
+                f'harmonic {self.h}: the map is built for {case_p.HARMONIC}'
             )
         self.limit = (
             int(np.ceil(mc.turn_limit(machine, ion, knobs, self.b0, self.h)))
@@ -248,7 +248,7 @@ class Pass:
             else max_turns
         )
         self.base, self.snaps = self.limit, {}
-        self.read_at = {self.base * f * P.STEPS: f for f in factors}
+        self.read_at = {self.base * f * case_p.STEPS: f for f in factors}
         if factors:
             self.limit = self.base * max(factors)
         self.phi = (
@@ -258,19 +258,19 @@ class Pass:
         )
         self.z0 = mc.start_heights(machine, draws) * 1e-3
         hold = (
-            (self.phi + np.pi) / (2 * np.pi) * P.STEPS / self.h
+            (self.phi + np.pi) / (2 * np.pi) * case_p.STEPS / self.h
         )  # steps to theta = 0, under half a turn at harmonic 2
-        at = P.STEPS - hold
+        at = case_p.STEPS - hold
         start = np.array(
             [
-                np.interp(at, np.arange(P.STEPS + 1), ref[:, c])
+                np.interp(at, np.arange(case_p.STEPS + 1), ref[:, c])
                 for c in range(6)
             ]
         )
         self.release = np.ceil(hold).astype(int)
         self.fate = np.full(N, TURN_LIMIT, dtype=object)
         self.w_end, self.w_last, self.w_prev = (
-            np.full(N, mp.w0 * P.A) for _ in range(3)
+            np.full(N, mp.w0 * case_p.A) for _ in range(3)
         )
         self.r_deflector = np.full(N, np.nan)
         self.turns = np.zeros(N, dtype=int)
@@ -344,14 +344,14 @@ class Pass:
             & (b.x * np.cos(line) + b.y * np.sin(line) > 0)
         )
         self.r_deflector[at] = r[at]
-        over_z = live & (np.abs(b.z) > P.MACHINE.z_aperture * 1e-3)
+        over_z = live & (np.abs(b.z) > case_p.MACHINE.z_aperture * 1e-3)
         out = live & ~over_z & ((r < self.rmin) | (r >= self.rmax))
         self.fate[over_z], self.fate[out] = Z_APERTURE, OUT_OF_MAP
         b.alive[over_z | out] = False
         self.prev = b.x.copy(), b.y.copy(), b.gamma.copy(), d.run.t
         if k in self.read_at:
             self.snaps[self.read_at[k]] = self.state(r)
-        return bool(b.alive.any()) and k < self.limit * P.STEPS
+        return bool(b.alive.any()) and k < self.limit * case_p.STEPS
 
     def state(self, r):
         return {
@@ -366,7 +366,7 @@ class Pass:
         }
 
     def crossing(self, c, d, xp, yp, gp, tp):
-        b, ion = d.bunch, P.ION
+        b, ion = d.bunch, case_p.ION
         f = -yp[c] / (b.y[c] - yp[c])
         when = tp + f * (d.run.t - tp)
         w = (gp[c] + f * (b.gamma[c] - gp[c]) - 1) * REST_MEV
@@ -382,7 +382,7 @@ class Pass:
             self.b0 * (1 + self.knobs['trim'] * (g / self.g0 - 1))
         )  # as machine.run: the radial probe of both models
         i = np.minimum(
-            (rho / P.MACHINE.radius * mc.PROBE_BINS).astype(int),
+            (rho / case_p.MACHINE.radius * mc.PROBE_BINS).astype(int),
             mc.PROBE_BINS - 1,
         )
         self.phase_sum[c, i] += np.degrees(phi)
@@ -408,8 +408,8 @@ class Pass:
         else:
             ok, power = out, self.w_end[~out].sum()
         return mc.extract(
-            P.MACHINE,
-            P.ION,
+            case_p.MACHINE,
+            case_p.ION,
             self.knobs,
             self.errors,
             self.w_last,
@@ -431,8 +431,8 @@ class Pass:
         out = s['fate'] == EXTRACTED
         lost = ~out if count_circulating else ~out & (s['fate'] != TURN_LIMIT)
         return mc.extract(
-            P.MACHINE,
-            P.ION,
+            case_p.MACHINE,
+            case_p.ION,
             self.knobs,
             self.errors,
             s['w_last'],
@@ -474,12 +474,12 @@ def row_of(prefix, m):
 def write(records, path, what, mp, units, phase_rms_deg=None):
     meta = {
         'case': f'synthetic {MISSION}, {what}',
-        'registration': P.REGISTRATION,
+        'registration': case_p.REGISTRATION,
         'label': 'SYNTHETIC',
         **provenance(*mp.inputs),
         'machine': platform.platform(),
         'python': platform.python_version(),
-        'steps_per_turn': str(P.STEPS),
+        'steps_per_turn': str(case_p.STEPS),
         'interpolation': 'hermite',
         'start_mev': str(mp.w0),
         'crest_deg': str(mp.crest_deg),
@@ -536,12 +536,12 @@ def tune_job(job):
 
 
 def harmonic_of(knobs, errors):
-    w_inj = P.MACHINE.w_injection * P.ION.mass_number
+    w_inj = case_p.MACHINE.w_injection * case_p.ION.mass_number
     return max(
         round(
             knobs['rf_mhz']
             * 1e6
-            / P.ION.f_rev(w_inj, knobs['b0'] * (1 + errors.field))
+            / case_p.ION.f_rev(w_inj, knobs['b0'] * (1 + errors.field))
         ),
         1,
     )
@@ -664,9 +664,12 @@ def check(outdir, mp):
     # Sign and size of the phase conversion against T0's update: phi +=
     # 2 pi (f_rf / f_rev - h) per turn.
     calm = {**m.knobs, 'phase_deg': -m.errors.phase_deg, 'buncher': 0.0}
-    turns, nominal_b0 = 60, mc.nominal(P.MACHINE, P.ION, P.W_EXT * P.A)[0]
+    turns, nominal_b0 = (
+        60,
+        mc.nominal(case_p.MACHINE, case_p.ION, case_p.W_EXT * case_p.A)[0],
+    )
     calm['b0'] = nominal_b0 / (1 + m.errors.field)
-    calm['rf_mhz'] = P.HARMONIC * P.F0 / 1e6
+    calm['rf_mhz'] = case_p.HARMONIC * case_p.F0 / 1e6
     for name, change in (
         ('rf +1e-4', {'rf_mhz': calm['rf_mhz'] * (1 + 1e-4)}),
         ('b0 +1e-4', {'b0': calm['b0'] * (1 + 1e-4)}),
@@ -680,7 +683,11 @@ def check(outdir, mp):
             ).mean()  # mean over the turns of each particle near the crest
             slip.append(last)
         predicted = (
-            360 * P.HARMONIC * (1e-4 if 'rf' in name else -1e-4) * turns / 2
+            360
+            * case_p.HARMONIC
+            * (1e-4 if 'rf' in name else -1e-4)
+            * turns
+            / 2
         )
         print(
             f'{name}: mean phase over {turns} turns moves {slip[1] - slip[0]:+.3f} deg, T0 update predicts {predicted:+.3f} deg'
@@ -688,7 +695,7 @@ def check(outdir, mp):
     # boris_b_coef against a map rewritten with the same scale.
     s = 1.002
     knobs = {**calm, 'b0': nominal_b0 * s / (1 + m.errors.field)}
-    field = P.load_field(mp.dir)
+    field = case_p.load_field(mp.dir)
     scaled = mp.workdir(outdir / 'check' / 'scaled')
     (scaled / 'bmap.dat').unlink()
     nodes = lambda i: lambda r, th: s * field.nodes(r, th)[i]  # noqa: E731
@@ -700,8 +707,8 @@ def check(outdir, mp):
             nodes(2),
             nodes(3),
             rmin=0.005,
-            rmax=P.MACHINE.radius * 1.15,
-            nr=P.MAP_NR,
+            rmax=case_p.MACHINE.radius * 1.15,
+            nr=case_p.MAP_NR,
             ntet=361,
         )
     a = Pass(work, mp, ref, knobs, m.errors, m.draws, max_turns=20)
@@ -1036,7 +1043,7 @@ def verdict(outdir, mp, workers, start_mev, extraction, phase_rms_deg):
         for r in pq.read_table(
             outdir / 'case_v_tunes.parquet', use_threads=False
         ).to_pylist()
-        if r['harmonic'] == P.HARMONIC
+        if r['harmonic'] == case_p.HARMONIC
     ]
     parts = outdir / 'parts'
     parts.mkdir(parents=True, exist_ok=True)
