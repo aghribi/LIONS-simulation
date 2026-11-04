@@ -25,10 +25,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import lions  # noqa: E402
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
-import convert  # noqa: E402
+import lions  # noqa: E402 (after sys.path)
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
+import convert  # noqa: E402 (after sys.path)
 
 OPAL_IMAGE = 'lions-bench/opal:2024.1.0'
 W0 = 1.0  # MeV/u

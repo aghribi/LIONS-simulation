@@ -26,11 +26,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import lions.constants as lc  # noqa: E402
+import lions.constants as lc  # noqa: E402 (after sys.path)
 import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
-import synthetic as syn  # noqa: E402
-import orbits  # noqa: E402
-from provenance import provenance  # noqa: E402
+import synthetic as syn  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
 
 SAMPLES = [1440, 2880]
 STEPS = [360, 720, 1440]

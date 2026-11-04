@@ -25,12 +25,12 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_p  # noqa: E402
-import case_v  # noqa: E402
-import synthetic as syn  # noqa: E402
-from lions.game import machine as mc  # noqa: E402
-from lions.game import reduced  # noqa: E402
-from provenance import provenance  # noqa: E402
+import case_p  # noqa: E402 (after sys.path)
+import case_v  # noqa: E402 (after sys.path)
+import synthetic as syn  # noqa: E402 (after sys.path)
+from lions.game import machine as mc  # noqa: E402 (after sys.path)
+from lions.game import reduced  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
 
 TABLE = (
     ROOT

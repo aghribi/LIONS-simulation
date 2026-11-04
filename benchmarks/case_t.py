@@ -18,10 +18,10 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-from lions.game import tuners as t  # noqa: E402
-from lions.game.env import mission_by_id  # noqa: E402
-from lions.game.missions import BUDGET  # noqa: E402
-from provenance import provenance  # noqa: E402
+from lions.game import tuners as t  # noqa: E402 (after sys.path)
+from lions.game.env import mission_by_id  # noqa: E402 (after sys.path)
+from lions.game.missions import BUDGET  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
 
 RL_SEEDS = range(5)
 ALL = ('EYE', 'DEEP', 'F18', 'NEON', 'ISOL', 'QUAL')

@@ -33,14 +33,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 sys.path.insert(0, str(ROOT / 'tests'))
 
-import lions  # noqa: E402
-import orbits  # noqa: E402
-import synthetic as syn  # noqa: E402
-from lions.game import machine as mc  # noqa: E402
-from lions.game import physics  # noqa: E402
-from lions.game.env import mission_by_id  # noqa: E402
-from lions.state import MAP_NR, OUTER_NX, OUTER_NY  # noqa: E402
-from provenance import provenance  # noqa: E402
+import lions  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+import synthetic as syn  # noqa: E402 (after sys.path)
+from lions.game import machine as mc  # noqa: E402 (after sys.path)
+from lions.game import physics  # noqa: E402 (after sys.path)
+from lions.game.env import mission_by_id  # noqa: E402 (after sys.path)
+from lions.state import MAP_NR, OUTER_NX, OUTER_NY  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
 
 STEPS = 360  # per turn, as in the timings of PHYSICAL.md
 OPTIONS = {'interpolation': 'hermite', 'azimuth': 'atan2'}

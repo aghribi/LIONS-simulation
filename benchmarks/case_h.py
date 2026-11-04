@@ -24,14 +24,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 sys.path.insert(0, str(ROOT / 'tests'))
 
-import case_g1  # noqa: E402
-import case_g2  # noqa: E402
-import fieldmodels  # noqa: E402
-import lions  # noqa: E402
-import lions.cli  # noqa: E402
-import orbits  # noqa: E402
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
+import case_g1  # noqa: E402 (after sys.path)
+import case_g2  # noqa: E402 (after sys.path)
+import fieldmodels  # noqa: E402 (after sys.path)
+import lions  # noqa: E402 (after sys.path)
+import lions.cli  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
 
 RUNS = ROOT / 'benchmarks' / 'runs'
 G1_MAPS = {

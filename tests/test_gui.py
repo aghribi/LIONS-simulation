@@ -9,7 +9,7 @@ import pytest
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 QtWidgets = pytest.importorskip('PyQt5.QtWidgets')
 
-import synthetic as syn  # noqa: E402
+import synthetic as syn  # noqa: E402 (after importorskip)
 
 REPO = Path(__file__).resolve().parent.parent
 EXAMPLE = REPO / 'examples' / 'don.120.ref_phi10_mars_2017'

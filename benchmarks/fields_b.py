@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tests'))
 
-import synthetic as syn  # noqa: E402
+import synthetic as syn  # noqa: E402 (after sys.path)
 
 B0 = -1.0  # T, LIONS sign for protons
 K, R0 = 0.5, 0.15  # 1/m, m: case B0 gradient

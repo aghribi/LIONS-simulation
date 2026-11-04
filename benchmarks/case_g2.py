@@ -27,9 +27,9 @@ from scipy.interpolate import RectBivariateSpline
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_g1  # noqa: E402
-import orbits  # noqa: E402
-from provenance import provenance  # noqa: E402
+import case_g1  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
 
 PSI = ROOT / 'benchmarks' / 'external' / 'psi_ring_github_io_7ed8895'
 MP_MEV = physical_constants['proton mass energy equivalent in MeV'][0]

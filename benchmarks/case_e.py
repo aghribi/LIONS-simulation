@@ -30,10 +30,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import lions  # noqa: E402
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
-from fields_b import B0, MAP, write_field  # noqa: E402
+import lions  # noqa: E402 (after sys.path)
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
+from fields_b import B0, MAP, write_field  # noqa: E402 (after sys.path)
 
 torch.set_default_dtype(torch.float64)
 W, Z0 = 1.0, 1e-3  # MeV, m

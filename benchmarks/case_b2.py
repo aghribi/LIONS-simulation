@@ -19,16 +19,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import lions  # noqa: E402
-import lions.apertures  # noqa: E402
-import lions.fields  # noqa: E402
+import lions  # noqa: E402 (after sys.path)
+import lions.apertures  # noqa: E402 (after sys.path)
+import lions.fields  # noqa: E402 (after sys.path)
 import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
-import orbits  # noqa: E402
-from case_a import opal_version  # noqa: E402
-from case_b import ENERGIES, STEPS, lions_state, exact_b0, orbit_metrics  # noqa: E402
-from fields_b import B0, R0, EPS, MAP  # noqa: E402
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+from case_a import opal_version  # noqa: E402 (after sys.path)
+from case_b import ENERGIES, STEPS, lions_state, exact_b0, orbit_metrics  # noqa: E402 (after sys.path)
+from fields_b import B0, R0, EPS, MAP  # noqa: E402 (after sys.path)
 
 K_GRADIENT = 0.5  # 1/m
 TOL = 1e-12

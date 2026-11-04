@@ -17,10 +17,10 @@ import pyarrow.parquet as pq
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_t  # noqa: E402
-from lions.game import tuners as t  # noqa: E402
-from lions.game.env import MissionEnv, mission_by_id  # noqa: E402
-from lions.game.missions import STEP_S  # noqa: E402
+import case_t  # noqa: E402 (after sys.path)
+from lions.game import tuners as t  # noqa: E402 (after sys.path)
+from lions.game.env import MissionEnv, mission_by_id  # noqa: E402 (after sys.path)
+from lions.game.missions import STEP_S  # noqa: E402 (after sys.path)
 
 HOLD = 50
 FRESH = list(range(20000, 20020))

@@ -20,15 +20,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import lions  # noqa: E402
-import lions.apertures  # noqa: E402
-import lions.fields  # noqa: E402
+import lions  # noqa: E402 (after sys.path)
+import lions.apertures  # noqa: E402 (after sys.path)
+import lions.fields  # noqa: E402 (after sys.path)
 import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
-import orbits  # noqa: E402
-from case_a import opal_version  # noqa: E402
-from fields_b import B0, EPS, K, MAP, R0, b_b0, write_field  # noqa: E402
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+from case_a import opal_version  # noqa: E402 (after sys.path)
+from fields_b import B0, EPS, K, MAP, R0, b_b0, write_field  # noqa: E402 (after sys.path)
 
 ENERGIES = [1.0, 2.0, 3.0, 4.0, 5.0]  # MeV
 STEPS = [360, 720, 1440]

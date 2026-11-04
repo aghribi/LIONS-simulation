@@ -25,7 +25,7 @@ from scipy.interpolate import CubicSpline
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import case_v  # noqa: E402
+import case_v  # noqa: E402 (after sys.path)
 
 WINDOW, MIN_CROSSINGS = (
     60,

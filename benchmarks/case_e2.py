@@ -23,11 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
-import lions  # noqa: E402
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
-from fields_b import B0  # noqa: E402
-from case_e import W, Port, initial, load, write_case  # noqa: E402
+import lions  # noqa: E402 (after sys.path)
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
+from fields_b import B0  # noqa: E402 (after sys.path)
+from case_e import W, Port, initial, load, write_case  # noqa: E402 (after sys.path)
 
 STEPS = 3600
 PARTICLES = [1, 1000, 100_000]

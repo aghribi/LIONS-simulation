@@ -20,12 +20,12 @@ sys.path.insert(0, str(ROOT / 'tests'))
 sys.path.insert(0, str(ROOT / 'benchmarks'))
 
 import RF_Track as rft  # noqa: E402, N813 (after sys.path; external name)
-import synthetic as syn  # noqa: E402
-from provenance import provenance  # noqa: E402
-import orbits  # noqa: E402
-from case_a import opal_version  # noqa: E402
-from case_b import exact_b0, lions_state  # noqa: E402
-from fields_b import B0, K, R0, b_b0, write_field  # noqa: E402
+import synthetic as syn  # noqa: E402 (after sys.path)
+from provenance import provenance  # noqa: E402 (after sys.path)
+import orbits  # noqa: E402 (after sys.path)
+from case_a import opal_version  # noqa: E402 (after sys.path)
+from case_b import exact_b0, lions_state  # noqa: E402 (after sys.path)
+from fields_b import B0, K, R0, b_b0, write_field  # noqa: E402 (after sys.path)
 
 W = 1.0  # MeV
 STEPS = 360

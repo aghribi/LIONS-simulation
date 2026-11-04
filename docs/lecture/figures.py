@@ -16,12 +16,12 @@ import numpy as np
 import pandas as pd
 
 matplotlib.use('pdf')
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402 (after sys.path)
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'benchmarks'))
-import fieldmodels  # noqa: E402
-from provenance import CODE  # noqa: E402
+import fieldmodels  # noqa: E402 (after sys.path)
+from provenance import CODE  # noqa: E402 (after sys.path)
 
 RUNS = ROOT / 'benchmarks' / 'runs'
 GEN = Path(__file__).resolve().parent / 'gen'
@@ -837,7 +837,7 @@ def case_e2():
         )
         best32 = torch[
             (torch.dtype == 'float32') & (torch.compiled == True)  # noqa: E712 (column)
-        ].set_index('particles')  # noqa: E712
+        ].set_index('particles')
         if len(best64):
             ax.loglog(
                 best64.index,
@@ -859,7 +859,7 @@ def case_e2():
             (d['mode'] == 'forward+backward')
             & (d.compiled == True)  # noqa: E712 (column)
             & (d.dtype == 'float64')
-        ]  # noqa: E712
+        ]
 
         def cell(n):
             return (
@@ -893,7 +893,7 @@ def case_e2():
         ]
         .set_index('particles')
         .wall_s
-    )  # noqa: E712
+    )
     num('EtwoAWallOne', w[1], 2)
     num('EtwoAWallMax', w[100000], 2)
     gpu = pd.concat(
