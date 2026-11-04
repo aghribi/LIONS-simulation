@@ -1,7 +1,9 @@
-"""Case E2: speed spike of the case E PyTorch port against plain LIONS (DESIGN.md section 20). Throwaway.
+"""Case E2: speed spike of the case E PyTorch port against plain LIONS
+(DESIGN.md section 20). Throwaway.
 
-usage: uv run --group gpu python benchmarks/case_e2.py [outdir] [--device cpu|mps|cuda]
-Writes case_e2.parquet. MPS has no float64: only the float32 variants run there.
+usage: uv run --group gpu python benchmarks/case_e2.py [outdir]
+[--device cpu|mps|cuda] Writes case_e2.parquet. MPS has no float64: only
+the float32 variants run there.
 """
 
 import argparse
@@ -35,12 +37,14 @@ DEVICE = 'cpu'
 
 
 def make_port(d, dtype, compiled):
-    # int x float promotes to the default dtype; case_e sets float64, which MPS cannot hold
+    # int x float promotes to the default dtype; case_e sets float64,
+    # which MPS cannot hold
     torch.set_default_dtype(dtype)
     port = Port(d)
     port.maps = [m.to(DEVICE, dtype) for m in port.maps]
     if compiled:
-        # a fresh cache per variant: past the recompile limit dynamo falls back to eager without saying so
+        # a fresh cache per variant: past the recompile limit dynamo
+        # falls back to eager without saying so
         torch._dynamo.reset()
         port.step = torch.compile(port.step, dynamic=False)
     return port
@@ -54,7 +58,9 @@ def start(d, n, dtype):
 
 
 def timed(fn):
-    """Median wall time of REPEATS calls after one warm-up (the warm-up time is returned too)."""
+    """Median wall time of REPEATS calls after one warm-up (the warm-up
+    time is returned too).
+    """
 
     def sync():
         if DEVICE == 'cuda':
@@ -91,7 +97,9 @@ def lions_time(n):
 
 
 def main(outdir):
-    global DEVICE  # the accuracy section runs the CPU reference, then restores the device
+    # the accuracy section runs the CPU reference, then restores the
+    # device
+    global DEVICE
     outdir.mkdir(parents=True, exist_ok=True)
     records, inputs = [], []
     dtypes = (
@@ -99,7 +107,9 @@ def main(outdir):
     )
 
     def add(code, dtype, compiled, mode, n, run):
-        """Time run() and record it; a variant that fails (a backend that cannot compile it) is recorded too."""
+        """Time run() and record it; a variant that fails (a backend that
+        cannot compile it) is recorded too.
+        """
         try:
             wall, first = run()
             error = None
@@ -172,7 +182,8 @@ def main(outdir):
                     lambda: timed(fwd_bwd),
                 )
 
-    # each device variant against eager float64 on the CPU, cases B0 and B
+    # each device variant against eager float64 on the CPU, cases B0 and
+    # B
     device = DEVICE
     variants = (
         [(torch.float32, False)]

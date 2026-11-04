@@ -1,20 +1,28 @@
-# /// script
-# requires-python = "==3.12.*"
-# dependencies = ["numpy==1.26.4", "scipy==1.13.1", "ndsplines==0.2.0", "sympy==1.13.3", "matplotlib==3.9.2",
-#                 "optimparallel==0.1.2", "h5py==3.12.1", "pyarrow==18.1.0"]
+# /// script requires-python = "==3.12.*" dependencies =
+# ["numpy==1.26.4", "scipy==1.13.1", "ndsplines==0.2.0",
+# "sympy==1.13.3", "matplotlib==3.9.2",
+#                 "optimparallel==0.1.2", "h5py==3.12.1",
+#                 "pyarrow==18.1.0"]
 # ///
-"""Case G1 inputs: exact field map and references from a FROM_ORBIT example (DESIGN.md section 21).
+"""Case G1 inputs: exact field map and references from a FROM_ORBIT example
+(DESIGN.md section 21).
 
-usage: MPLBACKEND=Agg uv run --script benchmarks/g1_maps.py EXAMPLE OUTDIR [--ri --rstep --nrad --ntheta]
-EXAMPLE: 3-sector (example/3-sector/3sector-ideal.py) or 10-sector (example/10-sector/10sector-2h.py).
+usage: MPLBACKEND=Agg uv run --script benchmarks/g1_maps.py EXAMPLE
+OUTDIR [--ri --rstep --nrad --ntheta] EXAMPLE: 3-sector
+(example/3-sector/3sector-ideal.py) or 10-sector
+(example/10-sector/10sector-2h.py).
 
-FROM_ORBIT (GPL-3.0) stays in its clone (benchmarks/external/from_orbit): the published example file is run as is,
-cut before its field-map and CYCLOPS section, so no FROM_ORBIT code enters this repository.
-The map is the exact field of the orbit family (FROM_ORBIT def_B: root finding for a(r, theta), then
-B = brho(a) curv(a, theta) / r_inf), not the output of its write_field_map, whose smoothing spline of a(r, theta)
-departs from the exact field by up to 1e-4. Derivatives by central differences of the exact field.
-Writes OUTDIR/master.h5 (Bz, dBz/dr, dBz/dtheta on one sector, FROM_ORBIT sign and units) and
-OUTDIR/truth.parquet (closed orbits, revolution frequency, tunes).
+FROM_ORBIT (GPL-3.0) stays in its clone
+(benchmarks/external/from_orbit): the published example file is run as
+is, cut before its field-map and CYCLOPS section, so no FROM_ORBIT code
+enters this repository. The map is the exact field of the orbit family
+(FROM_ORBIT def_B: root finding for a(r, theta), then B = brho(a)
+curv(a, theta) / r_inf), not the output of its write_field_map, whose
+smoothing spline of a(r, theta) departs from the exact field by up to
+1e-4. Derivatives by central differences of the exact field. Writes
+OUTDIR/master.h5 (Bz, dBz/dr, dBz/dtheta on one sector, FROM_ORBIT sign
+and units) and OUTDIR/truth.parquet (closed orbits, revolution
+frequency, tunes).
 """
 
 import argparse
@@ -40,12 +48,16 @@ EXAMPLES = {
     '3-sector': 'example/3-sector/3sector-ideal.py',
     '10-sector': 'example/10-sector/10sector-2h.py',
 }
-CUT = '#create a field map'  # the example's own marker: everything after it writes its map and runs CYCLOPS
+# the example's own marker: everything after it writes its map and runs
+# CYCLOPS
+CUT = '#create a field map'
 H_R, H_TH = 1e-6, 1e-6  # m, rad: central-difference steps on the exact field
 
 
 def run_example(name):
-    """Run the published example up to its field-map section; return its namespace."""
+    """Run the published example up to its field-map section; return its
+    namespace.
+    """
     path = CLONE / EXAMPLES[name]
     src = path.read_text()
     if CUT not in src:

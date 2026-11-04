@@ -1,4 +1,6 @@
-"""Synthetic fields of cases B0 and B (DESIGN.md sections 5 and 12). No RF-Track or OPAL dependency."""
+"""Synthetic fields of cases B0 and B (DESIGN.md sections 5 and 12). No
+RF-Track or OPAL dependency.
+"""
 
 import sys
 from pathlib import Path

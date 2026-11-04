@@ -1,6 +1,9 @@
-"""Post-hoc diagnostic of case T, not the registered metric. After the first read in spec: hold the knobs 50 passes with drift, read without noise, replay the actions blind.
+"""Post-hoc diagnostic of case T, not the registered metric. After the
+first read in spec: hold the knobs 50 passes with drift, read without
+noise, replay the actions blind.
 
-usage: uv run --extra game --extra rl --group bench python benchmarks/case_t_check.py [--outroot DIR]
+usage: uv run --extra game --extra rl --group bench python
+benchmarks/case_t_check.py [--outroot DIR]
 """
 
 import argparse

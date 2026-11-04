@@ -1,4 +1,6 @@
-"""Level 0 stages: plain models, no Qt. A human at the arcade, a script or an RL agent plays the same reset, step, score."""
+"""Level 0 stages: plain models, no Qt. A human at the arcade, a script or
+an RL agent plays the same reset, step, score.
+"""
 
 import math
 import random
@@ -15,7 +17,9 @@ Action = namedtuple(
 
 
 def load_scenario(name='level0'):
-    """Stage objects from a scenario file. A parameter whose unit differs from the one the stage expects is an error."""
+    """Stage objects from a scenario file. A parameter whose unit differs
+    from the one the stage expects is an error.
+    """
     import lions.game.missions  # noqa: F401, E402   registers the mission stages
 
     text = (
@@ -52,7 +56,8 @@ class Stage:
         self.mandatory = entry.get(
             'mandatory', True
         )  # False: failing costs no life
-        self.tutorial = False  # no clock and no shot limit: the arcade pairs it with a coach
+        # no clock and no shot limit: the arcade pairs it with a coach
+        self.tutorial = False
         self.switches = entry.get('switches', {})
 
     def reset(self, seed):
@@ -64,7 +69,9 @@ class Stage:
         return self.observation()
 
     def step(self, action, dt):
-        """Advance by dt seconds of game time. Returns observation, metrics, done."""
+        """Advance by dt seconds of game time. Returns observation,
+        metrics, done.
+        """
         if self.done:
             return self.observation(), self.metrics(), True
         last = self.last_action
@@ -83,7 +90,9 @@ class Stage:
         self.done, self.success, self.message = True, success, message
 
     def score(self):
-        """The record of a run: scenario, seed, switches, budget, metrics (SPEC section 7). No player identity."""
+        """The record of a run: scenario, seed, switches, budget, metrics
+        (SPEC section 7). No player identity.
+        """
         return {
             'scenario': self.scenario,
             'stage': self.key,
@@ -209,7 +218,9 @@ class Larmor(Stage):
 
 
 class GapStage(Stage):
-    """An ion crossing a gap twice per turn: gain q V cos(phi), phase slip pi (f_rf / f_rev - 1) per crossing."""
+    """An ion crossing a gap twice per turn: gain q V cos(phi), phase slip
+    pi (f_rf / f_rev - 1) per crossing.
+    """
 
     def setup_gap(self, phi):
         self.w, self.phi, self.crossings, self.combo, self.crest = (
@@ -223,7 +234,9 @@ class GapStage(Stage):
         self.arcs = [self.arc(0.0)]
 
     def arc(self, x_start):
-        """The half circle after a crossing, on the gap line: (x_start, x_end). Odd crossings go to +x, under the line."""
+        """The half circle after a crossing, on the gap line: (x_start,
+        x_end). Odd crossings go to +x, under the line.
+        """
         direction = 1 if len(self.arcs) % 2 else -1
         return x_start, x_start + direction * 2 * physics.radius(
             self.w, self.field()
@@ -346,7 +359,9 @@ class TrimCoils(GapStage):
         )
 
     def needed_delta(self):
-        """B = gamma B0, relative to the injection energy, for which the RF is set."""
+        """B = gamma B0, relative to the injection energy, for which the RF
+        is set.
+        """
         return physics.gamma(self.w) / physics.gamma(self.p['w_start']) - 1
 
     def advance(self, action, dt):
@@ -480,7 +495,9 @@ class Thomas(Stage):
         h = total / n
         for _ in range(
             n
-        ):  # z'' + (Qz^2 + e cos theta) z = d cos theta: the errors act at 2 Qz = 1 and at Qz = 1
+            # z'' + (Qz^2 + e cos theta) z = d cos theta: the errors act at
+            # 2 Qz = 1 and at Qz = 1
+        ):
             self.z += 0.5 * h * self.dz
             self.theta += h
             c = math.cos(self.theta)

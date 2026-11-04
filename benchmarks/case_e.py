@@ -1,7 +1,10 @@
-"""Case E: differentiability spike, LIONS magnetic tracking ported to PyTorch (DESIGN.md section 17). Throwaway.
+"""Case E: differentiability spike, LIONS magnetic tracking ported to
+PyTorch (DESIGN.md section 17). Throwaway.
 
-usage: uv run --group bench --with torch python benchmarks/case_e.py [outdir]
-       uv run --group bench --with torch python benchmarks/case_e.py --cost N PARTICLES CHECKPOINT  (one cost point, JSON)
+usage: uv run --group bench --with torch python benchmarks/case_e.py
+[outdir]
+       uv run --group bench --with torch python benchmarks/case_e.py
+       --cost N PARTICLES CHECKPOINT  (one cost point, JSON)
 Writes case_e.parquet.
 """
 
@@ -72,12 +75,15 @@ def load(n_steps, turns=1):
 
 
 class Port:
-    """LIONS compute_fields (magnetic part, map region) and boris_push with E = 0."""
+    """LIONS compute_fields (magnetic part, map region) and boris_push with
+    E = 0.
+    """
 
     def __init__(self, d):
         f = d.field
         self.maps = [torch.tensor(a) for a in (f.bz, f.d2bz, f.dbzdx, f.dbzdy)]
-        # Python floats: MPS has no float64, so numpy float64 scalars cannot enter its tensors
+        # Python floats: MPS has no float64, so numpy float64 scalars
+        # cannot enter its tensors
         self.rmin, self.dr, self.dtheta = (
             float(f.rmin),
             float(f.dr),
@@ -151,7 +157,9 @@ class Port:
         return (phase, *state)
 
     def run(self, state, s, n, segment=None):
-        """(r, pr, phase) after n steps; segment = steps per checkpointed block, None = no checkpointing."""
+        """(r, pr, phase) after n steps; segment = steps per checkpointed
+        block, None = no checkpointing.
+        """
         phase = torch.zeros_like(state[0])
         if segment is None:
             phase, *state = self.segment(n, s, phase, *state)
@@ -178,7 +186,9 @@ def initial(r0, pr0, p, n=1):
 
 
 def validate(d):
-    """Max relative difference between LIONS and the port over one turn, positions and momenta."""
+    """Max relative difference between LIONS and the port over one turn,
+    positions and momenta.
+    """
     n = d.run.n_steps
     rows = []
 
@@ -205,7 +215,9 @@ def validate(d):
 
 
 def gradients(d, n):
-    """Autograd and central finite differences of (r, pr, phase) after n steps w.r.t. (s, r0, pr0)."""
+    """Autograd and central finite differences of (r, pr, phase) after n
+    steps w.r.t. (s, r0, pr0).
+    """
     port, p = Port(d), d.bunch.p[0]
     r0 = syn.larmor_radius(W, B0)
     params = {'s': 1.0, 'r0': r0, 'pr0': 0.0}
@@ -250,7 +262,9 @@ def gradients(d, n):
 
 
 def cost_point(n, particles, ckpt):
-    """Forward plus backward wall time and peak RSS for one configuration (run in its own process)."""
+    """Forward plus backward wall time and peak RSS for one configuration
+    (run in its own process).
+    """
     with contextlib.chdir(ROOT / 'benchmarks' / 'runs' / 'case_e' / 'B'):
         d = load(360)
     port, p = Port(d), d.bunch.p[0]
@@ -324,7 +338,8 @@ def main(outdir):
     for n in COST_STEPS:
         for particles in COST_PARTICLES:
             for ckpt in (False, True):
-                # memory grows linearly in steps without checkpointing: skip a point extrapolated past half the RAM
+                # memory grows linearly in steps without checkpointing:
+                # skip a point extrapolated past half the RAM
                 prev = [
                     c
                     for c in cost
@@ -362,7 +377,8 @@ def main(outdir):
                     capture_output=True,
                     text=True,
                 )
-                # the RF-Track import prints a banner on stdout: the result is the last line
+                # the RF-Track import prints a banner on stdout: the
+                # result is the last line
                 cost.append(
                     {
                         'error': None,

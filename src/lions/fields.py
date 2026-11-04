@@ -99,9 +99,11 @@ def add_harmonics(
 
 
 def prepare_hermite(field, ntheta_all):
-    """Node slopes of the bicubic Hermite option from the map: dBz/dr, dBz/dtheta, d2Bz/drdtheta.
+    """Node slopes of the bicubic Hermite option from the map: dBz/dr,
+    dBz/dtheta, d2Bz/drdtheta.
 
-    The cross derivative is a second-order difference of dBz/dtheta in r (one-sided at the map edges).
+    The cross derivative is a second-order difference of dBz/dtheta in r
+    (one-sided at the map edges).
     """
     nr = field.nr
     r = field.rmin + field.dr * np.arange(nr)[:, None]
@@ -120,18 +122,22 @@ def prepare_hermite(field, ntheta_all):
 
 
 def atan2_azimuth(x, y):
-    """Azimuth in [0, 2 pi) from atan2: uniform precision. arccos(x / r), the Fortran formula, loses precision near
-    theta = 0 and pi (rounding over sin theta), which puts non-smooth noise of order 1e-12 m per kick into the
-    one-turn map at r of a few metres."""
+    """Azimuth in [0, 2 pi) from atan2: uniform precision. arccos(x / r),
+    the Fortran formula, loses precision near theta = 0 and pi (rounding
+    over sin theta), which puts non-smooth noise of order 1e-12 m per
+    kick into the one-turn map at r of a few metres.
+    """
     theta = np.arctan2(y, x) % (2.0 * np.pi)
     theta[theta >= 2.0 * np.pi] = 0.0
     return theta
 
 
 def hermite_bz(field, ivec, veca, x, y, r):
-    """Bicubic Hermite Bz in the radial cell ivec at offset veca, and its Cartesian gradient.
+    """Bicubic Hermite Bz in the radial cell ivec at offset veca, and its
+    Cartesian gradient.
 
-    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells. The azimuth is always atan2_azimuth.
+    Returns Bz, dBz/dx, dBz/dy on the median plane; C1 across cells. The
+    azimuth is always atan2_azimuth.
     """
     theta = atan2_azimuth(x, y)
     jvec = (theta / field.dtheta).astype(np.int32)
@@ -251,7 +257,8 @@ def compute_fields(d):
         d.bunch.theta[mask_lem1] = np.arccos(-1.0)
         mask_yneg = d.bunch.y < 0.0
         d.bunch.theta[mask_yneg] = 2.0 * np.pi - d.bunch.theta[mask_yneg]
-        # y < 0 with x / r rounding to 1 gives exactly 2 pi, one column past the map
+        # y < 0 with x / r rounding to 1 gives exactly 2 pi, one column
+        # past the map
         d.bunch.theta[d.bunch.theta >= 2.0 * np.pi] -= 2.0 * np.pi
 
     ivec[:] = 0
@@ -271,7 +278,8 @@ def compute_fields(d):
     c1, c2, c3, c4 = vecd1 * vecd2, veca * vecd2, veca * vecb, vecd1 * vecb
     B, D = d.field.bz[ik, jk], d.field.d2bz[ik, jk]
     if d.field.interpolation == 'hermite':
-        # Bz and its gradient from one C1 surface; the z^2 term stays bilinear
+        # Bz and its gradient from one C1 surface; the z^2 term stays
+        # bilinear
         bz, gx, gy = hermite_bz(
             d.field, ivec, veca, d.bunch.x, d.bunch.y, d.bunch.r
         )
@@ -345,7 +353,8 @@ def compute_fields(d):
             D[2, 2],
             D[1, 2],
         )
-        # Centred differences at the four corners, in the same operation order as the Fortran
+        # Centred differences at the four corners, in the same operation
+        # order as the Fortran
         vex1[m_c] = (
             (-(P[2, 1] - P[0, 1]) + vz * (D[2, 1] - D[0, 1])) * 0.5 / dx
         )
@@ -552,7 +561,9 @@ def compute_fields(d):
 
 
 def add_vertical_sorter_field(bunch, sorter, rf, run):
-    """Add the vertical sorter Ez; sorter.voltage_seen is its voltage at particle 0."""
+    """Add the vertical sorter Ez; sorter.voltage_seen is its voltage at
+    particle 0.
+    """
     sorter.voltage_seen = 0.0
     if sorter.gap == 0.0:
         return

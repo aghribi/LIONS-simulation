@@ -1,7 +1,12 @@
-"""Reduced model of a pass, stage B of docs/training/PHYSICAL.md and of PHYSICAL_NEON.md: T0's turn loop reading tables from LIONS on a field map, in place of closed forms.
+"""Reduced model of a pass, stage B of docs/training/PHYSICAL.md and of
+PHYSICAL_NEON.md: T0's turn loop reading tables from LIONS on a field
+map, in place of closed forms.
 
-Same arguments and Beam as machine.run. Rules and how each is verified: PHYSICAL.md. No phase cut, stall, clamp or septum in the turn loop. The labelled definitions
-(|z| aperture, r at the map edge, extraction radius) are those of the LIONS verdict. Below the lowest valid gain, gain and orbit are held or scaled: unverified.
+Same arguments and Beam as machine.run. Rules and how each is verified:
+PHYSICAL.md. No phase cut, stall, clamp or septum in the turn loop. The
+labelled definitions (|z| aperture, r at the map edge, extraction
+radius) are those of the LIONS verdict. Below the lowest valid gain,
+gain and orbit are held or scaled: unverified.
 """
 
 import os
@@ -25,7 +30,9 @@ EXTRACTED, Z_APERTURE, OUT_OF_MAP, CIRCULATING = (
 
 
 def gaussian_phases(knobs, errors, rms_deg):
-    """RF phase [rad] of each macroparticle at the start, in [-pi, pi): Gaussian quantiles around the tune's phase, no buncher."""
+    """RF phase [rad] of each macroparticle at the start, in [-pi, pi):
+    Gaussian quantiles around the tune's phase, no buncher.
+    """
     phi = np.radians(
         knobs['phase_deg']
         + errors.phase_deg
@@ -36,7 +43,10 @@ def gaussian_phases(knobs, errors, rms_deg):
 
 
 def install_from_env():
-    """CASE_REDUCED='table.parquet:rms_deg' puts this model in the missions' slot of a benchmark, workers included. Returns the setting, or '' for T0."""
+    """CASE_REDUCED='table.parquet:rms_deg' puts this model in the
+    missions' slot of a benchmark, workers included. Returns the
+    setting, or '' for T0.
+    """
     setting = os.environ.get('CASE_REDUCED', '')
     if setting:
         from lions.game.missions import Mission
@@ -51,7 +61,9 @@ def install_from_env():
 
 
 class Tables:
-    """Closed orbits against momentum (beta gamma), on the unscaled map. The orbit of p in a field s B is the orbit of p / s in B."""
+    """Closed orbits against momentum (beta gamma), on the unscaled map.
+    The orbit of p in a field s B is the orbit of p / s in B.
+    """
 
     def __init__(self, path):
         table = pq.read_table(path)
@@ -98,7 +110,11 @@ class Tables:
 
 class Reduced:
     def __init__(self, path, phase_rms_deg=None, no_beam_off_table=False):
-        """phase_rms_deg: Gaussian start phases of this rms, in place of T0's buncher law. no_beam_off_table: a tuner may reach another harmonic, where no gain was measured; no beam, labelled, instead of an error."""
+        """phase_rms_deg: Gaussian start phases of this rms, in place of
+        T0's buncher law. no_beam_off_table: a tuner may reach another
+        harmonic, where no gain was measured; no beam, labelled, instead
+        of an error.
+        """
         self.tables, self.phase_rms_deg, self.no_beam_off_table = (
             Tables(Path(path)),
             phase_rms_deg,
@@ -106,7 +122,10 @@ class Reduced:
         )
 
     def run(self, machine, ion, knobs, errors, draws, limit_factor=1):
-        """One pass, as machine.run. limit_factor: the numerical turn limit, in units of T0's; a particle still circulating there counts as lost power."""
+        """One pass, as machine.run. limit_factor: the numerical turn
+        limit, in units of T0's; a particle still circulating there
+        counts as lost power.
+        """
         out = self.track(machine, ion, knobs, errors, draws, limit_factor)
         return mc.extract(
             machine,
@@ -192,7 +211,8 @@ class Reduced:
             g = 1 + w[a] / t.rest_mev
             bg = np.sqrt(g * g - 1)
             lnq = np.log(bg) - lns
-            # A crossing of theta = 0: the probes read, the fate is decided, then the turn is made.
+            # A crossing of theta = 0: the probes read, the fate is
+            # decided, then the turn is made.
             w_prev[a], w_last[a] = w_last[a], w[a]
             turns[a] += 1
             ga = ion.gamma(w[a])

@@ -30,7 +30,9 @@ def prompt(prompt=''):
 
 
 def _read_block(f, nrows, ncols):
-    """nrows x ncols values in list-directed format; ValueError if the file ends early."""
+    """nrows x ncols values in list-directed format; ValueError if the file
+    ends early.
+    """
     rows = []
     for _ in range(nrows):
         tokens = f.read_tokens(ncols)
@@ -41,11 +43,13 @@ def _read_block(f, nrows, ncols):
 
 
 def read_bfield_map(path):
-    """Median-plane field map: Bz, d2Bz, dBz/dx, dBz/dy on (r, theta), extended to 360 deg.
+    """Median-plane field map: Bz, d2Bz, dBz/dx, dBz/dy on (r, theta),
+    extended to 360 deg.
 
-    Full map: ntheta columns over 360 deg. 1/8 map (ntheta = 91): 0 to 45 deg, read
-    with the theta index reversed and extended by the 8-fold symmetry. Arrays are
-    returned at the state size (MAP_NR, MAP_NTHETA).
+    Full map: ntheta columns over 360 deg. 1/8 map (ntheta = 91): 0 to
+    45 deg, read with the theta index reversed and extended by the
+    8-fold symmetry. Arrays are returned at the state size (MAP_NR,
+    MAP_NTHETA).
     """
     with open(path) as raw:
         f = FortranFile(raw)
@@ -79,7 +83,8 @@ def read_bfield_map(path):
                     'field map without dBz/dx, dBz/dy: Bx = By = 0, motion stays in the median plane'
                 )
                 dbzx_read = dbzy_read = np.zeros((nr, 91))
-            # 8-fold symmetry, as in the Fortran (1-based ranges in comments)
+            # 8-fold symmetry, as in the Fortran (1-based ranges in
+            # comments)
             for arr in (bz, d2bz):
                 arr[:nr, 180:90:-1] = arr[:nr, :90]  # (181:92:-1) = (1:90)
                 arr[:nr, 181:361] = arr[:nr, 1:181]  # (182:361) = (2:181)
@@ -112,10 +117,12 @@ def read_bfield_map(path):
 
 
 def read_central_potential(path, swap=False):
-    """Central-region potential: Fortran unformatted file, grid header in mm.
+    """Central-region potential: Fortran unformatted file, grid header in
+    mm.
 
-    Records: (xmin, xmax, ymin, ymax as float64, nx, ny as int32), then nx rows of
-    pot, then nx rows of d2pot (optional, zero when missing). swap: big-endian file.
+    Records: (xmin, xmax, ymin, ymax as float64, nx, ny as int32), then
+    nx rows of pot, then nx rows of d2pot (optional, zero when missing).
+    swap: big-endian file.
     """
     fdtype = np.dtype('>f8' if swap else '<f8')
     idtype = np.dtype('>i4' if swap else '<i4')
@@ -159,7 +166,9 @@ def read_central_potential(path, swap=False):
 
 
 def read_outer_potential(path):
-    """Outer-region potential (text): xmin xmax ymin ymax nx ny in m, then pot and d2pot rows."""
+    """Outer-region potential (text): xmin xmax ymin ymax nx ny in m, then
+    pot and d2pot rows.
+    """
     with open(path) as raw:
         f = FortranFile(raw)
         vals = f.read_tokens(6)
@@ -184,7 +193,9 @@ def read_outer_potential(path):
 
 
 def load(d, deck):
-    """Set up d from a deck (Deck or path): field maps, potentials, bunch and output files."""
+    """Set up d from a deck (Deck or path): field maps, potentials, bunch
+    and output files.
+    """
     d.outputs.open.clear()
     if isinstance(deck, Deck):
         d.run.deck_file = ''
@@ -370,7 +381,8 @@ def load(d, deck):
                 'turn     r     theta   drdc  dsdc  dphidc'
                 ' epsrdc  dwswdc        wmpa   dwdc        dwdphidc\n'
             )
-        # Sigma matrices are read now, the bunch is built after the field map is loaded
+        # Sigma matrices are read now, the bunch is built after the
+        # field map is loaded
         with open(files.sigma) as fsigma:
             for _ in b.families:
                 sigma_matrices.append(

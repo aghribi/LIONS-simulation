@@ -1,6 +1,9 @@
-"""Tuning methods on a mission: one pass of the machine is one evaluation. The arcade and benchmarks/case_t.py run this same code.
+"""Tuning methods on a mission: one pass of the machine is one evaluation.
+The arcade and benchmarks/case_t.py run this same code.
 
-Registered comparison in docs/training/RL_RUNS.md. Each method sees control-room readings or the score built from them, never the hidden errors.
+Registered comparison in docs/training/RL_RUNS.md. Each method sees
+control-room readings or the score built from them, never the hidden
+errors.
 """
 
 import copy
@@ -29,13 +32,17 @@ ACQ_RESTARTS, ACQ_RAW_SAMPLES = 4, 256
 
 
 class Run:
-    """The budget and the search box. A method calls it once per pass; it raises Done when in spec or out of budget."""
+    """The budget and the search box. A method calls it once per pass; it
+    raises Done when in spec or out of budget.
+    """
 
     class Done(Exception):
         pass
 
     def __init__(self, m, budget=BUDGET, on_pass=None, box=None, stop=None):
-        """box: {knob: (below, above)}, offsets from the start replacing BOX_ERRORS. stop: the end test, the measured one by default."""
+        """box: {knob: (below, above)}, offsets from the start replacing
+        BOX_ERRORS. stop: the end test, the measured one by default.
+        """
         self.m, self.budget, self.on_pass = m, budget, on_pass
         self.stop = stop or m.measured_ready
         self.evals, self.reached, self.score, self.best, self.best_knobs = (
@@ -96,7 +103,9 @@ class Run:
         return -self.score
 
     def terms(self, u):
-        """One objective per term of the client's spec. Without beam every term is worse than with beam, closer on the radial probe."""
+        """One objective per term of the client's spec. Without beam every
+        term is worse than with beam, closer on the radial probe.
+        """
         self.set(u)
         m = self.m
         return (
@@ -106,7 +115,9 @@ class Run:
         )
 
     def log_terms(self, u):
-        """The same terms for a model: log, clamped. Without beam worse than any beam, closer on the radial probe."""
+        """The same terms for a model: log, clamped. Without beam worse
+        than any beam, closer on the radial probe.
+        """
         self.set(u)
         m = self.m
         if not m.has_beam():
@@ -119,7 +130,9 @@ class Run:
 
 
 def coach(run, rng):
-    """The rules of lions.game.coach: one knob per pass, its fine step at 0.1."""
+    """The rules of lions.game.coach: one knob per pass, its fine step at
+    0.1.
+    """
     rules = Coach(run.m)
     while True:
         advice = rules.advise()
@@ -194,7 +207,9 @@ def bayesian(run, rng):
 
 
 def nsga2(run, rng):
-    """Multi-objective genetic algorithm: the spec terms are kept apart, no weights between them."""
+    """Multi-objective genetic algorithm: the spec terms are kept apart, no
+    weights between them.
+    """
     from pymoo.algorithms.moo.nsga2 import NSGA2
     from pymoo.core.problem import Problem
 
@@ -214,7 +229,9 @@ def nsga2(run, rng):
 
 
 def cma_es(run, rng):
-    """Covariance matrix adaptation on the score, default population. Restarts from a random point when it stops."""
+    """Covariance matrix adaptation on the score, default population.
+    Restarts from a random point when it stops.
+    """
     import cma
 
     start = run.start
@@ -237,7 +254,9 @@ def cma_es(run, rng):
 
 
 def _fitted_gp(x, y):
-    """One independent GP per column of y: Matern 5/2 with automatic relevance and inferred noise, BoTorch's dimension-scaled prior."""
+    """One independent GP per column of y: Matern 5/2 with automatic
+    relevance and inferred noise, BoTorch's dimension-scaled prior.
+    """
     import torch
     from botorch.fit import fit_gpytorch_mll
     from botorch.models import SingleTaskGP
@@ -261,7 +280,9 @@ def _fitted_gp(x, y):
 
 
 def _per_term_bo(run, rng, acquisition):
-    """20 points as Bayesian optimisation, then one model per spec term. acquisition(gp, x): an acquisition function on the log terms."""
+    """20 points as Bayesian optimisation, then one model per spec term.
+    acquisition(gp, x): an acquisition function on the log terms.
+    """
     import torch
     from botorch.exceptions.errors import ModelFittingError
     from botorch.optim import optimize_acqf
@@ -311,7 +332,9 @@ def constrained_bo(run, rng):
 
 
 def mobo(run, rng):
-    """qLogNEHVI on the spec terms, reference point at the spec limits: objectives -log(term), in spec above 0."""
+    """qLogNEHVI on the spec terms, reference point at the spec limits:
+    objectives -log(term), in spec above 0.
+    """
     import torch
     from botorch.acquisition.multi_objective.logei import (
         qLogNoisyExpectedHypervolumeImprovement,
@@ -340,7 +363,9 @@ def mobo(run, rng):
 
 
 def turbo(run, rng):
-    """TuRBO-1 on the score: Thompson sampling in a trust region around the best point, restarted on collapse."""
+    """TuRBO-1 on the score: Thompson sampling in a trust region around the
+    best point, restarted on collapse.
+    """
     import torch
     from botorch.exceptions.errors import ModelFittingError
     from botorch.generation.sampling import MaxPosteriorSampling
@@ -413,7 +438,9 @@ def turbo(run, rng):
 
 
 def policy(run, rng, model):
-    """A trained policy, deterministic: one action per pass, every knob at once."""
+    """A trained policy, deterministic: one action per pass, every knob at
+    once.
+    """
     from lions.game.env import MissionEnv
 
     env = MissionEnv(run.m.mission_id)
@@ -434,7 +461,9 @@ def tune(
     stop=None,
     **options,
 ):
-    """Runs a method on mission m until in spec or out of budget. Same seed, same search."""
+    """Runs a method on mission m until in spec or out of budget. Same
+    seed, same search.
+    """
     run = Run(m, budget, on_pass, box, stop)
     try:
         method(run, np.random.default_rng(seed), **options)
@@ -448,7 +477,9 @@ def policy_path(mission_id, algo='ppo', seed=0):
 
 
 def train_policy(mission_id, algo, seed, path, steps=None, progress=None):
-    """SB3 defaults, MlpPolicy, training conditions apart from the held-out ones. Saves to path."""
+    """SB3 defaults, MlpPolicy, training conditions apart from the held-out
+    ones. Saves to path.
+    """
     import torch
     from stable_baselines3 import PPO, SAC
     from stable_baselines3.common.callbacks import BaseCallback
@@ -572,7 +603,9 @@ METHODS = [
 
 
 class Tuning:
-    """A method on a private copy of the mission, in a thread owned by the caller. The screen replays the passes as they come."""
+    """A method on a private copy of the mission, in a thread owned by the
+    caller. The screen replays the passes as they come.
+    """
 
     def __init__(self, stage, method, seed):
         self.method, self.seed, self.stopping = method, seed, False

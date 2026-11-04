@@ -1,10 +1,13 @@
-"""Case G1: codes against FROM_ORBIT manufactured solutions (DESIGN.md section 21).
+"""Case G1: codes against FROM_ORBIT manufactured solutions (DESIGN.md
+section 21).
 
-usage: uv run --group bench python benchmarks/case_g1.py MASTER_DIR [--step 1|2|3] [--outroot DIR]
-MASTER_DIR holds master.h5 and truth.parquet from benchmarks/g1_maps.py.
-Step 1: precision of the references, RF-Track on a quintic spline of the exact map.
-Step 2 (--step 2): LIONS on the bilinear map at several azimuthal spacings.
-Step 3 (--step 3): the LIONS Boris step on bilinear (validation against LIONS), bicubic and quintic fields.
+usage: uv run --group bench python benchmarks/case_g1.py MASTER_DIR
+[--step 1|2|3] [--outroot DIR] MASTER_DIR holds master.h5 and
+truth.parquet from benchmarks/g1_maps.py. Step 1: precision of the
+references, RF-Track on a quintic spline of the exact map. Step 2
+(--step 2): LIONS on the bilinear map at several azimuthal spacings.
+Step 3 (--step 3): the LIONS Boris step on bilinear (validation against
+LIONS), bicubic and quintic fields.
 """
 
 import argparse
@@ -38,7 +41,8 @@ EVERY = {
 }  # master columns per map column (1/3 deg master)
 TOL = 1e-12
 H = 1e-6  # m, finite-difference step of the Jacobian
-RESIDUAL_MAX = 1e-9  # m, closed-orbit Newton residual above which the run counts as failed
+# m, closed-orbit Newton residual above which the run counts as failed
+RESIDUAL_MAX = 1e-9
 PAD = 5  # theta nodes wrapped on each side so the periodic spline has no edge
 
 
@@ -54,9 +58,11 @@ def load_master(path):
 
 
 def spline_field(grids, attrs, every=1):
-    """b(x, y, z) in the LIONS frame and sign (-Bz of FROM_ORBIT), first order in z, from quintic splines.
+    """b(x, y, z) in the LIONS frame and sign (-Bz of FROM_ORBIT), first
+    order in z, from quintic splines.
 
-    every > 1 builds the splines on a subset of the nodes (interpolation-error estimate).
+    every > 1 builds the splines on a subset of the nodes
+    (interpolation-error estimate).
     """
     n_sec = int(attrs['sector_count'])
     r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])
@@ -92,7 +98,9 @@ def spline_field(grids, attrs, every=1):
 
 
 def interpolation_error(grids, attrs):
-    """Spline on every second node, at the skipped nodes, against the master (relative, max over the grid)."""
+    """Spline on every second node, at the skipped nodes, against the
+    master (relative, max over the grid).
+    """
     _, coarse = spline_field(grids, attrs, every=2)
     r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])
     th = attrs['theta_step_rad'] * np.arange(grids['bz'].shape[1])
@@ -103,7 +111,9 @@ def interpolation_error(grids, attrs):
 
 
 def lions_map_arrays(grids, attrs, every):
-    """LIONS map nodes: master columns every `every`, full turn with the endpoint, LIONS sign; (r, theta, arrays)."""
+    """LIONS map nodes: master columns every `every`, full turn with the
+    endpoint, LIONS sign; (r, theta, arrays).
+    """
     n_sec, nth = int(attrs['sector_count']), grids['bz'].shape[1]
     if nth % every:
         raise ValueError(
@@ -120,7 +130,9 @@ def lions_map_arrays(grids, attrs, every):
 
 
 def write_lions_map(grids, attrs, every):
-    """bmap.dat (and empty potentials) in the working directory; returns the number of map columns."""
+    """bmap.dat (and empty potentials) in the working directory; returns
+    the number of map columns.
+    """
     r, th, m = lions_map_arrays(grids, attrs, every)
     syn.write_pot_central('pot1.bin')
     syn.write_pot_outer('pot2.dat')
@@ -138,7 +150,9 @@ def write_lions_map(grids, attrs, every):
 
 
 def bilinear_field(grids, attrs, every):
-    """The LIONS field model on the same nodes: bilinear Bz, z x bilinear dBz/dx and dBz/dy (d2Bz = 0)."""
+    """The LIONS field model on the same nodes: bilinear Bz, z x bilinear
+    dBz/dx and dBz/dy (d2Bz = 0).
+    """
     r, th, m = lions_map_arrays(grids, attrs, every)
     dr, dth = r[1] - r[0], th[1] - th[0]
 
@@ -160,7 +174,9 @@ def bilinear_field(grids, attrs, every):
 
 
 def smooth_field(grids, attrs, every, k):
-    """Splines of degree k (periodic in theta) of Bz, dBz/dr, dBz/dtheta on the same nodes; vectorised b(x, y, z)."""
+    """Splines of degree k (periodic in theta) of Bz, dBz/dr, dBz/dtheta on
+    the same nodes; vectorised b(x, y, z).
+    """
     n_sec, nth = int(attrs['sector_count']), grids['bz'].shape[1]
     r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])
     jj = np.arange(-PAD * every, nth + PAD * every, every)
@@ -187,7 +203,9 @@ def smooth_field(grids, attrs, every, k):
 
 
 def lions_species(mass_ev, charge):
-    """(atomic mass, mass number, charge) whose LIONS ion mass AMU (A - m_e q) is mass_ev."""
+    """(atomic mass, mass number, charge) whose LIONS ion mass AMU (A - m_e
+    q) is mass_ev.
+    """
     atomic_mass = (
         mass_ev * lc.E_CHARGE / (lc.AMU * lc.C_LIGHT**2)
         + lc.ELECTRON_MASS_U * charge
@@ -237,7 +255,9 @@ def step2(master_dir, outdir):
                     qr, qz = orbits.linear_tunes(m)
                     tt, pos, mom = lt.track(np.array([s]), 2.2)
                     cross = orbits.crossings(tt, pos[:, 0], mom[:, 0])
-                except Exception as exc:  # a map too coarse for the orbit is a result, recorded as such
+                # a map too coarse for the orbit is a result, recorded
+                # as such
+                except Exception as exc:
                     records.append(
                         {
                             'map': label,
@@ -305,7 +325,9 @@ def step2(master_dir, outdir):
 
 
 def orbit_metrics(track, t, p, q_ref):
-    """Closed orbit, tunes, isochronism of one configuration against the references (as in step 2)."""
+    """Closed orbit, tunes, isochronism of one configuration against the
+    references (as in step 2).
+    """
     r0, pr0 = t['r_theta0_m'], p * t['pr_over_p_theta0']
     s, res = orbits.closed_orbit(track, (r0, pr0))
     if res > RESIDUAL_MAX:
@@ -347,7 +369,8 @@ def step3(master_dir, outdir):
     charge_c = species[2] * lc.E_CHARGE
     records = []
 
-    # 3a: the numpy Boris step on the LIONS field model against LIONS itself, 1 deg map, 360 steps
+    # 3a: the numpy Boris step on the LIONS field model against LIONS
+    # itself, 1 deg map, 360 steps
     t = truth[1]
     p = np.sqrt(t['gamma'] ** 2 - 1)
     start = np.array([[t['r_theta0_m'], p * t['pr_over_p_theta0'], 0.0, 0.0]])

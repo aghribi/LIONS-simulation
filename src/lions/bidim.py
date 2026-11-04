@@ -13,7 +13,9 @@ from .state import TrapCircle
 
 
 class BidimWriter:
-    """Writer for up to 50 bidim files, each buffered in blocks of 4096 int32 events."""
+    """Writer for up to 50 bidim files, each buffered in blocks of 4096
+    int32 events.
+    """
 
     def __init__(self):
         self.n_open = 0
@@ -32,7 +34,9 @@ class BidimWriter:
     def open(
         self, count, first, x_bits, y_bits, titles, x_labels, y_labels, bounds
     ):
-        """Create files <first>.bid ... <first+count-1>.bid and write their headers. Returns 0 or an error code."""
+        """Create files <first>.bid ... <first+count-1>.bid and write their
+        headers. Returns 0 or an error code.
+        """
         self.n_open = 0
         date = [0, 0, 0]
         time = [0, 0, 0]
@@ -113,11 +117,15 @@ class BidimWriter:
         return 0
 
     def add(self, n, ix, iy):
-        """Add one event (ix, iy) to bidim number n. Returns 0 or 1 if n is out of range."""
+        """Add one event (ix, iy) to bidim number n. Returns 0 or 1 if n is
+        out of range.
+        """
         return self.add_many(n, [ix], [iy])
 
     def add_many(self, n, ix, iy):
-        """Add events (ix[i], iy[i]) in order to bidim number n. Returns 0 or 1 if n is out of range."""
+        """Add events (ix[i], iy[i]) in order to bidim number n. Returns 0
+        or 1 if n is out of range.
+        """
         if len(ix) == 0:
             return 0
         if n < self.first or n > self.last:
@@ -130,7 +138,8 @@ class BidimWriter:
         )
         pos = 0
         while pos < len(events):
-            # A full buffer is written only when the next event arrives, as in the Fortran
+            # A full buffer is written only when the next event arrives,
+            # as in the Fortran
             if self.fill[num] == 4097:
                 self._flush(num)
                 self.fill[num] = 1
@@ -142,7 +151,9 @@ class BidimWriter:
         return 0
 
     def close(self):
-        """Flush the buffers, with a 9999/9999 end marker after a partial block, and close the files."""
+        """Flush the buffers, with a 9999/9999 end marker after a partial
+        block, and close the files.
+        """
         for num in range(self.n_open):
             if self.fill[num] == 4097:
                 self._flush(num)
@@ -290,8 +301,9 @@ def setup_bidims(d, bidim, numbid=None):
         d.bidims.ay1[8] = 8191.0 / 2.0 / dz_max
         d.bidims.ay0[8] = d.bidims.ay1[8] * dz_max
 
-    # Marker file: lines and circles (pillars, traps) drawn into bidim 1, in mm.
-    # Circles with flag < -10 are ion traps; flag <= -9000 means trap only, not drawn.
+    # Marker file: lines and circles (pillars, traps) drawn into bidim
+    # 1, in mm. Circles with flag < -10 are ion traps; flag <= -9000
+    # means trap only, not drawn.
     marker_file = prompt('marker file (lines, pillars, etc.), or no:')
     d.traps.circles = []
     if marker_file != 'no':
@@ -375,7 +387,9 @@ def setup_bidims(d, bidim, numbid=None):
 
 
 def _channel(v):
-    """int() of each value, clipped to [-1, 8192] first so that the cast cannot overflow."""
+    """int() of each value, clipped to [-1, 8192] first so that the cast
+    cannot overflow.
+    """
     return np.clip(v, -1.0, 8192.0).astype(np.int64)
 
 

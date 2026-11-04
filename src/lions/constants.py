@@ -1,4 +1,6 @@
-"""Physical constants, with the values of the Fortran reference (CODATA 1986)."""
+"""Physical constants, with the values of the Fortran reference (CODATA
+1986).
+"""
 
 import numpy as np
 

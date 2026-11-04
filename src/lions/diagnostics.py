@@ -1,4 +1,6 @@
-"""Text outputs: z and xy tracks of particle 0, correlations, end-of-run summary."""
+"""Text outputs: z and xy tracks of particle 0, correlations, end-of-run
+summary.
+"""
 
 import struct
 
@@ -8,7 +10,9 @@ from .constants import C_LIGHT, MEV, SQRT8
 
 
 def write_outputs(d):
-    """Write the z, xy and correlation outputs for the current step, and the end-of-run summary."""
+    """Write the z, xy and correlation outputs for the current step, and
+    the end-of-run summary.
+    """
     vec = np.zeros(d.bunch.n_particles)
     vec1 = np.zeros(d.bunch.n_particles)
     vec2 = np.zeros(d.bunch.n_particles)
@@ -167,7 +171,8 @@ def write_outputs(d):
                 f'     {rmm:7.1f}  {tpr:6.1f} {w_mev_per_u:9.5f} {phase_lag_deg:15.2f}\n'
             )
 
-    # Correlations, skipped together with the z/xy rows (Fortran goto 800)
+    # Correlations, skipped together with the z/xy rows (Fortran goto
+    # 800)
     if (
         (d.run.step % d.run.output_every == 0 or d.run.step == 1)
         and d.bunch.correlations != 0
@@ -190,7 +195,8 @@ def write_outputs(d):
                 / d.bunch.charge[i1]
                 / d.bunch.bz[i1]
             )
-            # Same phase-space transform as beam.phase_space_coords (Fortran caldxs)
+            # Same phase-space transform as beam.phase_space_coords
+            # (Fortran caldxs)
             d.bunch.ps_cartesian[0, :nbr] = d.bunch.x[i1:i2] - d.bunch.x[i1]
             d.bunch.ps_cartesian[4, :nbr] = d.bunch.y[i1:i2] - d.bunch.y[i1]
             r_ref = np.sqrt(d.bunch.x[i1] ** 2 + d.bunch.y[i1] ** 2)
@@ -354,7 +360,8 @@ def write_outputs(d):
                     f'  {dzmm:6.2f} {epsz:6.2f}\n'
                 )
 
-    # One step before the end: save the bunch positions and the reverse-tracking start point
+    # One step before the end: save the bunch positions and the
+    # reverse-tracking start point
     if d.run.step == (d.run.n_steps - 1):
         d.outputs.end_x = d.bunch.x[0]
         d.outputs.end_y = d.bunch.y[0]

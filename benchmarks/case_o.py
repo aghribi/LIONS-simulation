@@ -1,7 +1,12 @@
-"""Case O: does radial motion explain the energy spread of the LIONS verdict? docs/training/PHYSICAL.md. Synthetic map: says nothing about a real machine.
+"""Case O: does radial motion explain the energy spread of the LIONS
+verdict? docs/training/PHYSICAL.md. Synthetic map: says nothing about a
+real machine.
 
-usage: uv run --extra game --extra rl --group bench --group dev python benchmarks/case_o.py {record,analyse} [--outroot DIR] [--mapdir DIR] [--tunes FILE] [--reference FILE] [--workers N] [--start-mev W]
-record: the tunes of case V through LIONS, one row per particle and crossing of theta = 0. analyse: fits, predictions and the registered outcome.
+usage: uv run --extra game --extra rl --group bench --group dev python
+benchmarks/case_o.py {record,analyse} [--outroot DIR] [--mapdir DIR]
+[--tunes FILE] [--reference FILE] [--workers N] [--start-mev W] record:
+the tunes of case V through LIONS, one row per particle and crossing of
+theta = 0. analyse: fits, predictions and the registered outcome.
 """
 
 import argparse
@@ -28,8 +33,12 @@ WINDOW, MIN_CROSSINGS = (
 )  # crossings fitted before the last one, and the fewest accepted
 EARLY_SKIP = 5  # crossings left out before the early window
 TUNES_Q = np.linspace(
-    0.005, 0.12, 231
-)  # section frequency of the radial oscillation, turns^-1: Qr - 1 is 0.014 to 0.034 on this map
+    0.005,
+    0.12,
+    231,
+    # section frequency of the radial oscillation, turns^-1: Qr - 1 is 0.014
+    # to 0.034 on this map
+)
 NEAR_CREST_DEG = 30.0
 SUPPORTED, REFUTED = (
     0.8,
@@ -205,7 +214,9 @@ def closed_orbit(mp):
 
 
 def fit(n, x):
-    """x = c + a cos(2 pi q n) + b sin(2 pi q n), q on a grid. Returns q, c, a, b and the rms residual."""
+    """x = c + a cos(2 pi q n) + b sin(2 pi q n), q on a grid. Returns q,
+    c, a, b and the rms residual.
+    """
     best = None
     for q in TUNES_Q:
         basis = np.column_stack(
@@ -338,7 +349,9 @@ def analyse(outdir, mp, reference):
 
 
 def explained(rows, key):
-    """Pooled within-tune variance of the extraction energy removed by a predictor, offset per tune free, slope 1."""
+    """Pooled within-tune variance of the extraction energy removed by a
+    predictor, offset per tune free, slope 1.
+    """
     actual, pred = [], []
     by = {}
     for r in rows:

@@ -1,4 +1,6 @@
-"""Missions: a client request, a machine with knobs, control-room readings. Same reset, step, score as the stages."""
+"""Missions: a client request, a machine with knobs, control-room readings.
+Same reset, step, score as the stages.
+"""
 
 import math
 from dataclasses import dataclass
@@ -78,7 +80,9 @@ def checked(block, units, where):
 
 @dataclass
 class Quantities:
-    """What the spec terms are built from: the true beam, or one pass of readings."""
+    """What the spec terms are built from: the true beam, or one pass of
+    readings.
+    """
 
     current: float  # uA
     w: float  # MeV
@@ -116,7 +120,9 @@ class Mission(Stage):
         self.harmonic = entry['harmonic']
 
     def ideal(self):
-        """Knobs a perfect operator would reach, hidden errors compensated. Knobs left out of a mission stay here."""
+        """Knobs a perfect operator would reach, hidden errors compensated.
+        Knobs left out of a mission stay here.
+        """
         p, m, e = self.p, self.machine, self.errors
         b0, f = mc.nominal(m, self.ion, p['w_target'])
         return {
@@ -161,7 +167,9 @@ class Mission(Stage):
         self.refresh()
 
     def start_value(self, spec):
-        """Where the shift starts: off the best setting, within the knob range."""
+        """Where the shift starts: off the best setting, within the knob
+        range.
+        """
         offset = (
             self.rng.uniform(0.5, 1)
             * self.rng.choice((-1, 1))
@@ -206,18 +214,24 @@ class Mission(Stage):
         return self.beam.spot
 
     def has_beam(self):
-        """A profile monitor reads nothing without beam: no position, no spot."""
+        """A profile monitor reads nothing without beam: no position, no
+        spot.
+        """
         return self.beam.extracted_ua > 0
 
     def reach(self):
-        """Outermost radius on the radial probe, relative to the extraction radius."""
+        """Outermost radius on the radial probe, relative to the extraction
+        radius.
+        """
         seen = np.flatnonzero(self.beam.probe > 0)
         return (
             float((seen[-1] + 1) / len(self.beam.probe)) if len(seen) else 0.0
         )
 
     def terms(self, q):
-        """What the client asks, as normalised errors: each term is in spec at 1 or below."""
+        """What the client asks, as normalised errors: each term is in spec
+        at 1 or below.
+        """
         raise NotImplementedError
 
     def true_quantities(self):
@@ -258,7 +272,9 @@ class Mission(Stage):
         return self.has_beam() and max(self.measured_terms().values()) <= 1
 
     def tune_score(self):
-        """In [0, 1], from what the control room reads. No beam out of the machine scores on the radial probe only."""
+        """In [0, 1], from what the control room reads. No beam out of the
+        machine scores on the radial probe only.
+        """
         if not self.has_beam():
             return 0.3 * self.reach()
         terms = self.measured_terms().values()
@@ -337,7 +353,9 @@ class Mission(Stage):
 
 
 class Degraded(Mission):
-    """A beam slowed in water-equivalent material before the sample: fewer protons, wider spot."""
+    """A beam slowed in water-equivalent material before the sample: fewer
+    protons, wider spot.
+    """
 
     def degrade(self):
         b, t = self.beam, self.knobs['degrader_cm']
@@ -359,7 +377,9 @@ class Degraded(Mission):
 
 
 class Therapy(Degraded):
-    """Water phantom: the Bragg peak on the tumour, the dose as prescribed, nothing behind. Not a clinical model."""
+    """Water phantom: the Bragg peak on the tumour, the dose as prescribed,
+    nothing behind. Not a clinical model.
+    """
 
     GOAL_UNITS = {
         'depth_cm': 'cm',
@@ -413,7 +433,8 @@ class Therapy(Degraded):
             )
         )
         mean = self.peak
-        # Depth dose of a proton: dE/dx = E^(1-p) / (p alpha), folded with the range spread.
+        # Depth dose of a proton: dE/dx = E^(1-p) / (p alpha), folded
+        # with the range spread.
         e = np.maximum(mean - self.depth_axis, 1e-3)
         stopping = e ** (1 / physics.BRAGG_P - 1) / (
             physics.BRAGG_P * physics.BRAGG_ALPHA ** (1 / physics.BRAGG_P)
@@ -489,7 +510,9 @@ class Therapy(Degraded):
 
 
 class Isotope(Mission):
-    """18O(p,n)18F in enriched water: A' = lambda (Y I - A), Y = 8 GBq/uA at 18 MeV (Silva, Niroomand-Rad; see the scenario)."""
+    """18O(p,n)18F in enriched water: A' = lambda (Y I - A), Y = 8 GBq/uA
+    at 18 MeV (Silva, Niroomand-Rad; see the scenario).
+    """
 
     GOAL_UNITS = {
         'activity_gbq': 'GBq',
@@ -553,7 +576,9 @@ class Isotope(Mission):
 
 
 class Experiment(Mission):
-    """A nuclear physics run: energy, spread and current in spec, held for the requested time."""
+    """A nuclear physics run: energy, spread and current in spec, held for
+    the requested time.
+    """
 
     GOAL_UNITS = {
         'w_tolerance': '1',
@@ -592,7 +617,9 @@ class Experiment(Mission):
 
 
 class IsolTarget(Mission):
-    """A production target: as much beam power as it survives, spread over the spot."""
+    """A production target: as much beam power as it survives, spread over
+    the spot.
+    """
 
     GOAL_UNITS = {
         'power_limit_kw': 'kW',
@@ -643,7 +670,10 @@ class IsolTarget(Mission):
 
 
 class Qualification(Degraded):
-    """An irradiation platform: protons on a material sample to qualify it for space: energy, flux, uniform field, then the fluence. Spot is a Gaussian on the sample."""
+    """An irradiation platform: protons on a material sample to qualify it
+    for space: energy, flux, uniform field, then the fluence. Spot is a
+    Gaussian on the sample.
+    """
 
     GOAL_UNITS = {
         'w_sample': 'MeV',

@@ -393,7 +393,9 @@ class LionsMainWindow(QMainWindow):
         self._pending_console.append(text)
 
     def _flush_all(self):
-        """Flush buffered plot data and console text in one pass (timer slot)."""
+        """Flush buffered plot data and console text in one pass (timer
+        slot).
+        """
         if self._pending_data:
             canvas = self.plot_widget.canvas
             for d in self._pending_data:

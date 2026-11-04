@@ -20,7 +20,8 @@ html_title = "LIONS"
 
 
 def _skip_qt_signals(app, what, name, obj, skip, options):
-    # PyQt signal docstrings are bare signatures ("*args") that docutils rejects.
+    # PyQt signal docstrings are bare signatures ("*args") that docutils
+    # rejects.
     from PyQt5.QtCore import pyqtSignal
 
     return True if isinstance(obj, pyqtSignal) else skip

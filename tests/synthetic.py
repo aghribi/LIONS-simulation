@@ -1,4 +1,6 @@
-"""Synthetic LIONS inputs: field maps, potentials and decks written on the fly."""
+"""Synthetic LIONS inputs: field maps, potentials and decks written on the
+fly.
+"""
 
 import contextlib
 import io
@@ -45,7 +47,8 @@ def write_bmap(
     ntet=361,
     theta_max=2 * np.pi,
 ):
-    """Field map over 0..theta_max (360 deg, or 45 deg with ntet = 91 for a 1/8 map).
+    """Field map over 0..theta_max (360 deg, or 45 deg with ntet = 91 for a
+    1/8 map).
 
     Each field is a constant or a function f(r, theta).
     """
@@ -74,7 +77,9 @@ def fortran_record(payload):
 def write_pot_central(
     path, pot=None, d2pot=None, half_width_mm=10.0, nx=5, ny=5
 ):
-    """Central-region potential pot(x, y) and d2pot(x, y), x and y in m. Zero by default."""
+    """Central-region potential pot(x, y) and d2pot(x, y), x and y in m.
+    Zero by default.
+    """
     h = half_width_mm
     x = np.linspace(-h, h, nx)[:, None] / 1000.0
     y = np.linspace(-h, h, ny)[None, :] / 1000.0
@@ -91,7 +96,9 @@ def write_pot_central(
 
 
 def write_bunch(python_path, fortran_path, pos, mom):
-    """Same bunch in the Python (raw doubles) and Fortran (records) formats. pos, mom: (n, 3)."""
+    """Same bunch in the Python (raw doubles) and Fortran (records)
+    formats. pos, mom: (n, 3).
+    """
     pos = np.ascontiguousarray(pos, '<f8')
     mom = np.ascontiguousarray(mom, '<f8')
     with open(python_path, 'wb') as f:
@@ -114,7 +121,9 @@ def write_markers(path, traps):
 def write_pot_outer(
     path, pot=None, xmin=-1.0, xmax=1.0, ymin=-1.0, ymax=1.0, nx=41, ny=201
 ):
-    """Outer-region potential pot(x, y) in the rotated gap frame (m), and d2pot = 0."""
+    """Outer-region potential pot(x, y) in the rotated gap frame (m), and
+    d2pot = 0.
+    """
     x = np.linspace(xmin, xmax, nx)[:, None]
     y = np.linspace(ymin, ymax, ny)[None, :]
     values = np.broadcast_to(pot(x, y) if pot is not None else 0.0, (nx, ny))
@@ -152,7 +161,8 @@ def write_deck(
 
     species: (atomic mass in u, mass number, charge state).
 
-    extraction, correlations: raw deck lines from 'rex tet1ex tet2ex eex' and from 'iflcor'.
+    extraction, correlations: raw deck lines from 'rex tet1ex tet2ex
+    eex' and from 'iflcor'.
     """
     lines = [
         "'synthetic'",
@@ -184,7 +194,9 @@ def quiet_run(deck, **kwargs):
 
 
 def numeric_rows(path):
-    """Rows of a text output that hold only numbers (headers and labels dropped)."""
+    """Rows of a text output that hold only numbers (headers and labels
+    dropped).
+    """
     rows = []
     for line in open(path):
         try:
@@ -195,7 +207,9 @@ def numeric_rows(path):
 
 
 def read_fortran_bunch(path, n=1):
-    """Bunch file written by the Fortran (two unformatted records): x,y,z then px,py,pz."""
+    """Bunch file written by the Fortran (two unformatted records): x,y,z
+    then px,py,pz.
+    """
     raw = open(path, 'rb').read()
     out, pos = [], 0
     for _ in range(2):

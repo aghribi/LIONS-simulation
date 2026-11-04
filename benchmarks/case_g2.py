@@ -1,11 +1,12 @@
 """Case G2: PSI Ring (map S03AV) against FIXPO (DESIGN.md section 21).
 
-usage: uv run --group bench python benchmarks/case_g2.py [--step 1] [--outroot DIR]
-Step 1: conventions of the files. 1a: units of the file theta derivatives; 1b: closed orbits at theta = 0 with the
-numpy Boris tracker, both directions, against ic.dat under both pr readings; 1c: OPAL closed-orbit finder with and
-without trim coil TC1.
-The PSI files (no licence, internal use) stay in benchmarks/external/ (git-ignored); OPAL gets a copy of the map in
-the run directory.
+usage: uv run --group bench python benchmarks/case_g2.py [--step 1]
+[--outroot DIR] Step 1: conventions of the files. 1a: units of the file
+theta derivatives; 1b: closed orbits at theta = 0 with the numpy Boris
+tracker, both directions, against ic.dat under both pr readings; 1c:
+OPAL closed-orbit finder with and without trim coil TC1. The PSI files
+(no licence, internal use) stay in benchmarks/external/ (git-ignored);
+OPAL gets a copy of the map in the run directory.
 """
 
 import argparse
@@ -42,15 +43,18 @@ TC1 = 'tc1: TRIMCOIL, TYPE="PSI-BFIELD-MIRRORED", RMIN=4350.0, RMAX=4470.0, BMAX
 
 
 def read_ring(path):
-    """RING map as OPAL reads it (getFieldFromFile_Ring): r [m], theta step [deg], Bz and three theta derivatives.
+    """RING map as OPAL reads it (getFieldFromFile_Ring): r [m], theta step
+    [deg], Bz and three theta derivatives.
 
-    Arrays (nrad, ntet) in file units (kG, per file azimuth unit); the first data record is skipped as in OPAL.
+    Arrays (nrad, ntet) in file units (kG, per file azimuth unit); the
+    first data record is skipped as in OPAL.
     """
     text, pos = path.read_text(), 0
 
     def scan(width=None):
-        # fscanf: skip whitespace, then %s (up to whitespace) or %16lE (the longest float within 16 characters).
-        # The numbers are fixed width, so a negative value touches its neighbour.
+        # fscanf: skip whitespace, then %s (up to whitespace) or %16lE
+        # (the longest float within 16 characters). The numbers are
+        # fixed width, so a negative value touches its neighbour.
         nonlocal pos
         while text[pos].isspace():
             pos += 1
@@ -107,9 +111,11 @@ def periodic_d5(f, h):
 
 
 def ring_field(r, dt_deg, bz_kg, direction):
-    """Median-plane field b(x, y, z) in T for protons travelling counterclockwise (LIONS frame, Bz < 0).
+    """Median-plane field b(x, y, z) in T for protons travelling
+    counterclockwise (LIONS frame, Bz < 0).
 
-    direction +1: the map azimuth increases along the motion; -1: it decreases. Quintic spline, periodic per sector.
+    direction +1: the map azimuth increases along the motion; -1: it
+    decreases. Quintic spline, periodic per sector.
     """
     ntet = bz_kg.shape[1]
     jj = np.arange(-PAD, ntet + PAD)
@@ -132,12 +138,15 @@ def ic_rows():
 
 
 def opal_closed_orbit(work, energy_mev, r_mm, pr_ic, trim):
-    """OPAL 2024.1 closed-orbit finder (tune mode) at one energy: (r [m], pr [beta gamma], Qr, Qz)."""
+    """OPAL 2024.1 closed-orbit finder (tune mode) at one energy: (r [m],
+    pr [beta gamma], Qr, Qz).
+    """
     work.mkdir(parents=True, exist_ok=True)
     (work / 'data').mkdir(exist_ok=True)
     shutil.copy(PSI / 'bfield.dat', work / 'bfield.dat')
     gev = energy_mev / 1000
-    # FMLOWE, FMHIGHE, DENERGY in GeV in OPAL 2024.1; the element cannot be named RING (protected keyword).
+    # FMLOWE, FMHIGHE, DENERGY in GeV in OPAL 2024.1; the element cannot
+    # be named RING (protected keyword).
     (work / 'tune.in').write_text(f'''OPTION, ECHO=FALSE;
 OPTION, VERSION=20240;
 OPTION, CLOTUNEONLY=TRUE;
@@ -311,7 +320,9 @@ def step1(outdir):
 
 
 def g1_grids(r, dt_deg, bz, dbt):
-    """The map in the case_g1 grids/attrs form (T, T/m, T/rad; sign of the file), dBz/dr by OPAL's 5-point scheme."""
+    """The map in the case_g1 grids/attrs form (T, T/m, T/rad; sign of the
+    file), dBz/dr by OPAL's 5-point scheme.
+    """
     n = len(r)
     h = r[1] - r[0]
     dbr = np.empty_like(bz)
@@ -340,7 +351,9 @@ def fold(q):
 
 
 def setup():
-    """Map in the G1 form, LIONS species and its mass, the quintic spline field, FIXPO rows (E, r, pr, Qr, Qz)."""
+    """Map in the G1 form, LIONS species and its mass, the quintic spline
+    field, FIXPO rows (E, r, pr, Qr, Qz).
+    """
     r, dt_deg, (bz, dbt, _, _) = read_ring(PSI / 'bfield.dat')
     grids, attrs = g1_grids(r, dt_deg, bz, dbt)
     species = case_g1.lions_species(MP_MEV * 1e6, 1)
@@ -444,9 +457,11 @@ def step2(outdir):
 
 
 def block_determinants(outdir, name, case, make_trackers):
-    """det - 1 of the r block, z block and M, and the tunes, at 152, 292, 452 MeV for each tracker.
+    """det - 1 of the r block, z block and M, and the tunes, at 152, 292,
+    452 MeV for each tracker.
 
-    make_trackers(energy, p, grids, attrs, species, mass_kg, spline, work) -> {code: (track, jacobian steps)}.
+    make_trackers(energy, p, grids, attrs, species, mass_kg, spline,
+    work) -> {code: (track, jacobian steps)}.
     """
     grids, attrs, species, mass_kg, spline, fixpo = setup()
     work = outdir / 'lions_map'
@@ -504,7 +519,9 @@ def block_determinants(outdir, name, case, make_trackers):
 
 
 def step2b(outdir):
-    """LIONS (three Jacobian steps), numpy Boris on the LIONS bilinear field, spline tracker."""
+    """LIONS (three Jacobian steps), numpy Boris on the LIONS bilinear
+    field, spline tracker.
+    """
 
     def trackers(energy, p, grids, attrs, species, mass_kg, spline, work):
         f_rev, q = F_RF / HARMONIC, case_g1.lc.E_CHARGE
@@ -559,7 +576,9 @@ def step2c(outdir):
 
 
 def step3(outdir):
-    """OPAL closed-orbit finder (RING reader, no trim coil) and RF-Track on the spline, every 20 MeV and 530 MeV."""
+    """OPAL closed-orbit finder (RING reader, no trim coil) and RF-Track on
+    the spline, every 20 MeV and 530 MeV.
+    """
     _, attrs, _, mass_kg, spline, fixpo = setup()
     r_max = attrs['ri_m'] + attrs['rstep_m'] * (attrs['nrad'] - 1)
     records = []

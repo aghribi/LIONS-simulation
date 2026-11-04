@@ -4,7 +4,9 @@ import numpy as np
 
 
 def boris_push(bunch, run, traps):
-    """Advance momenta and positions by one Boris step. With traps.follow == 0 only live particles move."""
+    """Advance momenta and positions by one Boris step. With traps.follow
+    == 0 only live particles move.
+    """
     if traps.follow == 0:
         m = bunch.alive
         vec_m = bunch.boris_b_coef[m] / bunch.gamma[m]

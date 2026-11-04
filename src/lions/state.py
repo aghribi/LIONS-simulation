@@ -1,7 +1,8 @@
 """Simulation state of LIONS, grouped in components.
 
-Names and their Fortran counterparts: docs/glossary.md. Memory holds SI units,
-angles in rad, momenta as beta gamma, unless the name says otherwise.
+Names and their Fortran counterparts: docs/glossary.md. Memory holds SI
+units, angles in rad, momenta as beta gamma, unless the name says
+otherwise.
 """
 
 from dataclasses import dataclass, field
@@ -9,12 +10,14 @@ from typing import Optional
 
 import numpy as np
 
-# Field and potential arrays keep the Fortran sizes: the interpolation reads
-# neighbours up to i + 2 and j + 1, and the zero padding is part of the results.
+# Field and potential arrays keep the Fortran sizes: the interpolation
+# reads neighbours up to i + 2 and j + 1, and the zero padding is part
+# of the results.
 CENTRAL_NX, CENTRAL_NY = 500, 300
 OUTER_NX, OUTER_NY = 50, 1000
-# MAP_NTHETA is above the Fortran 721 so that 1/3 deg full maps (1081 columns, PSI Ring) fit; smaller maps
-# read the same values, the extra columns are padding.
+# MAP_NTHETA is above the Fortran 721 so that 1/3 deg full maps (1081
+# columns, PSI Ring) fit; smaller maps read the same values, the extra
+# columns are padding.
 MAP_NR, MAP_NTHETA = 250, 1081
 MAX_BIDIMS = 10
 MAX_BARY = 10800
@@ -102,8 +105,11 @@ class FieldMap:
     b_factor: Optional[float] = (
         None  # T: max|Bz| imposed on the map; None = map used as read
     )
-    interpolation: str = 'bilinear'  # 'hermite': bicubic Hermite Bz from the arrays below (fields.prepare_hermite)
-    azimuth: str = 'arccos'  # 'atan2': particle azimuth for the field lookup from atan2(y, x)
+    # 'hermite': bicubic Hermite Bz from the arrays below
+    # (fields.prepare_hermite)
+    interpolation: str = 'bilinear'
+    # 'atan2': particle azimuth for the field lookup from atan2(y, x)
+    azimuth: str = 'arccos'
     dbzdr: Optional[np.ndarray] = None  # T/m
     dbzdtheta: Optional[np.ndarray] = None  # T/rad
     d2bzdrdtheta: Optional[np.ndarray] = None  # T/(m rad)
@@ -111,7 +117,9 @@ class FieldMap:
 
 @dataclass
 class Region:
-    """Potential on a Cartesian grid (m): central region, or outer region in the gap frame."""
+    """Potential on a Cartesian grid (m): central region, or outer region
+    in the gap frame.
+    """
 
     nx: int
     ny: int
@@ -194,7 +202,9 @@ MASKS = (
 
 
 class Bunch:
-    """Per-particle arrays (SI, p = beta gamma), masks, families and sigma matrices."""
+    """Per-particle arrays (SI, p = beta gamma), masks, families and sigma
+    matrices.
+    """
 
     def __init__(self, n_particles=0):
         self.n_particles = n_particles

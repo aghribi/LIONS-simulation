@@ -1,8 +1,10 @@
-"""Run index of a site results store: one row per run directory <case>/<run>/, written to <store>/run_index.parquet.
+"""Run index of a site results store: one row per run directory
+<case>/<run>/, written to <store>/run_index.parquet.
 
-usage: python benchmarks/build_run_index.py STORE [--site SITE] [--dry-run]
-A run is complete when it holds a case_*.parquet; its code and input provenance come from that table's schema
-metadata (benchmarks/provenance.py). Runs without one are listed as incomplete.
+usage: python benchmarks/build_run_index.py STORE [--site SITE]
+[--dry-run] A run is complete when it holds a case_*.parquet; its code
+and input provenance come from that table's schema metadata
+(benchmarks/provenance.py). Runs without one are listed as incomplete.
 """
 
 import argparse

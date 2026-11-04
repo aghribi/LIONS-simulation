@@ -1,4 +1,6 @@
-"""The job image installs environment/requirements.gpu.txt: it must be the uv export of uv.lock."""
+"""The job image installs environment/requirements.gpu.txt: it must be the
+uv export of uv.lock.
+"""
 
 import shutil
 import subprocess

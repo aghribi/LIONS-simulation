@@ -1,10 +1,18 @@
-"""Case P: synthetic machine for LIONS, F18 (docs/training/PHYSICAL.md) or NEON (docs/training/PHYSICAL_NEON.md). Synthetic: says nothing about a real machine.
+"""Case P: synthetic machine for LIONS, F18 (docs/training/PHYSICAL.md) or
+NEON (docs/training/PHYSICAL_NEON.md). Synthetic: says nothing about a
+real machine.
 
-usage: [CASE_P_MISSION=NEON] uv run --extra game --extra rl --group bench --group dev python benchmarks/case_p.py {design,dees,slip,offaxis,published} [--outroot DIR]
-Energies are per nucleon unless named total; gains per turn are total, as T0's. CASE_P_MISSION is read at import, since the machine sets the module constants.
-design: isochronous map from closed orbits, tunes (analytic field, Boris; LIONS Hermite at a few energies).
-dees: gain per turn against T0 energy_gain. slip: RF phase slip from injection to extraction at the design setting.
-offaxis: from the verdict start energy, centred and off the median plane. published: the design against CIME's published ranges (NEON).
+usage: [CASE_P_MISSION=NEON] uv run --extra game --extra rl --group
+bench --group dev python benchmarks/case_p.py
+{design,dees,slip,offaxis,published} [--outroot DIR] Energies are per
+nucleon unless named total; gains per turn are total, as T0's.
+CASE_P_MISSION is read at import, since the machine sets the module
+constants. design: isochronous map from closed orbits, tunes (analytic
+field, Boris; LIONS Hermite at a few energies). dees: gain per turn
+against T0 energy_gain. slip: RF phase slip from injection to extraction
+at the design setting. offaxis: from the verdict start energy, centred
+and off the median plane. published: the design against CIME's published
+ranges (NEON).
 """
 
 import argparse
@@ -36,7 +44,9 @@ from provenance import provenance  # noqa: E402
 
 STEPS = 360  # per turn, as in the timings of PHYSICAL.md
 OPTIONS = {'interpolation': 'hermite', 'azimuth': 'atan2'}
-GAP_DEG = 1.5  # tanh half width of a dee gap, seen from the centre: invented, as the whole central region
+# tanh half width of a dee gap, seen from the centre: invented, as the
+# whole central region
+GAP_DEG = 1.5
 GAP_MIN = 5e-4  # m, smallest gap half width, resolved by the potential grid
 WORKERS = 2
 MISSION = os.environ.get('CASE_P_MISSION', 'F18')
@@ -55,7 +65,9 @@ F0 = mc.nominal(MACHINE, ION, W_EXT * A)[
 ]  # Hz, revolution frequency at the design setting of T0
 EPS = np.sqrt(
     2 * MACHINE.flutter
-)  # F = <(B - <B>)^2> / <B>^2 = eps^2 / 2 for B = <B> (1 + eps cos N theta), lecture eq. for F
+    # F = <(B - <B>)^2> / <B>^2 = eps^2 / 2 for B = <B> (1 + eps cos N
+    # theta), lecture eq. for F
+)
 SPECIES = (
     syn.HYDROGEN if MISSION == 'F18' else A,
     A,
@@ -77,7 +89,9 @@ def momentum(w):
 
 
 class Field:
-    """B = -Bc gamma_iso(r) (1 + g(r)) (1 + eps cos N theta), LIONS sign. g: corrections at r_nodes, from closed orbits."""
+    """B = -Bc gamma_iso(r) (1 + g(r)) (1 + eps cos N theta), LIONS sign.
+    g: corrections at r_nodes, from closed orbits.
+    """
 
     def __init__(self, r_nodes=None, g=None):
         self.n, self.r_nodes = MACHINE.sectors, r_nodes
@@ -107,7 +121,9 @@ class Field:
         )
 
     def nodes(self, r, t):
-        """On the median plane: Bz, its Laplacian in (x, y), dBz/dx, dBz/dy."""
+        """On the median plane: Bz, its Laplacian in (x, y), dBz/dx,
+        dBz/dy.
+        """
         b, b1, b2 = self.mean(r)
         c, s = np.cos(self.n * t), np.sin(self.n * t)
         bz, dr, dt = (
@@ -134,7 +150,9 @@ class Field:
 
 
 def closed_orbit(field, w, guess):
-    """State, frequency [Hz], mean radius [m] of the closed orbit at kinetic energy w, Boris at the deck step."""
+    """State, frequency [Hz], mean radius [m] of the closed orbit at
+    kinetic energy w, Boris at the deck step.
+    """
     p = momentum(w)
     track = orbits.BorisTracker(field, MASS_KG, CHARGE, p, F0, STEPS).track
     s, _ = orbits.closed_orbit(track, (guess, 0.0))
@@ -168,7 +186,8 @@ def isochronise(energies, iterations=8, tol=2e-6):
         print(f'iteration {it}: max |f / F0 - 1| = {worst:.2e}', flush=True)
         if worst < tol:
             break
-        # A local relative field change delta moves the orbit by -delta / gamma^2 (k = gamma^2 - 1): f changes by delta / gamma^2.
+        # A local relative field change delta moves the orbit by -delta
+        # / gamma^2 (k = gamma^2 - 1): f changes by delta / gamma^2.
         delta = gamma(energies) ** 2 * (F0 / f - 1)
         old = field.spline(rbar) if field.spline is not None else 0.0
         field = Field(rbar, (1 + old) * (1 + delta) - 1)
@@ -222,7 +241,9 @@ def rows_of(energies, field, rows):
 
 
 def lions_check(job):
-    """Closed orbit, frequency and tunes with LIONS Hermite on the written map, no E field."""
+    """Closed orbit, frequency and tunes with LIONS Hermite on the written
+    map, no E field.
+    """
     workdir, w, guess = job
     track = orbits.LionsTracker(
         workdir, w, F0, STEPS, species=SPECIES, options=OPTIONS
@@ -251,7 +272,10 @@ def lions_check(job):
 
 
 def dee_potential(x, y):
-    """1 on the wedge around the x axis (y < 0 in the gap frame), 0 outside. The gap width follows the radius, so transit stays the same."""
+    """1 on the wedge around the x axis (y < 0 in the gap frame), 0
+    outside. The gap width follows the radius, so transit stays the
+    same.
+    """
     return 0.5 * (
         1 - np.tanh(y / np.maximum(x * np.tan(np.radians(GAP_DEG)), GAP_MIN))
     )
@@ -290,7 +314,10 @@ def write_machine(outdir, field):
 def accelerate(
     workdir, w0, r0, pr0_mrad, phi0_deg, turns, one_turn=False, z0=0.0
 ):
-    """Design setting, one ion from (r0, theta = 0): crossings of theta = 0 as (t [s], energy [MeV/u], r [m], z [m]), or the total gain [MeV] over one nominal turn."""
+    """Design setting, one ion from (r0, theta = 0): crossings of theta = 0
+    as (t [s], energy [MeV/u], r [m], z [m]), or the total gain [MeV]
+    over one nominal turn.
+    """
     with contextlib.chdir(workdir):
         syn.write_deck(
             'deck.dat',
@@ -581,7 +608,9 @@ def slip(
 
 
 def start_energy(gains, rec):
-    """The closed-orbit energy of the lowest gain row from which every gain ratio is within 5%."""
+    """The closed-orbit energy of the lowest gain row from which every gain
+    ratio is within 5%.
+    """
     keep = [g['w_mev'] for g in sorted(gains, key=lambda g: g['w_mev'])]
     for g in sorted(gains, key=lambda g: -g['w_mev']):
         if abs(g['ratio'] - 1) >= 0.05:
@@ -591,7 +620,9 @@ def start_energy(gains, rec):
 
 
 def published(outdir):
-    """Registered checks against CIME's published ranges, PHYSICAL_NEON.md. Qr close to 1 is read from its fractional part."""
+    """Registered checks against CIME's published ranges, PHYSICAL_NEON.md.
+    Qr close to 1 is read from its fractional part.
+    """
     rows = [
         r
         for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist()
@@ -612,7 +643,9 @@ def published(outdir):
 
 
 def offaxis(outdir):
-    """Gate of PHYSICAL.md: from the start energy at the crest, z0 = 0, T0's z_injection and twice it (T0 spreads z0 by 30% rms)."""
+    """Gate of PHYSICAL.md: from the start energy at the crest, z0 = 0,
+    T0's z_injection and twice it (T0 spreads z0 by 30% rms).
+    """
     rec = {
         r['w_mev']: r['r_co_m']
         for r in pq.read_table(outdir / 'case_p_orbits.parquet').to_pylist()

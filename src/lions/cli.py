@@ -38,10 +38,12 @@ def set_vertical_sorter(
     nuz_z_cut=0.0,
     dv=0.0,
 ):
-    """Vertical sorter: region (m, deg), drive voltage (V), gap (m), phase (deg).
+    """Vertical sorter: region (m, deg), drive voltage (V), gap (m), phase
+    (deg).
 
-    gap = 0: no vertical sorting. Prompt order of the Fortran: rmin rmax theta1 theta2,
-    then voltage gap phase nuz nuz_z_cut dv (pot_ver h_ver phi_ver anuz coupnuz dpotspot).
+    gap = 0: no vertical sorting. Prompt order of the Fortran: rmin rmax
+    theta1 theta2, then voltage gap phase nuz nuz_z_cut dv (pot_ver
+    h_ver phi_ver anuz coupnuz dpotspot).
     """
     d.sorter.rmin = rmin
     d.sorter.rmax = rmax
@@ -70,9 +72,11 @@ def read_vertical_sorter(d):
 
 
 def track(d, bidim=None, on_step=None):
-    """Tracking loop: initial step, then n_steps steps. Closes the output files.
+    """Tracking loop: initial step, then n_steps steps. Closes the output
+    files.
 
-    on_step(d) is called after each step; tracking stops if it returns False.
+    on_step(d) is called after each step; tracking stops if it returns
+    False.
     """
     d.run.step = 0
     check_box(d.bunch, d.field, d.box)
@@ -105,9 +109,11 @@ def track(d, bidim=None, on_step=None):
 def run(deck, swap=False, vertical=None, on_step=None):
     """Run without prompts or bidims. Returns the final State.
 
-    - deck: Deck, or path of an input deck; its file paths are relative to the current directory.
+    - deck: Deck, or path of an input deck; its file paths are relative
+      to the current directory.
     - swap: swap the bytes of the central potential (big-endian files).
-    - vertical: keyword arguments of set_vertical_sorter, None = no vertical sorting.
+    - vertical: keyword arguments of set_vertical_sorter, None = no
+      vertical sorting.
     - on_step: see track().
     """
     d = State()

@@ -1,4 +1,6 @@
-"""Tier T0 of the trainer: closed forms for a proton in a cyclotron (Lecture chapter 1). Tested against LIONS."""
+"""Tier T0 of the trainer: closed forms for a proton in a cyclotron
+(Lecture chapter 1). Tested against LIONS.
+"""
 
 import math
 
@@ -30,7 +32,9 @@ def revolution_frequency(w_mev, b_tesla):
 
 
 def rotation(b_tesla):
-    """+1 counter-clockwise seen from +z, -1 clockwise: a positive ion turns clockwise when Bz > 0."""
+    """+1 counter-clockwise seen from +z, -1 clockwise: a positive ion
+    turns clockwise when Bz > 0.
+    """
     return -1 if b_tesla > 0 else 1
 
 
@@ -40,14 +44,18 @@ def isochronous_index(w_mev):
 
 
 def qz_squared(k, n_sectors, flutter, spiral_rad):
-    """Smooth approximation: Qz^2 = -k + N^2 / (N^2 - 1) F (1 + 2 tan^2 xi)."""
+    """Smooth approximation: Qz^2 = -k + N^2 / (N^2 - 1) F (1 + 2 tan^2
+    xi).
+    """
     return -k + n_sectors**2 / (n_sectors**2 - 1) * flutter * (
         1 + 2 * math.tan(spiral_rad) ** 2
     )
 
 
 def qr_squared(k, n_sectors, flutter, spiral_rad):
-    """Smooth approximation: Qr^2 = 1 + k + 3 N^2 / ((N^2 - 1)(N^2 - 4)) F (1 + tan^2 xi)."""
+    """Smooth approximation: Qr^2 = 1 + k + 3 N^2 / ((N^2 - 1)(N^2 - 4)) F
+    (1 + tan^2 xi).
+    """
     n2 = n_sectors**2
     return (
         1
@@ -60,13 +68,16 @@ def qr_squared(k, n_sectors, flutter, spiral_rad):
     )
 
 
-# Beam on matter. Water, protons: Bortfeld, Med. Phys. 24, 2024 (1997). Highland form of multiple scattering.
+# Beam on matter. Water, protons: Bortfeld, Med. Phys. 24, 2024 (1997).
+# Highland form of multiple scattering.
 BRAGG_ALPHA, BRAGG_P = 0.0022, 1.77  # R [cm] = alpha E [MeV]^p
 STRAGGLING_A, STRAGGLING_B = 0.012, 0.935  # sigma [cm] = a R [cm]^b
 WATER_X0_CM = (
     36.08  # radiation length [UNVERIFIED: the usual value, from memory]
 )
-GY_PER_FLUENCE = 1.602e-10  # Gy per (MeV cm2/g) per (proton/cm2), from 1 MeV = 1.602e-13 J and 1 g = 1e-3 kg
+# Gy per (MeV cm2/g) per (proton/cm2), from 1 MeV = 1.602e-13 J and 1 g
+# = 1e-3 kg
+GY_PER_FLUENCE = 1.602e-10
 
 
 def proton_range(w_mev):
@@ -83,7 +94,9 @@ def straggling(range_cm):
 
 
 def scattering_angle(w_mev, thickness_cm):
-    """Highland: rms projected angle [rad] of a proton through water, with the energy at the entrance."""
+    """Highland: rms projected angle [rad] of a proton through water, with
+    the energy at the entrance.
+    """
     if thickness_cm <= 0:
         return 0.0
     g = gamma(w_mev)

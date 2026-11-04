@@ -1,8 +1,10 @@
-"""One-turn maps at the theta = 0 section, closed orbits and tunes, for LIONS, OPAL-cycl and RF-Track.
+"""One-turn maps at the theta = 0 section, closed orbits and tunes, for
+LIONS, OPAL-cycl and RF-Track.
 
-Section state: (r, pr, z, pz) at y = 0, x > 0, momenta in beta gamma; the total momentum p is fixed.
-Each code returns full-step trajectories (t, pos, mom); the section crossing is interpolated in time
-with a 4-point Lagrange polynomial.
+Section state: (r, pr, z, pz) at y = 0, x > 0, momenta in beta gamma;
+the total momentum p is fixed. Each code returns full-step trajectories
+(t, pos, mom); the section crossing is interpolated in time with a
+4-point Lagrange polynomial.
 """
 
 import concurrent.futures
@@ -29,7 +31,9 @@ OPAL_IMAGE = 'lions-bench/opal:2024.1.0'
 
 
 def lagrange4(t, f, t0):
-    """Value at t0 of the cubic through 4 samples (t, f), f of shape (4, ...)."""
+    """Value at t0 of the cubic through 4 samples (t, f), f of shape (4,
+    ...).
+    """
     out = 0.0
     for i in range(4):
         w = np.prod([(t0 - t[j]) / (t[i] - t[j]) for j in range(4) if j != i])
@@ -38,7 +42,9 @@ def lagrange4(t, f, t0):
 
 
 def crossings(t, pos, mom):
-    """Section states (r, pr, z, pz) and times at each upward crossing of y = 0 with x > 0."""
+    """Section states (r, pr, z, pz) and times at each upward crossing of y
+    = 0 with x > 0.
+    """
     y = pos[:, 1]
     idx = np.nonzero((y[:-1] < 0) & (y[1:] >= 0) & (pos[:-1, 0] > 0))[0]
     out = []
@@ -66,7 +72,9 @@ def crossings(t, pos, mom):
 
 
 def initial_vectors(states, p):
-    """Section states (n, 4) to positions and momenta (n, 3) at y = 0, moving towards +y."""
+    """Section states (n, 4) to positions and momenta (n, 3) at y = 0,
+    moving towards +y.
+    """
     s = np.atleast_2d(states)
     r, pr, z, pz = s.T
     pt = np.sqrt(p**2 - pr**2 - pz**2)
@@ -77,18 +85,23 @@ def initial_vectors(states, p):
 
 
 def deck_tail(options):
-    """Deck tail lines carrying LIONS options after an explicit 'no no' (ficloa ficsto)."""
+    """Deck tail lines carrying LIONS options after an explicit 'no no'
+    (ficloa ficsto).
+    """
     return (
         ('no no', *(f'{k}={v}' for k, v in options.items())) if options else ()
     )
 
 
 class LionsTracker:
-    """LIONS in a working directory holding bmap.dat, pot1.bin, pot2.dat. Many particles per run.
+    """LIONS in a working directory holding bmap.dat, pot1.bin, pot2.dat.
+    Many particles per run.
 
-    w_mev: kinetic energy per nucleon; fhf_hz: RF frequency at harmonic 1 (one turn = steps_per_turn steps);
-    species: (atomic mass in u, mass number, charge state), protons by default.
-    options: LIONS deck options, e.g. {'interpolation': 'hermite', 'azimuth': 'atan2'}; none = the Fortran model.
+    w_mev: kinetic energy per nucleon; fhf_hz: RF frequency at harmonic
+    1 (one turn = steps_per_turn steps); species: (atomic mass in u,
+    mass number, charge state), protons by default. options: LIONS deck
+    options, e.g. {'interpolation': 'hermite', 'azimuth': 'atan2'}; none
+    = the Fortran model.
     """
 
     def __init__(
@@ -110,7 +123,9 @@ class LionsTracker:
         self.tail = deck_tail(options)
 
     def track(self, states, turns):
-        """Full-step trajectories (t, pos, mom) of shape (steps, n, 3), momenta at full steps."""
+        """Full-step trajectories (t, pos, mom) of shape (steps, n, 3),
+        momenta at full steps.
+        """
         states = np.atleast_2d(states)
         n_part = len(states)
         with contextlib.chdir(self.workdir):
@@ -133,7 +148,8 @@ class LionsTracker:
             b = d.bunch
             pos, mom = initial_vectors(states, b.p[0])
             b.x[:], b.y[:], b.z[:] = pos.T
-            # LIONS treats the deck momentum as p(-1/2): step it back half a step from p(0).
+            # LIONS treats the deck momentum as p(-1/2): step it back
+            # half a step from p(0).
             b.px[:], b.py[:], b.pz[:] = mom.T
             b.gamma[:] = np.sqrt(1 + (mom**2).sum(axis=1))
             lions.cli.check_box(
@@ -144,8 +160,9 @@ class LionsTracker:
             rows = []
 
             def record(state):
-                # p(k) = half Boris kick of p(k - 1/2) with the field at x(k): the inverse of the
-                # start, so the recorded map is conjugate to the Boris step map.
+                # p(k) = half Boris kick of p(k - 1/2) with the field at
+                # x(k): the inverse of the start, so the recorded map is
+                # conjugate to the Boris step map.
                 bb = state.bunch
                 kept = (
                     bb.px.copy(),
@@ -176,7 +193,9 @@ class LionsTracker:
 
 
 def half_kick(d, fraction):
-    """Boris momentum update over fraction x dt with the current fields; positions unchanged."""
+    """Boris momentum update over fraction x dt with the current fields;
+    positions unchanged.
+    """
     b = d.bunch
     saved = b.x.copy(), b.y.copy(), b.z.copy()
     coefs = b.boris_b_coef.copy(), b.boris_e_coef.copy()
@@ -188,7 +207,9 @@ def half_kick(d, fraction):
 
 
 class OpalTracker:
-    """OPAL-cycl single-particle runs in Docker, CARBONCYCL map written from a LIONS FieldMap."""
+    """OPAL-cycl single-particle runs in Docker, CARBONCYCL map written
+    from a LIONS FieldMap.
+    """
 
     def __init__(
         self,
@@ -276,9 +297,11 @@ STOP;
 
 
 class _UserField(rft.UserField):
-    """RF-Track field from b(x, y, z) -> (Bx, By, Bz) in T, LIONS frame and metres.
+    """RF-Track field from b(x, y, z) -> (Bx, By, Bz) in T, LIONS frame and
+    metres.
 
-    RF-Track calls get_field in the element frame, z from 0 at the entrance; the element is centred on Z = 0.
+    RF-Track calls get_field in the element frame, z from 0 at the
+    entrance; the element is centred on Z = 0.
     """
 
     def __init__(self, length, b):
@@ -293,10 +316,11 @@ class _UserField(rft.UserField):
 
 
 class RFTrackTracker:
-    """RF-Track `Volume` around a static magnetic field b(x, y, z), one particle per run.
+    """RF-Track `Volume` around a static magnetic field b(x, y, z), one
+    particle per run.
 
-    The volume spans |y| < half_size (RF-Track Z); positions are sampled samples_per_turn times per
-    nominal period.
+    The volume spans |y| < half_size (RF-Track Z); positions are sampled
+    samples_per_turn times per nominal period.
     """
 
     def __init__(
@@ -346,10 +370,13 @@ class RFTrackTracker:
 
 
 class BorisTracker:
-    """The LIONS Boris step (magnetic field only) in numpy, with a pluggable field(x, y, z) -> (Bx, By, Bz) in T.
+    """The LIONS Boris step (magnetic field only) in numpy, with a
+    pluggable field(x, y, z) -> (Bx, By, Bz) in T.
 
-    Same conventions as LionsTracker: momenta in beta gamma at half steps, started by a backward half kick at x0,
-    recorded at full steps after a forward half kick, so one-turn maps are comparable with LIONS step for step.
+    Same conventions as LionsTracker: momenta in beta gamma at half
+    steps, started by a backward half kick at x0, recorded at full steps
+    after a forward half kick, so one-turn maps are comparable with
+    LIONS step for step.
     """
 
     def __init__(self, field, mass_kg, charge_c, p, f_rev_hz, steps_per_turn):
@@ -359,7 +386,9 @@ class BorisTracker:
         self.c_dt = syn.C * self.dt
 
     def kick(self, pos, mom, fraction):
-        """Boris rotation of mom over fraction x dt with the field at pos (LIONS boris_push with E = 0)."""
+        """Boris rotation of mom over fraction x dt with the field at pos
+        (LIONS boris_push with E = 0).
+        """
         bx, by, bz = self.field(*pos.T)
         gamma = np.sqrt(1 + (mom**2).sum(axis=1))
         vec = fraction * self.bcoef / gamma
@@ -409,7 +438,8 @@ class BorisTracker:
 
 
 class RK4Tracker:
-    """Classical RK4, fixed step, on dx/dt = c p / gamma and dp/dt = (q / m) (p / gamma) x B, p in beta gamma.
+    """Classical RK4, fixed step, on dx/dt = c p / gamma and dp/dt = (q /
+    m) (p / gamma) x B, p in beta gamma.
 
     Same field call, time step and full-step recording as BorisTracker.
     """
@@ -446,7 +476,9 @@ class RK4Tracker:
 
 
 def stack_runs(out):
-    """Single-particle runs [(t, pos, mom)] to (t, pos, mom) of shape (steps, n, 3), cut to the shortest."""
+    """Single-particle runs [(t, pos, mom)] to (t, pos, mom) of shape
+    (steps, n, 3), cut to the shortest.
+    """
     steps = min(len(o[0]) for o in out)
     return (
         out[0][0][:steps],
@@ -456,12 +488,16 @@ def stack_runs(out):
 
 
 def section_series(t, pos, mom):
-    """Turn-by-turn section states for each particle: list of arrays (turns, 5)."""
+    """Turn-by-turn section states for each particle: list of arrays
+    (turns, 5).
+    """
     return [crossings(t, pos[:, i], mom[:, i]) for i in range(pos.shape[1])]
 
 
 def one_turn(track, states):
-    """Map section states (n, 4) through one turn. track(states, turns) -> (t, pos, mom)."""
+    """Map section states (n, 4) through one turn. track(states, turns) ->
+    (t, pos, mom).
+    """
     t, pos, mom = track(states, 1.2)
     series = section_series(t, pos, mom)
     lost = [i for i, s in enumerate(series) if len(s) == 0]
@@ -473,7 +509,9 @@ def one_turn(track, states):
 
 
 def closed_orbit(track, guess, iters=8, h=1e-7):
-    """Newton on (r, pr) at z = pz = 0, finite-difference Jacobian. Returns state and residual."""
+    """Newton on (r, pr) at z = pz = 0, finite-difference Jacobian. Returns
+    state and residual.
+    """
     s = np.array([guess[0], guess[1], 0.0, 0.0])
     for _ in range(iters):
         probes = (
@@ -494,7 +532,9 @@ def closed_orbit(track, guess, iters=8, h=1e-7):
 
 
 def tune(signal):
-    """Fractional tune of a turn-by-turn signal: Hann-windowed DFT peak, refined by golden section."""
+    """Fractional tune of a turn-by-turn signal: Hann-windowed DFT peak,
+    refined by golden section.
+    """
     x = np.asarray(signal) - np.mean(signal)
     n = len(x)
     w = 0.5 * (1 - np.cos(2 * np.pi * np.arange(n) / n))
@@ -521,7 +561,9 @@ S4 = np.kron(np.eye(2), np.array([[0.0, 1.0], [-1.0, 0.0]]))
 
 
 def jacobian(track, s, h_r, h_p):
-    """4x4 one-turn Jacobian at the section state s, central differences (steps h_r in m, h_p in p)."""
+    """4x4 one-turn Jacobian at the section state s, central differences
+    (steps h_r in m, h_p in p).
+    """
     h = np.array([h_r, h_p, h_r, h_p])
     steps = np.diag(h)
     out = one_turn(track, np.vstack([s + steps, s - steps]))
@@ -529,7 +571,9 @@ def jacobian(track, s, h_r, h_p):
 
 
 def linear_tunes(m):
-    """Fractional tunes from the r and z diagonal blocks: cos(2 pi Q) = trace / 2."""
+    """Fractional tunes from the r and z diagonal blocks: cos(2 pi Q) =
+    trace / 2.
+    """
     return tuple(
         np.arccos(np.clip(np.trace(m[i : i + 2, i : i + 2]) / 2, -1, 1))
         / (2 * np.pi)

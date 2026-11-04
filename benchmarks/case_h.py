@@ -1,8 +1,11 @@
-"""Case H: field-model and integrator options for LIONS (DESIGN.md section 23), phase 1 in the harness.
+"""Case H: field-model and integrator options for LIONS (DESIGN.md section
+23), phase 1 in the harness.
 
-usage: uv run --group bench python benchmarks/case_h.py {validate,matrix,cost} [--outroot DIR]
-validate: F1 node reproduction and C1 continuity; RK4 order. matrix: closed orbits, tunes, det(M) for every map,
-field model, integrator and step count. cost: wall time per particle-step and memory of each option.
+usage: uv run --group bench python benchmarks/case_h.py
+{validate,matrix,cost} [--outroot DIR] validate: F1 node reproduction
+and C1 continuity; RK4 order. matrix: closed orbits, tunes, det(M) for
+every map, field model, integrator and step count. cost: wall time per
+particle-step and memory of each option.
 """
 
 import argparse
@@ -54,7 +57,9 @@ COST_PARTICLES = (1000, 100000)
 
 
 def g1_map(name):
-    """grids, attrs, cases [(label, t, p, q_ref)], mass_kg, charge_c for a G1 master."""
+    """grids, attrs, cases [(label, t, p, q_ref)], mass_kg, charge_c for a
+    G1 master.
+    """
     master, step1 = G1_MAPS[name]
     grids, attrs = case_g1.load_master(master / 'master.h5')
     ref = pq.read_table(step1 / 'case_g1_step1.parquet').to_pylist()
@@ -79,7 +84,9 @@ def g1_map(name):
 
 
 def psi_map():
-    """As g1_map for the PSI Ring; references from RF-Track on the quintic spline (G2 step 3)."""
+    """As g1_map for the PSI Ring; references from RF-Track on the quintic
+    spline (G2 step 3).
+    """
     grids, attrs, _, mass_kg, _, fixpo = case_g2.setup()
     rft = {
         (round(r['energy_mev'], 3), r['metric']): r['value']
@@ -135,7 +142,8 @@ def write(records, outdir, name, case, *inputs):
 
 def validate(outdir):
     records = []
-    # F1 on the PSI map (steepest gradients): node reproduction and C1 continuity across cell edges
+    # F1 on the PSI map (steepest gradients): node reproduction and C1
+    # continuity across cell edges
     grids, attrs, *_ = psi_map()
     r, th, bz, dbr, dbt = fieldmodels.node_arrays(grids, attrs, 1)
     surface = fieldmodels.hermite_surface(r, th, bz, dbr, dbt)
@@ -177,7 +185,8 @@ def validate(outdir):
                     'value': float(jump),
                 }
             )
-    # RK4 order on the 3-sector quintic field, outer orbit (reference exact to 1e-13)
+    # RK4 order on the 3-sector quintic field, outer orbit (reference
+    # exact to 1e-13)
     grids, attrs, cases, mass_kg, charge_c = g1_map('3-sector')
     field = case_g1.smooth_field(grids, attrs, 1, 5)
     label, t, p, q_ref = cases[2]
@@ -271,7 +280,9 @@ def matrix(outdir):
 
 
 def cost(outdir):
-    """Wall time per particle-step on the PSI map at 1/3 deg (300 MeV protons spread over the map), and LIONS."""
+    """Wall time per particle-step on the PSI map at 1/3 deg (300 MeV
+    protons spread over the map), and LIONS.
+    """
     grids, attrs, cases, mass_kg, charge_c = psi_map()
     p = cases[11][2]
     rng = np.random.default_rng(1)
@@ -296,7 +307,8 @@ def cost(outdir):
                 )
 
                 def step():
-                    # one step of each scheme: Boris, one field call and rotation; RK4, four rates
+                    # one step of each scheme: Boris, one field call and
+                    # rotation; RK4, four rates
                     if integrator == 'boris':
                         tr.kick(pos + tr.c_dt * mom, mom, 1.0)
                     else:
@@ -356,11 +368,14 @@ PHASE2 = {
 
 
 def lions_option(outdir):
-    """Phase 2: LIONS with interpolation=hermite against the harness F1 with Boris; cost against LIONS default."""
+    """Phase 2: LIONS with interpolation=hermite against the harness F1
+    with Boris; cost against LIONS default.
+    """
     records = []
     for name, (check_every, check_case) in PHASE2.items():
         grids, attrs, cases, mass_kg, charge_c = load_map(name)
-        # the particle every other case used: CODATA protons on the PSI map, the FROM_ORBIT species on G1
+        # the particle every other case used: CODATA protons on the PSI
+        # map, the FROM_ORBIT species on G1
         species = (
             case_g1.lions_species(case_g2.MP_MEV * 1e6, 1)
             if name == 'psi'
@@ -507,7 +522,9 @@ AZIMUTH_CASES = {
 
 
 def azimuth(outdir):
-    """Phase 2b: LIONS bilinear with azimuth arccos and atan2 against the numpy bilinear tracker (atan2)."""
+    """Phase 2b: LIONS bilinear with azimuth arccos and atan2 against the
+    numpy bilinear tracker (atan2).
+    """
     records = []
     for name, (every, k, n) in AZIMUTH_CASES.items():
         grids, attrs, cases, mass_kg, charge_c = load_map(name)
@@ -628,7 +645,9 @@ def azimuth(outdir):
 
 
 def lions_cost(grids, attrs, pos, mom, outdir, steps=20, options=None):
-    """LIONS itself: plain tracking loop over `steps` steps, per particle-step."""
+    """LIONS itself: plain tracking loop over `steps` steps, per
+    particle-step.
+    """
     work = outdir / 'lions_cost'
     work.mkdir(parents=True, exist_ok=True)
     tail = orbits.deck_tail(options)
@@ -659,7 +678,9 @@ def lions_cost(grids, attrs, pos, mom, outdir, steps=20, options=None):
 
 
 def memory(grids, attrs):
-    """Bytes held by each field model at 1/3 deg: node arrays (F0, F1), spline knots and coefficients (F2, F3)."""
+    """Bytes held by each field model at 1/3 deg: node arrays (F0, F1),
+    spline knots and coefficients (F2, F3).
+    """
     _, _, bz, _, _ = fieldmodels.node_arrays(grids, attrs, 1)
     out = {'F0_bilinear': 3 * bz.nbytes, 'F1_hermite': 4 * bz.nbytes}
     r = attrs['ri_m'] + attrs['rstep_m'] * np.arange(attrs['nrad'])

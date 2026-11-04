@@ -1,7 +1,9 @@
-"""Input deck: the LIONS/Fortran text format as a dataclass, one reader and one writer.
+"""Input deck: the LIONS/Fortran text format as a dataclass, one reader and
+one writer.
 
-Values are kept in the units of the file (m, deg, mrad, MeV/u, mm for grids, V, Hz).
-Fortran names of each field: docs/guide/02_inputs.md and docs/glossary.md.
+Values are kept in the units of the file (m, deg, mrad, MeV/u, mm for
+grids, V, Hz). Fortran names of each field: docs/guide/02_inputs.md and
+docs/glossary.md.
 """
 
 from dataclasses import dataclass, field
@@ -9,10 +11,11 @@ from typing import Optional
 
 from .fortran_text import FortranFile, fortran_float
 
-# Python-only deck options, written key=value at the end of the deck: key -> (Deck field, values, the first
-# being the Fortran behaviour and the default).
-# interpolation: magnetic map model, bilinear (Fortran) or bicubic Hermite (C1).
-# azimuth: particle azimuth for the field lookup, arccos(x / r) (Fortran) or atan2(y, x).
+# Python-only deck options, written key=value at the end of the deck:
+# key -> (Deck field, values, the first being the Fortran behaviour and
+# the default). interpolation: magnetic map model, bilinear (Fortran) or
+# bicubic Hermite (C1). azimuth: particle azimuth for the field lookup,
+# arccos(x / r) (Fortran) or atan2(y, x).
 OPTIONS = {
     'interpolation': ('field_interpolation', ('bilinear', 'hermite')),
     'azimuth': ('field_azimuth', ('arccos', 'atan2')),
@@ -222,9 +225,10 @@ def read_deck(path):
             f.read_tokens(3)
         )
 
-        # Optional tail: [b_factor] [ficloa ficsto] [key=value ...]. The Fortran reads only
-        # ficloa ficsto; b_factor is taken only when the first token is numeric. key=value
-        # options are Python only and come last, so the Fortran never reads them.
+        # Optional tail: [b_factor] [ficloa ficsto] [key=value ...]. The
+        # Fortran reads only ficloa ficsto; b_factor is taken only when
+        # the first token is numeric. key=value options are Python only
+        # and come last, so the Fortran never reads them.
         tail, options = [], {}
         while True:
             tok = f.read_tokens(1)
@@ -307,12 +311,15 @@ def _line(*values):
 
 
 def _quoted(name):
-    # Quoted so that Fortran list-directed input keeps '/' and spaces in paths
+    # Quoted so that Fortran list-directed input keeps '/' and spaces in
+    # paths
     return f"'{name}'"
 
 
 def write_deck(deck, path):
-    """Write a deck that both read_deck and the Fortran reference read back unchanged."""
+    """Write a deck that both read_deck and the Fortran reference read back
+    unchanged.
+    """
     angle = (
         -deck.dee_half_angle_deg
         if deck.gap_offset is not None
@@ -423,7 +430,8 @@ def write_deck(deck, path):
         for k, (name, values) in OPTIONS.items()
         if getattr(deck, name) != values[0]
     }
-    # Options need ficloa ficsto written before them, so that the Fortran never reads an option as a file name
+    # Options need ficloa ficsto written before them, so that the
+    # Fortran never reads an option as a file name
     if (deck.bunch_load_file, deck.bunch_save_file) != ('no', 'no') or options:
         lines.append(
             ' '.join(

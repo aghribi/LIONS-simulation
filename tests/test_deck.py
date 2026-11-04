@@ -1,4 +1,6 @@
-"""Deck reader and writer: round trips, every optional section, run from a Deck object."""
+"""Deck reader and writer: round trips, every optional section, run from a
+Deck object.
+"""
 
 from pathlib import Path
 
@@ -142,7 +144,9 @@ def test_options_round_trip(tmp_path):
 
 
 def test_interpolation_option_follows_the_bunch_files(tmp_path):
-    """The Fortran reads ficloa ficsto after the file names: the option must come after them."""
+    """The Fortran reads ficloa ficsto after the file names: the option
+    must come after them.
+    """
     deck = read_deck(EXAMPLES[0])
     deck.field_interpolation = 'hermite'
     write_deck(deck, tmp_path / 'deck.dat')

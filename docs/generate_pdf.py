@@ -1,4 +1,5 @@
-"""PDF of the LIONS guide: docs/guide/*.md in filename order, rendered with fpdf2.
+"""PDF of the LIONS guide: docs/guide/*.md in filename order, rendered with
+fpdf2.
 
 Usage: uv run --with fpdf2 python generate_pdf.py
 Output: docs/_build/pdf/LIONS.pdf

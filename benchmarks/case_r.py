@@ -1,8 +1,14 @@
-"""Case R: reduced model against LIONS and T0 on a mission's tunes, docs/training/PHYSICAL.md (F18) and PHYSICAL_NEON.md (NEON). Synthetic map: says nothing about a real machine.
+"""Case R: reduced model against LIONS and T0 on a mission's tunes,
+docs/training/PHYSICAL.md (F18) and PHYSICAL_NEON.md (NEON). Synthetic
+map: says nothing about a real machine.
 
-usage: [CASE_P_MISSION=NEON] uv run --extra game --extra rl --group bench --group dev python benchmarks/case_r.py {tables,check,compare} [--mapdir DIR] [--verdict DIR] [--outroot DIR] [--workers N]
-tables: LIONS Hermite closed orbits at the energies of case P, no RF, into the scenario table. check: the rules of the model, each against its reference.
-compare: reduced model and T0 against LIONS on the tunes of the verdict, with pass times. Energies in the table are total, MeV.
+usage: [CASE_P_MISSION=NEON] uv run --extra game --extra rl --group
+bench --group dev python benchmarks/case_r.py {tables,check,compare}
+[--mapdir DIR] [--verdict DIR] [--outroot DIR] [--workers N] tables:
+LIONS Hermite closed orbits at the energies of case P, no RF, into the
+scenario table. check: the rules of the model, each against its
+reference. compare: reduced model and T0 against LIONS on the tunes of
+the verdict, with pass times. Energies in the table are total, MeV.
 """
 
 import argparse
@@ -137,7 +143,8 @@ class Scaled:
 def check(mapdir):
     t = R.Tables(TABLE)
     data = pq.read_table(TABLE).to_pydict()
-    # Interpolation of the path length: drop every other energy, predict it.
+    # Interpolation of the path length: drop every other energy, predict
+    # it.
     lnp, lnl = np.log(data['p']), np.log(data['path_m'])
     from scipy.interpolate import CubicSpline
 
@@ -148,7 +155,8 @@ def check(mapdir):
         '; scaled grid against the table, max',
         float(np.max(np.abs(t.path(lnp) / np.array(data['path_m']) - 1))),
     )
-    # f_rev(p, s) = v(p) / L(p / s) against Boris closed orbits in a scaled field.
+    # f_rev(p, s) = v(p) / L(p / s) against Boris closed orbits in a
+    # scaled field.
     field = P.load_field(mapdir)
     for s in (0.997, 1.002):
         for w in (P.W_EXT / 18, P.W_EXT / 1.8):
@@ -204,8 +212,8 @@ def check(mapdir):
             flush=True,
         )
     P.DEE_KV = keep
-    # Betatron action against the off-axis tracks of case P.
-    # The tracks start at the start energy of the gate, not of this table.
+    # Betatron action against the off-axis tracks of case P. The tracks
+    # start at the start energy of the gate, not of this table.
     orbit_rows = {
         r['w_mev']: r['r_co_m']
         for r in pq.read_table(mapdir / 'case_p_orbits.parquet').to_pylist()
@@ -275,7 +283,8 @@ def compare(verdict, outdir):
             np.array([x['lions_probe'] for x in c]) * V.N * V.N
         )  # the tables hold counts / N^2
         phase_lions = np.array([x['lions_phase_deg'] for x in c])
-        # Beam.energies holds what the slit keeps, and the LIONS columns are before it: all three are read with the slit open.
+        # Beam.energies holds what the slit keeps, and the LIONS columns
+        # are before it: all three are read with the slit open.
         unslit = {**m.knobs, 'slit': 0.0}
         began = time.perf_counter()
         b = model.run(m.machine, m.ion, unslit, m.errors, m.draws)
@@ -353,7 +362,9 @@ def compare(verdict, outdir):
 
 
 def particle_rows(model, m, lions, row):
-    """Fate of each macroparticle: the reduced model run with the same start, particle by particle through its own record."""
+    """Fate of each macroparticle: the reduced model run with the same
+    start, particle by particle through its own record.
+    """
     fate, w_end, turns = model.fates(
         m.machine, m.ion, m.knobs, m.errors, m.draws
     )
@@ -375,7 +386,10 @@ def particle_rows(model, m, lions, row):
 
 
 def lines_report(rows, title):
-    """Median absolute error per line. A tune where LIONS extracts nothing has no energy or spread and is left out, counted. A model that extracts nothing where LIONS does counts as infinite error."""
+    """Median absolute error per line. A tune where LIONS extracts nothing
+    has no energy or spread and is left out, counted. A model that
+    extracts nothing where LIONS does counts as infinite error.
+    """
     a = lambda k: np.array([r[k] for r in rows], dtype=float)  # noqa: E731
     beam = a('lions_extracted') > 0
     measured = {

@@ -1,4 +1,6 @@
-"""Live pyqtgraph plots for LIONS, with persistent zoom/pan and a crosshair cursor, plus the Plotly 3D view."""
+"""Live pyqtgraph plots for LIONS, with persistent zoom/pan and a crosshair
+cursor, plus the Plotly 3D view.
+"""
 
 import importlib
 
@@ -128,7 +130,9 @@ class CrosshairOverlay:
 
 
 class PlotCanvas(QWidget):
-    """pyqtgraph canvas: six plots, each with the reference particle and a scatter of all particles."""
+    """pyqtgraph canvas: six plots, each with the reference particle and a
+    scatter of all particles.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -139,11 +143,13 @@ class PlotCanvas(QWidget):
         self.graphics_widget.setBackground(BG_COLOR)
         layout.addWidget(self.graphics_widget)
 
-        # Radius limits (mm) for XY, R-theta and R-dphi; 0 means no limit.
+        # Radius limits (mm) for XY, R-theta and R-dphi; 0 means no
+        # limit.
         self.rmax_display = 0.0
         self.rmax_rtheta = 0.0
         self.rmax_rdph = 0.0
-        # dphi window for R-dphi and dphi vs turn; (0, 0) means no filter.
+        # dphi window for R-dphi and dphi vs turn; (0, 0) means no
+        # filter.
         self.dphi_min = 0.0
         self.dphi_max = 0.0
 
@@ -187,7 +193,8 @@ class PlotCanvas(QWidget):
         self._deflector_items = []
 
         self._fam_data = {}  # {k: {'x':[], 'y':[], 'turn':[], ...}}
-        self._fam_curves = {}  # {k: {'xy':..., 'energy':..., 'rtheta':..., 'zpz':...}}
+        # {k: {'xy':..., 'energy':..., 'rtheta':..., 'zpz':...}}
+        self._fam_curves = {}
 
         self.crosshairs = []
         for plot in [
@@ -226,7 +233,8 @@ class PlotCanvas(QWidget):
         if k in self._fam_data:
             return
 
-        # Legends must exist before the curves, or pyqtgraph does not register them.
+        # Legends must exist before the curves, or pyqtgraph does not
+        # register them.
         if nbrfam > 1 and not self._legends_added:
             self._legends_added = True
             for plot in [
@@ -626,7 +634,8 @@ class PlotCanvas(QWidget):
         """Draw the deflectors on the XY plot.
 
         defl_list: list of dicts with keys
-            rdf_m, xdfi_m, ydfi_m, xdfo_m, ydfo_m, tetdfi_deg, tetdfo_deg
+            rdf_m, xdfi_m, ydfi_m, xdfo_m, ydfo_m, tetdfi_deg,
+            tetdfo_deg
         """
         for item in self._deflector_items:
             self.plot_xy.removeItem(item)
@@ -1177,7 +1186,9 @@ class Plot3DWindow(QDialog):
         self.setWindowTitle(f"LIONS - 3D View  [Exported: {path}]")
 
     def _filter_by_radius(self, x, y, *arrays):
-        """Keep the points with Rmin <= r <= Rmax; return x, y and the arrays, filtered."""
+        """Keep the points with Rmin <= r <= Rmax; return x, y and the
+        arrays, filtered.
+        """
         rmin = self.rmin_3d_spin.value()
         rmax = self.rmax_3d_spin.value()
         if rmin <= 0 and rmax <= 0:
@@ -1367,7 +1378,8 @@ class Plot3DWindow(QDialog):
         if not self._available:
             return
         fig = self._build_figure()
-        # Through a file: setHtml is limited to 2 MB, smaller than inlined plotly.js.
+        # Through a file: setHtml is limited to 2 MB, smaller than
+        # inlined plotly.js.
         tmp_dir = tempfile.gettempdir()
         tmp_path = os.path.join(tmp_dir, '_lions_3d_view.html')
         fig.write_html(

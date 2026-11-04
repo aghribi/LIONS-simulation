@@ -1,12 +1,14 @@
-"""Mission tuning, third amendment of docs/training/RL_RUNS.md: score and stop on the readings, box from the tunes of the coach and PPO, BoTorch baselines, stay-in-spec.
+"""Mission tuning, third amendment of docs/training/RL_RUNS.md: score and
+stop on the readings, box from the tunes of the coach and PPO, BoTorch
+baselines, stay-in-spec.
 
-usage: uv run --extra game --extra rl --extra bo --group bench python benchmarks/case_t3.py STEP ...
-tunes MISSION --policies DIR: coach and PPO with the old stop rule, one Parquet per mission.
-box: containment and the widened box, from the tunes.
-classical MISSION METHOD BOX: 20 conditions, one Parquet. BOX is original or widened.
-rl MISSION SEED: 100k steps, then 20 conditions.
-timing: one pass per mission.
-collect: every part into one table per step.
+usage: uv run --extra game --extra rl --extra bo --group bench python
+benchmarks/case_t3.py STEP ... tunes MISSION --policies DIR: coach and
+PPO with the old stop rule, one Parquet per mission. box: containment
+and the widened box, from the tunes. classical MISSION METHOD BOX: 20
+conditions, one Parquet. BOX is original or widened. rl MISSION SEED:
+100k steps, then 20 conditions. timing: one pass per mission. collect:
+every part into one table per step.
 """
 
 import argparse
@@ -70,7 +72,9 @@ def floats(terms):
 
 
 def row(mission, method, box, training_seed, condition, m, run, elapsed):
-    """The run has stopped: the first measured read in spec, or the budget. Then the knobs stay and the machine drifts."""
+    """The run has stopped: the first measured read in spec, or the budget.
+    Then the knobs stay and the machine drifts.
+    """
     in_spec = run.reached is not None
     true_at_stop = bool(m.ready())
     knobs_at_stop, field_at_stop = json.dumps(m.knobs), float(m.errors.field)
@@ -144,7 +148,9 @@ def tune_old_rule(mission, method, seed, **options):
 
 
 def tunes(mission, policies, outdir):
-    """In-spec tunes of the coach and of every policy, by the old stop rule, as offsets from their own start."""
+    """In-spec tunes of the coach and of every policy, by the old stop
+    rule, as offsets from their own start.
+    """
     rows = []
     jobs = [
         ('coach', -1, t.coach, {}),
@@ -195,7 +201,9 @@ def _original_box(mission, condition):
 
 
 def box(outdir):
-    """The rule of the amendment, applied per mission and knob on the in-spec tunes."""
+    """The rule of the amendment, applied per mission and knob on the
+    in-spec tunes.
+    """
     records = pq.read_table(outdir / 'tunes').to_pylist()
     out = []
     for mission in MISSIONS:

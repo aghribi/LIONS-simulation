@@ -1,4 +1,6 @@
-"""Initial 6D distribution and phase-space coordinates relative to particle 0."""
+"""Initial 6D distribution and phase-space coordinates relative to particle
+0.
+"""
 
 import numpy as np
 
@@ -20,7 +22,9 @@ def cholesky_upper(m, a):
 
 
 def sample_unit_ball(m, n_part):
-    """n_part points uniform in the unit m-ball, point 0 at the origin, whitened to unit second moments. Fixed seed 42."""
+    """n_part points uniform in the unit m-ball, point 0 at the origin,
+    whitened to unit second moments. Fixed seed 42.
+    """
     np.random.seed(42)
     ps = np.zeros((m, n_part), dtype=np.float64)
 
@@ -56,7 +60,9 @@ def sample_unit_ball(m, n_part):
 
 
 def phase_space_coords(bunch):
-    """Phase-space coordinates of each family relative to its first particle, and sigma matrices."""
+    """Phase-space coordinates of each family relative to its first
+    particle, and sigma matrices.
+    """
     vec = np.zeros(bunch.n_particles)
     vec1 = np.zeros(bunch.n_particles)
     vec2 = np.zeros(bunch.n_particles)
@@ -154,7 +160,9 @@ def phase_space_coords(bunch):
 
 
 def project_on_radial_line(bunch, rf, run):
-    """Project each particle on the radial line through particle 0 of its family. Returns the curvature radii of the last family."""
+    """Project each particle on the radial line through particle 0 of its
+    family. Returns the curvature radii of the last family.
+    """
     vec = np.zeros(bunch.n_particles)
     vec1 = np.zeros(bunch.n_particles)
     vec2 = np.zeros(bunch.n_particles)
@@ -236,7 +244,9 @@ def project_on_radial_line(bunch, rf, run):
 
 
 def projected_phase_space(bunch, rf, run):
-    """Phase-space coordinates on the radial line through particle 0, for the correlations."""
+    """Phase-space coordinates on the radial line through particle 0, for
+    the correlations.
+    """
     nbr = bunch.families[0].size
     vec = project_on_radial_line(bunch, rf, run)
     bunch.ps_projected[0, :nbr] = bunch.proj_offset[:nbr]
@@ -250,7 +260,9 @@ def projected_phase_space(bunch, rf, run):
 
 
 def distribute_bunch(d, sigma_matrices):
-    """Bunch from the sigma matrices (after the field map is read), then optional bunch load."""
+    """Bunch from the sigma matrices (after the field map is read), then
+    optional bunch load.
+    """
     dxtmp = np.zeros((6, d.bunch.n_particles))
     rot = np.zeros((6, 6))
     vec = np.zeros(d.bunch.n_particles)

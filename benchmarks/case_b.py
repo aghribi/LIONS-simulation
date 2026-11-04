@@ -1,7 +1,8 @@
-"""Case B0 (smooth radial gradient, exact references) and case B (4-sector field on the bilinear map).
+"""Case B0 (smooth radial gradient, exact references) and case B (4-sector
+field on the bilinear map).
 
-usage: uv run --group bench python benchmarks/case_b.py [outdir]
-Writes case_b.parquet. OPAL runs in Docker; outdir must be visible to Docker.
+usage: uv run --group bench python benchmarks/case_b.py [outdir] Writes
+case_b.parquet. OPAL runs in Docker; outdir must be visible to Docker.
 """
 
 import contextlib
@@ -55,7 +56,9 @@ def lions_state(w, n, nbrion=1):
 
 
 def check_parity(points=200, z_max=5e-3, seed=0):
-    """RF-Track closed form against LIONS compute_bfield (DESIGN.md section 12). Raises on failure."""
+    """RF-Track closed form against LIONS compute_bfield (DESIGN.md section
+    12). Raises on failure.
+    """
     rng = np.random.default_rng(seed)
     d = lions_state(1.0, STEPS[0], nbrion=points)
     b, f = d.bunch, d.field
@@ -88,7 +91,9 @@ def check_parity(points=200, z_max=5e-3, seed=0):
 
 
 def exact_b0(p, mass_kg, charge):
-    """Closed orbit radius and fractional linear tunes of case B0 (DESIGN.md section 12)."""
+    """Closed orbit radius and fractional linear tunes of case B0
+    (DESIGN.md section 12).
+    """
     rigidity = p * mass_kg * syn.C / charge
     a = 1 + K * R0
     r = (a - np.sqrt(a**2 - 4 * K * rigidity / abs(B0))) / (2 * K)
@@ -104,7 +109,9 @@ def exact_b0(p, mass_kg, charge):
 
 
 def orbit_metrics(track, guess, p, rho, iters=8):
-    """Closed orbit, then tunes and symplectic error from the one-turn Jacobian at it."""
+    """Closed orbit, then tunes and symplectic error from the one-turn
+    Jacobian at it.
+    """
     s, res = orbits.closed_orbit(track, guess, iters=iters)
     m = orbits.jacobian(track, s, H, H * p / rho)
     qr, qz = orbits.linear_tunes(m)
@@ -121,7 +128,9 @@ def orbit_metrics(track, guess, p, rho, iters=8):
 
 
 def fft_tunes(track, s):
-    """Tunes of the turn-by-turn r and z signals of two particles offset from the closed orbit s."""
+    """Tunes of the turn-by-turn r and z signals of two particles offset
+    from the closed orbit s.
+    """
     states = np.array([s + [FFT_OFFSET, 0, 0, 0], s + [0, 0, FFT_OFFSET, 0]])
     series = orbits.section_series(*track(states, 1.2 * FFT_TURNS))
     if min(len(x) for x in series) < FFT_TURNS:

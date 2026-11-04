@@ -1,8 +1,11 @@
-"""Local files of the trainer: high scores, anonymous run logs (SPEC section 8, decision D6).
+"""Local files of the trainer: high scores, anonymous run logs (SPEC
+section 8, decision D6).
 
-A run log holds observations, actions and the score record, with a random id per game. It never holds the initials of the
-high-score table. Nothing is written without the consent of the current player, asked at each new game and never stored:
-the next player on a shared machine is asked again.
+A run log holds observations, actions and the score record, with a
+random id per game. It never holds the initials of the high-score table.
+Nothing is written without the consent of the current player, asked at
+each new game and never stored: the next player on a shared machine is
+asked again.
 """
 
 import json
@@ -89,7 +92,9 @@ class Store:
         self._write('scores.json', table[:TABLE_SIZE])
 
     def log_run(self, stage, rows):
-        """One Parquet file per stage run. rows: one dict per step. Does nothing without consent."""
+        """One Parquet file per stage run. rows: one dict per step. Does
+        nothing without consent.
+        """
         if not self.consent or not rows:
             return None
         import pyarrow as pa

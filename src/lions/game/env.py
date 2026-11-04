@@ -1,7 +1,10 @@
-"""Gymnasium environment on the missions: tune a machine from control-room readings until the client's spec is met.
+"""Gymnasium environment on the missions: tune a machine from control-room
+readings until the client's spec is met.
 
-Observation: knob positions and readings, never the hidden errors. Action: bounded increments of every knob, at most one step each,
-as an operator turns them. Reward: progress of Mission.tune_score, a cost per action, a bonus when in spec.
+Observation: knob positions and readings, never the hidden errors.
+Action: bounded increments of every knob, at most one step each, as an
+operator turns them. Reward: progress of Mission.tune_score, a cost per
+action, a bonus when in spec.
 """
 
 import math
@@ -26,7 +29,9 @@ class MissionEnv(gym.Env):
     metadata = {'render_modes': []}
 
     def __init__(self, mission_id, seeds=None):
-        """seeds: the conditions drawn from at reset. Training and evaluation use separate sets."""
+        """seeds: the conditions drawn from at reset. Training and
+        evaluation use separate sets.
+        """
         self.m = mission_by_id(mission_id)
         self.seeds = seeds
         self.steps = 0

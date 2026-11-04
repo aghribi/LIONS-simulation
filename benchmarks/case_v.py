@@ -1,12 +1,24 @@
-"""Case V: LIONS judges the tunes of a mission, docs/training/PHYSICAL.md (F18) and PHYSICAL_NEON.md (NEON). Synthetic map: says nothing about a real machine.
+"""Case V: LIONS judges the tunes of a mission, docs/training/PHYSICAL.md
+(F18) and PHYSICAL_NEON.md (NEON). Synthetic map: says nothing about a
+real machine.
 
-usage: CASE_P_MISSION=NEON uv run --extra game --extra rl --extra bo --group bench --group dev python benchmarks/case_v.py {tunes,check,verdict,limit} [--outroot DIR] [--mapdir DIR] [--reference DIR] [--workers N] [--start-mev W] [--extraction {mean,energy}]
-tunes: the tunes of case T3 that read in spec, regenerated and compared with its table. The F18 tunes of case T need the code at a39faa0: the score has changed since. check: time one pass, sign of the phase conversion, field scaling.
-verdict: every tune through LIONS, one pass per tune; finished tunes are kept in parts/ and skipped on a rerun.
-limit: every tune to 4 times T0's turn limit, read at 1, 2 and 4 times it, with particles still circulating reported apart.
---start-mev: start at the closed-orbit energy nearest above W, for the verdict without the central region; case_v_tunes.parquet is then copied into --outroot.
---phase-rms-deg: Gaussian start phases of this rms around the tune's phase, in place of T0's buncher law. Deterministic quantiles.
---extraction: mean, the orbit of mean radius R, as F18. energy: the orbit at T0's energy for R, where beta c / omega = R.
+usage: CASE_P_MISSION=NEON uv run --extra game --extra rl --extra bo
+--group bench --group dev python benchmarks/case_v.py
+{tunes,check,verdict,limit} [--outroot DIR] [--mapdir DIR] [--reference
+DIR] [--workers N] [--start-mev W] [--extraction {mean,energy}] tunes:
+the tunes of case T3 that read in spec, regenerated and compared with
+its table. The F18 tunes of case T need the code at a39faa0: the score
+has changed since. check: time one pass, sign of the phase conversion,
+field scaling. verdict: every tune through LIONS, one pass per tune;
+finished tunes are kept in parts/ and skipped on a rerun. limit: every
+tune to 4 times T0's turn limit, read at 1, 2 and 4 times it, with
+particles still circulating reported apart. --start-mev: start at the
+closed-orbit energy nearest above W, for the verdict without the central
+region; case_v_tunes.parquet is then copied into --outroot.
+--phase-rms-deg: Gaussian start phases of this rms around the tune's
+phase, in place of T0's buncher law. Deterministic quantiles.
+--extraction: mean, the orbit of mean radius R, as F18. energy: the
+orbit at T0's energy for R, where beta c / omega = R.
 """
 
 import argparse
@@ -55,7 +67,9 @@ REST_MEV = P.MASS_KG * syn.C**2 / syn.MEV
 DEFLECTOR_DEG, DEFLECTOR_R = (
     250.0,
     1.513,
-)  # entry of the Mo deck: another ion on another map, a labelled reading, decides nothing
+    # entry of the Mo deck: another ion on another map, a labelled reading,
+    # decides nothing
+)
 EXTRACTED, Z_APERTURE, OUT_OF_MAP, TURN_LIMIT = (
     'extracted',
     'z_aperture',
@@ -80,7 +94,9 @@ def wrap(phi):
 
 
 def lions_phi0(phi, crest_deg):
-    """T0 phase [rad, 0 at the crest] to the RF phase omega t [deg] of a LIONS particle crossing theta = 0. Later is larger in both."""
+    """T0 phase [rad, 0 at the crest] to the RF phase omega t [deg] of a
+    LIONS particle crossing theta = 0. Later is larger in both.
+    """
     return crest_deg + np.degrees(phi)
 
 
@@ -90,7 +106,9 @@ def t0_phase(omega_t, crest_deg):
 
 
 class Map:
-    """What the verdict takes from case P: start orbit, crest, extraction radius."""
+    """What the verdict takes from case P: start orbit, crest, extraction
+    radius.
+    """
 
     def __init__(self, mapdir, start_mev=None, extraction='mean'):
         self.dir, self.extraction = Path(mapdir).resolve(), extraction
@@ -162,7 +180,9 @@ def load(deck_args):
 
 
 def reference_orbit(workdir, mp):
-    """Closed orbit at the start energy, no RF: x, y, z, px, py, pz at each step over one turn, in LIONS' staggered convention."""
+    """Closed orbit at the start energy, no RF: x, y, z, px, py, pz at each
+    step over one turn, in LIONS' staggered convention.
+    """
     rows = []
 
     def record(d):
@@ -188,9 +208,13 @@ def reference_orbit(workdir, mp):
 
 
 class Pass:
-    """One pass of 120 macroparticles through LIONS. The RF is one clock for the whole bunch, so a particle's RF phase is its arrival time at theta = 0.
+    """One pass of 120 macroparticles through LIONS. The RF is one clock
+    for the whole bunch, so a particle's RF phase is its arrival time at
+    theta = 0.
 
-    Each one starts before theta = 0 on the closed orbit, with its electric kick off until it arrives there: it arrives at the start energy, at its own phase.
+    Each one starts before theta = 0 on the closed orbit, with its
+    electric kick off until it arrives there: it arrives at the start
+    energy, at its own phase.
     """
 
     def __init__(
@@ -285,7 +309,9 @@ class Pass:
             b.px[:], b.py[:], b.pz[:] = start[3], start[4], 0.0
             b.gamma[:] = np.sqrt(1 + b.px**2 + b.py**2 + b.pz**2)
             if not scale_in_map:
-                b.boris_b_coef *= self.s  # scales Bx, By, Bz together; b_factor in the deck is only printed
+                # scales Bx, By, Bz together; b_factor in the deck is
+                # only printed
+                b.boris_b_coef *= self.s
             self.e_coef = b.boris_e_coef.copy()
             b.boris_e_coef[self.release > 0] = 0.0
             self.prev = b.x.copy(), b.y.copy(), b.gamma.copy(), d.run.t
@@ -369,7 +395,9 @@ class Pass:
         b.alive[done] = False
 
     def beam(self, behind_rule=False):
-        """Beam through the closed forms of machine.extract. behind_rule: T0's loss rule applied on top of the dynamics."""
+        """Beam through the closed forms of machine.extract. behind_rule:
+        T0's loss rule applied on top of the dynamics.
+        """
         out = self.fate == EXTRACTED
         if behind_rule:
             ok = out & ~self.flagged
@@ -396,7 +424,10 @@ class Pass:
         )
 
     def beam_at(self, s, count_circulating):
-        """Beam read at a snapshot. A particle still circulating has no fate: count_circulating says whether its energy enters the lost power."""
+        """Beam read at a snapshot. A particle still circulating has no
+        fate: count_circulating says whether its energy enters the lost
+        power.
+        """
         out = s['fate'] == EXTRACTED
         lost = ~out if count_circulating else ~out & (s['fate'] != TURN_LIMIT)
         return mc.extract(
@@ -417,7 +448,9 @@ class Pass:
 
 
 def judged(condition, knobs, field, beam=None):
-    """A mission in the state of the tune: spec terms and verdict for a beam, T0's own if none."""
+    """A mission in the state of the tune: spec terms and verdict for a
+    beam, T0's own if none.
+    """
     m = mission_by_id(MISSION)
     m.reset(condition)
     m.knobs, m.errors.field = dict(knobs), field
@@ -465,7 +498,9 @@ def write(records, path, what, mp, units, phase_rms_deg=None):
 
 
 def tune_job(job):
-    """One tune of case T3, regenerated: the Parquet holds no field error. torch on one thread, as there."""
+    """One tune of case T3, regenerated: the Parquet holds no field error.
+    torch on one thread, as there.
+    """
     import torch
 
     torch.set_num_threads(1)
@@ -513,7 +548,9 @@ def harmonic_of(knobs, errors):
 
 
 def tunes(outdir, reference, mp, workers):
-    """Every tune that read in spec on the original box in case T3. Each must end as in its table, or the run stops."""
+    """Every tune that read in spec on the original box in case T3. Each
+    must end as in its table, or the run stops.
+    """
     runs = [
         r
         for r in pq.read_table(
@@ -541,7 +578,10 @@ def tunes(outdir, reference, mp, workers):
 
 
 def tunes_from_table(outdir, reference, mp):
-    """Tunes read in spec on the tuning model, from their table: PPO seed 0 and the other methods. The stored state must give the stored true read, or the run stops."""
+    """Tunes read in spec on the tuning model, from their table: PPO seed 0
+    and the other methods. The stored state must give the stored true
+    read, or the run stops.
+    """
     runs = [
         r
         for sub in ('classical', 'rl')
@@ -621,7 +661,8 @@ def check(outdir, mp):
         'deg; never crossed',
         int(np.isnan(p.phi_first).sum()),
     )
-    # Sign and size of the phase conversion against T0's update: phi += 2 pi (f_rf / f_rev - h) per turn.
+    # Sign and size of the phase conversion against T0's update: phi +=
+    # 2 pi (f_rf / f_rev - h) per turn.
     calm = {**m.knobs, 'phase_deg': -m.errors.phase_deg, 'buncher': 0.0}
     turns, nominal_b0 = 60, mc.nominal(P.MACHINE, P.ION, P.W_EXT * P.A)[0]
     calm['b0'] = nominal_b0 / (1 + m.errors.field)

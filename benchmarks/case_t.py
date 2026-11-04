@@ -1,6 +1,9 @@
-"""Mission tuning: coach, classical baselines and RL at equal budget (docs/training/RL_RUNS.md). The methods are lions.game.tuners.
+"""Mission tuning: coach, classical baselines and RL at equal budget
+(docs/training/RL_RUNS.md). The methods are lions.game.tuners.
 
-usage: uv run --extra game --extra rl --group bench python benchmarks/case_t.py --step classical|rl [--missions F18 EYE] [--algos ppo] [--methods cma_es] [--outroot DIR]
+usage: uv run --extra game --extra rl --group bench python
+benchmarks/case_t.py --step classical|rl [--missions F18 EYE] [--algos
+ppo] [--methods cma_es] [--outroot DIR]
 """
 
 import argparse

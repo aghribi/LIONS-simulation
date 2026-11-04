@@ -1,4 +1,6 @@
-"""Viewer for the magnetic field map and the electric potential maps, in 2D or 3D."""
+"""Viewer for the magnetic field map and the electric potential maps, in 2D
+or 3D.
+"""
 
 import os
 import numpy as np

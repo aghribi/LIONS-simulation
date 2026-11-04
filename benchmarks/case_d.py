@@ -1,7 +1,8 @@
-"""Case D2: long-term canonical angular momentum in the B0 field (DESIGN.md section 16).
+"""Case D2: long-term canonical angular momentum in the B0 field (DESIGN.md
+section 16).
 
-usage: uv run --group bench python benchmarks/case_d.py [outdir]
-Writes case_d.parquet. OPAL runs in Docker; outdir must be visible to Docker.
+usage: uv run --group bench python benchmarks/case_d.py [outdir] Writes
+case_d.parquet. OPAL runs in Docker; outdir must be visible to Docker.
 """
 
 import contextlib
@@ -34,7 +35,9 @@ TOL = 1e-12
 
 
 def invariant(pos, mom, q_over_mc):
-    """Canonical angular momentum in beta gamma m (DESIGN.md section 16), plane z = 0."""
+    """Canonical angular momentum in beta gamma m (DESIGN.md section 16),
+    plane z = 0.
+    """
     x, y = pos[:, 0], pos[:, 1]
     r = np.hypot(x, y)
     return (

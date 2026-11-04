@@ -1,7 +1,9 @@
-"""The tutorial helper: one next step, from what the control room reads. It never looks at the hidden errors.
+"""The tutorial helper: one next step, from what the control room reads. It
+never looks at the hidden errors.
 
-These rules are also the scripted baseline of the Lab track. They are one reasonable procedure written for this model, not the CIME
-operator procedure (SPEC decision D4).
+These rules are also the scripted baseline of the Lab track. They are
+one reasonable procedure written for this model, not the CIME operator
+procedure (SPEC decision D4).
 """
 
 import math
@@ -56,7 +58,9 @@ class Coach:
         return b.phase[seen] if len(seen) > 1 else np.zeros(2)
 
     def rf_steps(self):
-        """Get the beam out: frequency first, then the injection phase, from the phase probe."""
+        """Get the beam out: frequency first, then the injection phase,
+        from the phase probe.
+        """
         phase = self.phase_profile()
         drift = phase[-1] - phase[0]
         third = max(len(phase) // 3, 1)
@@ -137,7 +141,9 @@ class Coach:
         return None
 
     def quad_hunt(self, want_bigger, text, why):
-        """The spot has no sign: turn, watch, turn back if it went the wrong way."""
+        """The spot has no sign: turn, watch, turn back if it went the
+        wrong way.
+        """
         spot = self.m.spot()
         if (
             self.last_spot is not None
@@ -210,7 +216,9 @@ class Coach:
         return None
 
     def room_for_more(self):
-        """Raising the source must not undo the loss step: a dead band between the two."""
+        """Raising the source must not undo the loss step: a dead band
+        between the two.
+        """
         return self.m.beam.lost_kw < 0.65 * self.m.machine.max_lost_kw
 
     def mission_steps(self):
@@ -399,7 +407,9 @@ class Coach:
 
 
 class StageCoach:
-    """The helper of the level 0 stages: what the screen shows, and the key to press."""
+    """The helper of the level 0 stages: what the screen shows, and the key
+    to press.
+    """
 
     def __init__(self, stage):
         self.s = stage

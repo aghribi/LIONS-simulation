@@ -1,4 +1,6 @@
-"""Input form for the LIONS simulation: every data file parameter plus the runtime answers."""
+"""Input form for the LIONS simulation: every data file parameter plus the
+runtime answers.
+"""
 
 import json
 from dataclasses import astuple
@@ -805,7 +807,9 @@ class InputFormPanel(QWidget):
             self.ficpie_edit.setText(path)
 
     def _compute_betagamma(self):
-        """Total beta*gamma of family 1 from the form, as lions.io.load computes it; 0.0 if undefined."""
+        """Total beta*gamma of family 1 from the form, as lions.io.load
+        computes it; 0.0 if undefined.
+        """
         amat = self.amat_spin.value()
         mass_number = self.a_mass_spin.value()
         w0mev = self.w0mev_spin.value()
@@ -820,11 +824,12 @@ class InputFormPanel(QWidget):
     def _load_sigma_diag(self, ficsig, data_path):
         """Load the 6 diagonal values of a sigma file into the spinboxes.
 
-        The file holds sigma^2 (variance) in m^2 / (bg)^2.
-        The GUI shows sigma (std dev) in mm (positions) / mrad (momenta).
+        The file holds sigma^2 (variance) in m^2 / (bg)^2. The GUI shows
+        sigma (std dev) in mm (positions) / mrad (momenta).
         """
         try:
-            # Relative paths are resolved against the data file directory
+            # Relative paths are resolved against the data file
+            # directory
             if data_path and os.path.dirname(data_path):
                 sig_path = os.path.join(os.path.dirname(data_path), ficsig)
             else:
@@ -843,7 +848,8 @@ class InputFormPanel(QWidget):
                     self.sig_dphi,
                     self.sig_dp,
                 ]
-                # True = position (m -> mm), False = momentum (bg -> mrad)
+                # True = position (m -> mm), False = momentum (bg ->
+                # mrad)
                 is_pos = [True, False, True, False, True, False]
                 for i, spin in enumerate(spins):
                     line = sf.readline()
@@ -856,7 +862,8 @@ class InputFormPanel(QWidget):
                         if is_pos[i]:
                             sig *= 1000.0  # m -> mm
                         else:
-                            # Small-angle approximation of arcsin(p_comp / p_total) * 1000
+                            # Small-angle approximation of arcsin(p_comp
+                            # / p_total) * 1000
                             if bg_total > 0:
                                 sig = sig / bg_total * 1000.0
                         spin.setValue(sig)
@@ -866,8 +873,8 @@ class InputFormPanel(QWidget):
     def _write_sigma_from_gui(self):
         """Write a diagonal 6x6 sigma file from the GUI values.
 
-        The GUI holds sigma (std dev) in mm (positions) / mrad (momenta).
-        The file holds sigma^2 (variance) in m^2 / (bg)^2.
+        The GUI holds sigma (std dev) in mm (positions) / mrad
+        (momenta). The file holds sigma^2 (variance) in m^2 / (bg)^2.
         """
         ficsig = self.ficsig_edit.text().strip()
         if not ficsig:
@@ -890,7 +897,8 @@ class InputFormPanel(QWidget):
             ]
             # True = position (mm -> m), False = momentum (mrad -> bg)
             is_pos = [True, False, True, False, True, False]
-            # Floor sigma^2 above 0: the Cholesky decomposition needs a positive definite matrix
+            # Floor sigma^2 above 0: the Cholesky decomposition needs a
+            # positive definite matrix
             EPS_POS = 1e-30  # m^2 (~ 1e-12 mm)
             EPS_MOM = 1e-30  # (bg)^2
             sig2 = []
@@ -989,7 +997,8 @@ class InputFormPanel(QWidget):
     def _do_load_data_file(self, path):
         """Fill the form from a deck read by lions.deck.read_deck."""
         deck = read_deck(path)
-        # Kept for the entries the form does not edit (gap offset, bunch files)
+        # Kept for the entries the form does not edit (gap offset, bunch
+        # files)
         self._loaded_deck = deck
 
         self.title_edit.setText(deck.title)
@@ -1330,7 +1339,8 @@ class InputFormPanel(QWidget):
                 f"{self.bid_xmin.value()} {self.bid_xmax.value()} "
                 f"{self.bid_ymin.value()} {self.bid_ymax.value()}"
             )
-            # Multi-particle correlations (initgra reads them when d.n > 1)
+            # Multi-particle correlations (initgra reads them when d.n >
+            # 1)
             total_n = self.nbrion_spin.value()
             for fw in self.extra_families:
                 total_n += fw.nbrion_spin.value()

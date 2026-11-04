@@ -1,4 +1,6 @@
-"""Trainer: T0 closed forms against LIONS, then every stage played by a script: it can be won, and it can be lost."""
+"""Trainer: T0 closed forms against LIONS, then every stage played by a
+script: it can be won, and it can be lost.
+"""
 
 import math
 
@@ -48,7 +50,9 @@ def test_uniform_field_against_lions(workdir):
 
 
 def test_smooth_qz_against_lions(workdir):
-    """4 sectors, no mean gradient, flutter eps^2 / 2: the tracked Qz within 3% of the smooth approximation."""
+    """4 sectors, no mean gradient, flutter eps^2 / 2: the tracked Qz
+    within 3% of the smooth approximation.
+    """
     b, eps = -1.0, 0.3
     syn.write_bmap(
         'bmap.dat',
@@ -203,7 +207,9 @@ def test_logged_units():
 
 
 def test_arcade_full_flow(tmp_path):
-    """A headless session through the real widget: consent, one stage logged, game over, high-score table."""
+    """A headless session through the real widget: consent, one stage
+    logged, game over, high-score table.
+    """
     import os
 
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -263,7 +269,9 @@ def tuned(mission, seed=1, **changes):
 
 
 def test_extraction_energy_follows_the_field():
-    """The energy at the extraction radius is set by B rho = p / q, whatever the path."""
+    """The energy at the extraction radius is set by B rho = p / q,
+    whatever the path.
+    """
     from lions.game import machine as mc
 
     s = tuned(MISSIONS['NEON'])
@@ -301,7 +309,9 @@ def test_off_tune_loses_the_beam(knob, factor):
 
 
 def test_the_rf_locks_on_two_harmonics():
-    """Harmonic 2 and 3 both accelerate, with their own transit factors; between them nothing does."""
+    """Harmonic 2 and 3 both accelerate, with their own transit factors;
+    between them nothing does.
+    """
     s = MISSIONS['NEON']
     rf3 = tuned(s).ideal()['rf_mhz']
     h3, h2 = tuned(s).beam, tuned(s, rf_mhz=rf3 * 2 / 3).beam
@@ -354,7 +364,9 @@ def test_f18_saturates_at_the_sourced_yield(monkeypatch):
 
 
 def deliver_all(s, dt=0.05):
-    """Beam on at the tuned setting, off at the prescription for a therapy mission."""
+    """Beam on at the tuned setting, off at the prescription for a therapy
+    mission.
+    """
     t = 0.0
     while not s.done and t < s.p['time_limit']:
         ready = hasattr(s, 'healthy') and s.delivered >= s.p['dose_gy']
@@ -464,7 +476,9 @@ def test_parking_on_the_knob_edges_scores_low(name):
 
 
 def test_saturating_a_limit_does_not_read_as_success():
-    """Gaming check: more current than the target takes is out of spec, not a high score."""
+    """Gaming check: more current than the target takes is out of spec, not
+    a high score.
+    """
     s = MISSIONS['F18']
     assert tuned(s, 1, source_ua=400.0).ready() is False
 
@@ -545,7 +559,9 @@ def test_every_knob_has_help():
 
 
 def test_tutorial_for_each_challenge_with_real_keys(tmp_path):
-    """Down to each line, T: that challenge's own walkthrough, then its helper. A failed tutorial costs no life."""
+    """Down to each line, T: that challenge's own walkthrough, then its
+    helper. A failed tutorial costs no life.
+    """
     import os
 
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -587,7 +603,9 @@ def test_tutorial_for_each_challenge_with_real_keys(tmp_path):
 
 @pytest.mark.parametrize('name', sorted(MISSIONS))
 def test_walkthrough_covers_every_knob_and_the_helper(name):
-    """Each challenge has its own steps, naming every knob it offers; the helper's advice always maps to one."""
+    """Each challenge has its own steps, naming every knob it offers; the
+    helper's advice always maps to one.
+    """
     from lions.game.coach import Coach
 
     s = MISSIONS[name]
@@ -722,7 +740,9 @@ def arcade_window(tmp_path, monkeypatch):
 def test_each_challenge_runs_a_method_with_real_keys(
     tmp_path, monkeypatch, name
 ):
-    """Down to the line, O, choose, ENTER: passes on the screen, in the end the real machine agrees. No points, no life, no log."""
+    """Down to the line, O, choose, ENTER: passes on the screen, in the end
+    the real machine agrees. No points, no life, no log.
+    """
     from PyQt5.QtCore import Qt
     from PyQt5.QtTest import QTest
     from lions.game.tuners import METHODS
@@ -830,7 +850,9 @@ def test_behind_window_opens_on_b_and_says_what_runs(tmp_path, monkeypatch):
 
 
 def test_the_game_imports_no_tracking_code():
-    """The Behind window says LIONS and OPAL do not run. If a level starts to call them, this fails: update the window."""
+    """The Behind window says LIONS and OPAL do not run. If a level starts
+    to call them, this fails: update the window.
+    """
     import ast
     from pathlib import Path
     import lions.game

@@ -1,8 +1,9 @@
 """Python port against the Fortran reference on synthetic inputs.
 
-Both programs run as executables with the same stdin, each in its own directory
-with the same input files. Compared: final bunch (ficsto, full precision), the
-numeric rows of every text output, and the case-specific output files.
+Both programs run as executables with the same stdin, each in its own
+directory with the same input files. Compared: final bunch (ficsto, full
+precision), the numeric rows of every text output, and the case-specific
+output files.
 """
 
 import shutil
@@ -30,7 +31,8 @@ def fortran(tmp_path_factory):
         pytest.skip('gfortran not found')
     build = tmp_path_factory.mktemp('fortran')
     exe = build / 'lions_f'
-    # No FMA contraction: NumPy does not fuse, and fusing alone shifts the last bits.
+    # No FMA contraction: NumPy does not fuse, and fusing alone shifts
+    # the last bits.
     subprocess.run(
         [
             'gfortran',
@@ -72,7 +74,9 @@ def bunch(r0):
 
 
 def case_outer(bunch_file):
-    """4-sector Bz with off-plane terms, vertical offset and angle, dees via the outer potential."""
+    """4-sector Bz with off-plane terms, vertical offset and angle, dees
+    via the outer potential.
+    """
     syn.write_bmap(
         'bmap.dat',
         bz=lambda r, t: B0 * (1 + 0.05 * np.cos(4 * t)),
@@ -92,7 +96,9 @@ def case_outer(bunch_file):
 
 
 def case_eighth_map(bunch_file):
-    """Same field as case_outer, given as a 1/8 map (0 to 45 deg, 91 columns)."""
+    """Same field as case_outer, given as a 1/8 map (0 to 45 deg, 91
+    columns).
+    """
     case_outer(bunch_file)
     syn.write_bmap(
         'bmap.dat',
@@ -107,9 +113,11 @@ def case_eighth_map(bunch_file):
 
 
 def case_central(bunch_file):
-    """Whole orbit in the central region: pot1 and its d2pot (Ez) on a 3 mm grid.
+    """Whole orbit in the central region: pot1 and its d2pot (Ez) on a 3 mm
+    grid.
 
-    The grid must cover r < rmax1: neither code checks the grid bounds there.
+    The grid must cover r < rmax1: neither code checks the grid bounds
+    there.
     """
     syn.write_bmap('bmap.dat', B0)
     syn.write_pot_central(
@@ -130,7 +138,9 @@ def case_central(bunch_file):
 
 
 def case_extraction(bunch_file):
-    """Electrostatic deflector (30-90 deg), magnetic dipole (120-180 deg), grids at 200 and 250 deg."""
+    """Electrostatic deflector (30-90 deg), magnetic dipole (120-180 deg),
+    grids at 200 and 250 deg.
+    """
     syn.write_bmap('bmap.dat', B0)
     grids = [
         f'{a} {1000 * np.cos(np.radians(a)):.12g} {1000 * np.sin(np.radians(a)):.12g} 0 0'
@@ -174,13 +184,17 @@ def write_correlated(bunch_file, loaded):
 
 
 def case_correlations(bunch_file, loaded):
-    """20 particles loaded from the same bunch, ficcor written every 30 steps."""
+    """20 particles loaded from the same bunch, ficcor written every 30
+    steps.
+    """
     write_correlated(bunch_file, loaded)
     return NOVERT + ['0'], ['cor.out']
 
 
 def case_traps(bunch_file, loaded):
-    """Same bunch with bidims on and one trap circle next to particle 0 that catches part of it."""
+    """Same bunch with bidims on and one trap circle next to particle 0
+    that catches part of it.
+    """
     write_correlated(bunch_file, loaded)
     r0_mm = 1000 * syn.larmor_radius(W0, B0)
     syn.write_markers('markers.dat', [(r0_mm + 0.6, 0.0, 0.5)])
@@ -249,7 +263,9 @@ def assert_rows_match(path_f, path_p):
 @pytest.mark.parametrize('rewrite', [False, True], ids=['deck', 'rewritten'])
 @pytest.mark.parametrize('name', CASES)
 def test_python_matches_fortran(tmp_path, fortran, name, rewrite):
-    """rewritten: the deck goes through read_deck and write_deck before both runs."""
+    """rewritten: the deck goes through read_deck and write_deck before
+    both runs.
+    """
     setup = CASES[name]
     loaded = {'correlations': True, 'traps': True}.get(name)
     extra = run_in(
@@ -280,7 +296,9 @@ def test_python_matches_fortran(tmp_path, fortran, name, rewrite):
 
 
 def test_fortran_ignores_deck_options(tmp_path, fortran):
-    """A deck with interpolation=hermite and azimuth=atan2 gives the Fortran the same run as the plain deck."""
+    """A deck with interpolation=hermite and azimuth=atan2 gives the
+    Fortran the same run as the plain deck.
+    """
 
     def with_option(bunch_file):
         out = case_outer(bunch_file)

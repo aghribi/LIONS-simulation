@@ -1,4 +1,6 @@
-"""ION RUSH: the arcade front end of the trainer. Draws the stages of lions.game.stages; the physics is all there."""
+"""ION RUSH: the arcade front end of the trainer. Draws the stages of
+lions.game.stages; the physics is all there.
+"""
 
 import math
 import random
@@ -145,7 +147,9 @@ class Arcade(QWidget):
     # ---------- tuning methods: no clock, no score, nothing logged
 
     def open_pick(self, new_machine):
-        """The list of methods. Same machine: the hidden errors stay, to compare methods on one condition."""
+        """The list of methods. Same machine: the hidden errors stay, to
+        compare methods on one condition.
+        """
         self.end_tuning()
         if new_machine:
             self.machine_seed, self.tuned = (
@@ -218,7 +222,9 @@ class Arcade(QWidget):
             return 0.0
 
     def replay(self):
-        """Puts the next pass of the method on the screen's machine. A method stops on the readings: the true beam may be out of spec."""
+        """Puts the next pass of the method on the screen's machine. A
+        method stops on the readings: the true beam may be out of spec.
+        """
         t = self.tuning
         self.replay_clock += 1
         if self.tuning_over or self.replay_clock % REPLAY_FRAMES:
@@ -247,7 +253,9 @@ class Arcade(QWidget):
         s.refresh()
 
     def take_the_beam(self):
-        """The method has finished: the player delivers from where it stopped, with the helper."""
+        """The method has finished: the player delivers from where it
+        stopped, with the helper.
+        """
         self.end_tuning()
         self.rows, self.coach = [], coach_for(self.stage)
         self.state = 'play'

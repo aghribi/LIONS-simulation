@@ -1,4 +1,6 @@
-"""lions.run on a uniform magnetic field with zero electric fields (1 MeV proton)."""
+"""lions.run on a uniform magnetic field with zero electric fields (1 MeV
+proton).
+"""
 
 import contextlib
 import io
@@ -107,7 +109,9 @@ def test_on_step_stops_and_closes_files(workdir):
 
 @pytest.mark.parametrize('ntet', [361, 721, 1081])
 def test_field_just_below_the_x_axis(workdir, ntet):
-    """theta = 2 pi - arccos(1) = 2 pi for a tiny negative y must read map column 0, not ntet."""
+    """theta = 2 pi - arccos(1) = 2 pi for a tiny negative y must read map
+    column 0, not ntet.
+    """
     syn.write_bmap('bmap.dat', lambda r, t: -1.0 - 0.1 * np.sin(t), ntet=ntet)
     syn.write_deck(
         'deck.dat',
@@ -144,7 +148,9 @@ def test_hermite_closed_orbit(workdir, b):
 
 
 def smooth_field(r, t):
-    """Analytic Bz with azimuthal and radial variation, its dBz/dx and dBz/dy."""
+    """Analytic Bz with azimuthal and radial variation, its dBz/dx and
+    dBz/dy.
+    """
     bz = -1.0 * (1 + 0.05 * np.cos(4 * t)) - 0.4 * (r - 0.25) ** 2
     d_r, d_t = -0.8 * (r - 0.25), 0.2 * np.sin(4 * t)
     return (
@@ -155,7 +161,9 @@ def smooth_field(r, t):
 
 
 def field_at(tail, r, t, z):
-    """Bz and (Bx, By) / z from compute_fields at the points (r, t, z) on the smooth_field map."""
+    """Bz and (Bx, By) / z from compute_fields at the points (r, t, z) on
+    the smooth_field map.
+    """
     syn.write_bmap(
         'bmap.dat',
         bz=lambda r_, t_: smooth_field(r_, t_)[0],
@@ -183,7 +191,9 @@ def field_at(tail, r, t, z):
 
 
 def test_hermite_nodes_and_accuracy(workdir):
-    """At the nodes the option returns the map; between them it is closer to the analytic field."""
+    """At the nodes the option returns the map; between them it is closer
+    to the analytic field.
+    """
     nodes_r = np.linspace(0.05, 0.5, 46)[5:40:7]
     nodes_t = np.linspace(0, 2 * np.pi, 361)[3:350:37]
     r, t = (a.ravel() for a in np.meshgrid(nodes_r, nodes_t))
@@ -207,7 +217,9 @@ def test_hermite_nodes_and_accuracy(workdir):
 
 
 def test_atan2_azimuth_near_the_x_axis(workdir):
-    """At theta = 1e-9 rad atan2 gives the azimuth to rounding; arccos(x / r) loses it (error ~ eps / sin theta)."""
+    """At theta = 1e-9 rad atan2 gives the azimuth to rounding; arccos(x /
+    r) loses it (error ~ eps / sin theta).
+    """
     theta = 1e-9 * np.arange(1, 6)
     r = np.full(5, 0.25)
     err = {}

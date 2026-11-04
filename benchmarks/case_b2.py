@@ -1,7 +1,8 @@
-"""Case B discriminating runs (DESIGN.md section 14): B-smooth (RF-Track, no map) and B-gradient.
+"""Case B discriminating runs (DESIGN.md section 14): B-smooth (RF-Track,
+no map) and B-gradient.
 
-usage: uv run --group bench python benchmarks/case_b2.py [outdir]
-Writes case_b2.parquet. OPAL runs in Docker; outdir must be visible to Docker.
+usage: uv run --group bench python benchmarks/case_b2.py [outdir] Writes
+case_b2.parquet. OPAL runs in Docker; outdir must be visible to Docker.
 """
 
 import contextlib
@@ -39,7 +40,9 @@ RUNS = {
 
 
 def fields(k):
-    """Bz, dBz/dx, dBz/dy as functions of (r, theta) for B0 g(r) f(theta) (DESIGN.md section 14)."""
+    """Bz, dBz/dx, dBz/dy as functions of (r, theta) for B0 g(r) f(theta)
+    (DESIGN.md section 14).
+    """
 
     def g(r):
         return 1 - k * (r - R0)
@@ -78,9 +81,11 @@ def closed_form(k):
 
 
 def check_parity(b, k, points=200, z_max=5e-3, seed=0):
-    """Closed form against LIONS compute_bfield at the map nodes in theta. Raises on failure.
+    """Closed form against LIONS compute_bfield at the map nodes in theta.
+    Raises on failure.
 
-    Bz is exact there. Bx, By carry the linear interpolation in r of g(r) / r, at most
+    Bz is exact there. Bx, By carry the linear interpolation in r of
+    g(r) / r, at most
     |z| dr^2 / 8 * 8 eps |B0| (1 + k r0) / r_i^3, r_i the inner node of the cell.
     """
     rng = np.random.default_rng(seed)

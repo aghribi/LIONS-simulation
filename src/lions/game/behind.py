@@ -1,4 +1,6 @@
-"""What runs behind the game: a separate window. It states what the game executes and what it does not. tests/test_game.py checks the imports."""
+"""What runs behind the game: a separate window. It states what the game
+executes and what it does not. tests/test_game.py checks the imports.
+"""
 
 import time
 from importlib import metadata
@@ -116,7 +118,9 @@ def page(stage):
 
 
 class Behind(QWidget):
-    """Reads the game, never writes to it. Hidden errors are not shown: it would give the answer away."""
+    """Reads the game, never writes to it. Hidden errors are not shown: it
+    would give the answer away.
+    """
 
     def __init__(self, arcade):
         super().__init__()

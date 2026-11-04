@@ -1,7 +1,9 @@
-"""Figures, tables and numbers of the lecture notes, from the benchmark tables in benchmarks/runs.
+"""Figures, tables and numbers of the lecture notes, from the benchmark
+tables in benchmarks/runs.
 
 usage: uv run --group bench --with pandas python docs/lecture/figures.py
-Writes docs/lecture/gen/: one PDF per figure, numbers.tex (one macro per quoted value), tab_*.tex, sources.tex.
+Writes docs/lecture/gen/: one PDF per figure, numbers.tex (one macro per
+quoted value), tab_*.tex, sources.tex.
 """
 
 import hashlib
@@ -54,7 +56,9 @@ plt.rcParams.update(
 
 
 def psi_band():
-    """Energy range [MeV] flagged as the Qr half-integer band in the G2 step 3 table."""
+    """Energy range [MeV] flagged as the Qr half-integer band in the G2
+    step 3 table.
+    """
     d = table('case_g2/step3/case_g2_step3.parquet')
     e = d[d.qr_half_integer_band].energy_mev
     return float(e.min()), float(e.max())
@@ -69,7 +73,9 @@ def table(path):
 
 
 def num(name, value, digits=2):
-    """\\name expands to value in siunitx scientific form with `digits` significant digits."""
+    """\\name expands to value in siunitx scientific form with `digits`
+    significant digits.
+    """
     if not name.isalpha():
         raise ValueError(f'macro name {name} must be letters only')
     value = float(value)
@@ -116,12 +122,16 @@ def order(e1, e2):
 
 
 def boris_polygon():
-    """Boris in a uniform field, n steps per turn: positions on a circle of radius rho sqrt(1 + (w dt/2)^2)."""
+    """Boris in a uniform field, n steps per turn: positions on a circle of
+    radius rho sqrt(1 + (w dt/2)^2).
+    """
     n, rho = 8, 1.0
     wdt = 2 * np.pi / n
     angle = (
         2 * np.arctan(wdt / 2)
-    )  # Boris rotation of p per step; |p| and the step length rho w dt are exact
+        # Boris rotation of p per step; |p| and the step length rho w dt are
+        # exact
+    )
     phase = -angle / 2 + angle * np.arange(1, n + 1)
     steps = rho * wdt * np.column_stack([-np.sin(phase), np.cos(phase)])
     xs = np.vstack([[0.0, 0.0], np.cumsum(steps, axis=0)])
@@ -173,7 +183,9 @@ def boris_polygon():
 
 
 def azimuth_error():
-    """Azimuth recovered from (x, y) = r (cos t, sin t) in float64: arccos(x / r) against atan2(y, x)."""
+    """Azimuth recovered from (x, y) = r (cos t, sin t) in float64:
+    arccos(x / r) against atan2(y, x).
+    """
     theta = np.logspace(-13, -0.2, 2000)
     r = 1.0
     x, y = r * np.cos(theta), r * np.sin(theta)
@@ -257,7 +269,9 @@ def field_maps():
 
 
 def interpolation_kinks():
-    """Bz and dBz/dtheta along theta on the 3-sector master at one radius: 1 deg nodes, bilinear against Hermite."""
+    """Bz and dBz/dtheta along theta on the 3-sector master at one radius:
+    1 deg nodes, bilinear against Hermite.
+    """
     path = RUNS / 'case_g1' / '3sector_master' / 'master.h5'
     with h5py.File(path) as f:
         grids = {k: f[k][()] for k in ('bz', 'dbz_dr', 'dbz_dtheta')}
@@ -270,7 +284,8 @@ def interpolation_kinks():
     rr = r[i] + 0.37 * (r[1] - r[0])
     t = np.linspace(np.deg2rad(24), np.deg2rad(29), 1200)
     h_bz, _, h_dt = surface(np.full_like(t, rr), t)
-    # bilinear on the same nodes (LIONS weights), and its theta derivative per cell
+    # bilinear on the same nodes (LIONS weights), and its theta
+    # derivative per cell
     dth = th[1] - th[0]
     j = (t / dth).astype(int)
     v = (t - th[j]) / dth
@@ -324,7 +339,9 @@ def interpolation_kinks():
 
 
 def interpolation_orders():
-    """Interpolation error bounds for one harmonic sin(2 pi theta / lambda) sampled with N nodes per period."""
+    """Interpolation error bounds for one harmonic sin(2 pi theta / lambda)
+    sampled with N nodes per period.
+    """
     for n, key in ((18, 'Eighteen'), (54, 'FiftyFour')):
         kh = 2 * np.pi / n
         num(f'LinErr{key}', kh**2 / 8)
@@ -514,7 +531,8 @@ def case_b():
     par = d[d.metric == 'parity_bxy_max_abs'].value
     num('BzeroParityBxy', par.max())
 
-    # case B, 1 MeV, Qr against steps per code, and the RF-Track run on the closed-form field (case B2)
+    # case B, 1 MeV, Qr against steps per code, and the RF-Track run on
+    # the closed-form field (case B2)
     b = d[(d.case == 'B') & (d.energy_mev == 1.0) & (d.map_dtheta_deg == 1.0)]
     b2 = table('case_b2/case_b2.parquet')
     smooth = b2[(b2.case == 'B-smooth') & (b2.metric == 'qr')]
@@ -565,7 +583,8 @@ def case_b():
     ]
     num('BHalfDegQrRatioMin', min(ratio))
     num('BHalfDegQrRatioMax', max(ratio), 3)
-    # case B2: conditioning det(M_r - I) = 4 sin^2(pi Qr) (LIONS, 1440 steps) and r_eo spread across steps, per energy
+    # case B2: conditioning det(M_r - I) = 4 sin^2(pi Qr) (LIONS, 1440
+    # steps) and r_eo spread across steps, per energy
     full_b = d[(d.case == 'B') & (d.map_dtheta_deg == 1.0)]
     grad = b2[b2.case == 'B-gradient']
     cond = lambda x: (
@@ -582,7 +601,8 @@ def case_b():
     c_ratio = cond(grad) / cond(full_b)
     num('BTwoCondMin', c_ratio.min())
     num('BTwoCondMax', c_ratio.max())
-    # closed-orbit sensitivity |(M - I)^-1| ~ 1 / (2 sin(pi Q)) = 1 / sqrt(det(M - I))
+    # closed-orbit sensitivity |(M - I)^-1| ~ 1 / (2 sin(pi Q)) = 1 /
+    # sqrt(det(M - I))
     num('BTwoSensMin', np.sqrt(c_ratio.min()))
     num('BTwoSensMax', np.sqrt(c_ratio.max()))
     sm = (
@@ -620,7 +640,8 @@ def case_b():
     num('BLionsQz', lq['qz'], 3)
     num('BCondDet', 4 * np.sin(np.pi * lq['qr']) ** 2)
     num('BSens', 1 / (2 * np.sin(np.pi * lq['qr'])))
-    # smooth approximation (Zaremba and Kleeven, eqs. 14, 15), N = 4, k = 0, xi = 0, flutter eps^2 / 2
+    # smooth approximation (Zaremba and Kleeven, eqs. 14, 15), N = 4, k
+    # = 0, xi = 0, flutter eps^2 / 2
     n_sec, flutter = 4, 0.3**2 / 2
     num('BFlutter', flutter, 2)
     num('BSmoothQz', np.sqrt(n_sec**2 / (n_sec**2 - 1) * flutter), 3)
@@ -1225,7 +1246,9 @@ H_FIELDS = {
 
 
 def h_worst(d):
-    """max over cases of max(|Qr|, |Qz|, |det - 1|) per (spacing, field, integrator, steps); PSI band excluded."""
+    """max over cases of max(|Qr|, |Qz|, |det - 1|) per (spacing, field,
+    integrator, steps); PSI band excluded.
+    """
     energy = d.case.str.extract(r'E=([\d.]+)')[0].astype(float)
     d = d[~energy.between(*psi_band())]
     d = d[d.metric.isin(['qr_error', 'qz_error', 'det_error'])].assign(
@@ -1273,7 +1296,8 @@ def case_h():
         bbox_to_anchor=(0.5, -0.22),
     )
     save(fig, 'h_matrix')
-    # PSI against FIXPO: matrix errors are against RF-Track (q - q_rft); add RF-Track minus FIXPO from G2 step 3
+    # PSI against FIXPO: matrix errors are against RF-Track (q - q_rft);
+    # add RF-Track minus FIXPO from G2 step 3
     psi = table(H_MAPS['psi'])
     psi = psi.assign(
         energy=psi.case.str.extract(r'E=([\d.]+)')[0].astype(float)

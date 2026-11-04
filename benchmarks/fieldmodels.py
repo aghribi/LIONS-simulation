@@ -1,11 +1,16 @@
-"""Field models on the LIONS map nodes for case H (DESIGN.md section 23). F0 bilinear and F2, F3 splines are in
-case_g1 (bilinear_field, smooth_field); this module adds the node arrays and F1, the bicubic Hermite field."""
+"""Field models on the LIONS map nodes for case H (DESIGN.md section 23).
+F0 bilinear and F2, F3 splines are in case_g1 (bilinear_field,
+smooth_field); this module adds the node arrays and F1, the bicubic
+Hermite field.
+"""
 
 import numpy as np
 
 
 def node_arrays(grids, attrs, every):
-    """LIONS map nodes (full turn, endpoint included, LIONS sign): r, theta, Bz, dBz/dr, dBz/dtheta."""
+    """LIONS map nodes (full turn, endpoint included, LIONS sign): r,
+    theta, Bz, dBz/dr, dBz/dtheta.
+    """
     n_sec, nth = int(attrs['sector_count']), grids['bz'].shape[1]
     if nth % every:
         raise ValueError(
@@ -23,7 +28,9 @@ def node_arrays(grids, attrs, every):
 
 
 def _basis(u):
-    """Cubic Hermite basis on [0, 1] and its derivative: values (h00, h01), slopes (h10, h11)."""
+    """Cubic Hermite basis on [0, 1] and its derivative: values (h00, h01),
+    slopes (h10, h11).
+    """
     u2, u3 = u * u, u * u * u
     value = (2 * u3 - 3 * u2 + 1, -2 * u3 + 3 * u2)
     slope = (u3 - 2 * u2 + u, u3 - u2)
@@ -33,9 +40,11 @@ def _basis(u):
 
 
 def hermite_surface(r, th, bz, dbr, dbt):
-    """S(rr, t) -> (Bz, dBz/dr, dBz/dtheta): bicubic Hermite, C1, from node values and first derivatives.
+    """S(rr, t) -> (Bz, dBz/dr, dBz/dtheta): bicubic Hermite, C1, from node
+    values and first derivatives.
 
-    The cross derivative d2Bz/drdtheta comes from second-order differences of dBz/dtheta in r.
+    The cross derivative d2Bz/drdtheta comes from second-order
+    differences of dBz/dtheta in r.
     """
     dr, dth = r[1] - r[0], th[1] - th[0]
     drt = np.gradient(dbt, r, axis=0, edge_order=2)
@@ -81,7 +90,9 @@ def hermite_surface(r, th, bz, dbr, dbt):
 
 
 def hermite_field(r, th, bz, dbr, dbt):
-    """b(x, y, z) in T: F1, Bz from the Hermite surface, Br and Btheta from its derivatives (first order in z)."""
+    """b(x, y, z) in T: F1, Bz from the Hermite surface, Br and Btheta from
+    its derivatives (first order in z).
+    """
     surface = hermite_surface(r, th, bz, dbr, dbt)
 
     def field(x, y, z):

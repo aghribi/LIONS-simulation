@@ -1,6 +1,8 @@
-"""Trains the PPO policy of a mission for the arcade and tests it on the held-out conditions. Seed 0, never the best of several.
+"""Trains the PPO policy of a mission for the arcade and tests it on the
+held-out conditions. Seed 0, never the best of several.
 
-usage: uv run --extra game --extra rl python -m lions.game.train F18 [EYE ...]
+usage: uv run --extra game --extra rl python -m lions.game.train F18
+[EYE ...]
 """
 
 import json

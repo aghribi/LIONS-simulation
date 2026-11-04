@@ -1,4 +1,6 @@
-"""QThread that runs the LIONS engine and routes input() and print() to the GUI."""
+"""QThread that runs the LIONS engine and routes input() and print() to the
+GUI.
+"""
 
 import sys
 import io
@@ -17,7 +19,9 @@ from ..state import State
 
 
 class InputQueue:
-    """Stands in for builtins.input and returns the preloaded answers in order."""
+    """Stands in for builtins.input and returns the preloaded answers in
+    order.
+    """
 
     def __init__(self, answers):
         self.q = queue.Queue()
@@ -43,7 +47,9 @@ class InputQueue:
 
 
 class OutputInterceptor(io.TextIOBase):
-    """Replaces sys.stdout: emits each write as a Qt signal and echoes it to the terminal."""
+    """Replaces sys.stdout: emits each write as a Qt signal and echoes it
+    to the terminal.
+    """
 
     def __init__(self, signal):
         super().__init__()
@@ -128,7 +134,8 @@ class SimulationWorker(QThread):
     def _on_step(self, d):
         """lions.cli.track hook: progress, plot data, stop request."""
         ite = d.run.step
-        # About 200 progress signals per run, to keep the Qt event loop responsive.
+        # About 200 progress signals per run, to keep the Qt event loop
+        # responsive.
         if (
             ite % max(1, d.run.n_steps // 200) == 0
             or ite == 1
@@ -150,7 +157,9 @@ class SimulationWorker(QThread):
         return True
 
     def _emit_data(self, d):
-        """Emit one plot-data dict per family: reference particle plus all live particles."""
+        """Emit one plot-data dict per family: reference particle plus all
+        live particles.
+        """
         try:
             nbrfam = len(d.bunch.families)
             for k in range(nbrfam):

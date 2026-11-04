@@ -1,8 +1,12 @@
-"""Control-room model of a cyclotron for the missions: macroparticles from the source to the target, turn by turn.
+"""Control-room model of a cyclotron for the missions: macroparticles from
+the source to the target, turn by turn.
 
-Tier T0: closed forms along the machine, no tracked field map. It keeps what a tuner meets: frequency and field are coupled, the
-harmonic sets the energy gain, phase slips, losses at the septum. It is not LIONS, and only the quantities tested in
-tests/test_game.py are checked. Fixed random numbers per seed keep the readings smooth for humans and optimisers.
+Tier T0: closed forms along the machine, no tracked field map. It keeps
+what a tuner meets: frequency and field are coupled, the harmonic sets
+the energy gain, phase slips, losses at the septum. It is not LIONS, and
+only the quantities tested in tests/test_game.py are checked. Fixed
+random numbers per seed keep the readings smooth for humans and
+optimisers.
 """
 
 from dataclasses import dataclass
@@ -114,7 +118,9 @@ class Beam:
 
 
 def nominal(machine, ion, w_extraction):
-    """Central field [T] and revolution frequency [Hz] of an isochronous machine extracting at w_extraction [MeV, total]."""
+    """Central field [T] and revolution frequency [Hz] of an isochronous
+    machine extracting at w_extraction [MeV, total].
+    """
     b_ext = ion.rigidity(w_extraction) / machine.radius
     b0 = (
         b_ext
@@ -125,7 +131,9 @@ def nominal(machine, ion, w_extraction):
 
 
 def machine_energy(machine, ion, b0):
-    """Kinetic energy [MeV] at the extraction radius of an isochronous field: B rho = gamma B0 R gives beta c = omega0 R."""
+    """Kinetic energy [MeV] at the extraction radius of an isochronous
+    field: B rho = gamma B0 R gives beta c = omega0 R.
+    """
     beta = min(
         ion.charge * E_CHARGE * b0 * machine.radius / (ion.mass_kg * C), 0.99
     )
@@ -147,7 +155,9 @@ def deflector_nominal(machine, ion, w_mev):
 
 
 def start_phases(knobs, errors):
-    """RF phase [rad] of each macroparticle at injection, in [-pi, pi). 0 is the crest."""
+    """RF phase [rad] of each macroparticle at injection, in [-pi, pi). 0
+    is the crest.
+    """
     phi_u = np.linspace(-np.pi, np.pi, MACROPARTICLES, endpoint=False)
     phi = (
         phi_u
@@ -171,7 +181,9 @@ def turn_limit(machine, ion, knobs, b0, h):
 
 
 def run(machine, ion, knobs, errors, draws):
-    """One pass. The harmonic is not a knob: it is the integer nearest f_rf / f_rev at injection. knobs: rf_mhz, dee_kv, phase_deg, buncher, source_ua, b0, trim, deflector_kv, steer_x, steer_y, quad, slit.
+    """One pass. The harmonic is not a knob: it is the integer nearest f_rf
+    / f_rev at injection. knobs: rf_mhz, dee_kv, phase_deg, buncher,
+    source_ua, b0, trim, deflector_kv, steer_x, steer_y, quad, slit.
 
     draws: fixed standard normals (MACROPARTICLES, 3) for this seed.
     """
@@ -293,12 +305,16 @@ def extract(
     phase_sum,
     counts,
 ):
-    """From the last turn to the target, closed forms: septum, slit, deflector, steerers, quadrupole. w, w_prev [MeV]: the last two turns. ok: arrived."""
+    """From the last turn to the target, closed forms: septum, slit,
+    deflector, steerers, quadrupole. w, w_prev [MeV]: the last two
+    turns. ok: arrived.
+    """
     edges = np.linspace(0, machine.radius, PROBE_BINS + 1)
     energies = w[ok]
     n_in = MACROPARTICLES
     if ok.any():
-        # Septum: a particle ends the last turn anywhere within one turn separation; the blade removes its thickness.
+        # Septum: a particle ends the last turn anywhere within one turn
+        # separation; the blade removes its thickness.
         g_ext = ion.gamma(energies.mean())
         gain = np.abs(energies - w_prev[ok]).mean()
         separation = (

@@ -1,4 +1,6 @@
-"""Region and element masks: box, central and outer regions, deflectors, dipoles, grids, traps."""
+"""Region and element masks: box, central and outer regions, deflectors,
+dipoles, grids, traps.
+"""
 
 import numpy as np
 

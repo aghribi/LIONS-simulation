@@ -1,9 +1,11 @@
-"""Case A: uniform Bz, no E, one turn of a 1 MeV proton in LIONS, OPAL-cycl and RF-Track.
+"""Case A: uniform Bz, no E, one turn of a 1 MeV proton in LIONS, OPAL-cycl
+and RF-Track.
 
-usage: uv run --group bench python benchmarks/case_a.py [outdir]
-Writes case_a.parquet (one row per code, integrator, resolution and metric).
-OPAL runs in the `lions-bench/opal:2024.1.0` image (benchmarks/opal/Dockerfile); outdir must be
-visible to Docker (under $HOME with colima).
+usage: uv run --group bench python benchmarks/case_a.py [outdir] Writes
+case_a.parquet (one row per code, integrator, resolution and metric).
+OPAL runs in the `lions-bench/opal:2024.1.0` image
+(benchmarks/opal/Dockerfile); outdir must be visible to Docker (under
+$HOME with colima).
 """
 
 import contextlib
@@ -69,7 +71,9 @@ def initial_state():
 
 
 def metrics(xy, p_first, p_last, rho):
-    """n positions one step apart: radius, |p| and phase errors over the n - 1 steps."""
+    """n positions one step apart: radius, |p| and phase errors over the n
+    - 1 steps.
+    """
     centre, radius = fit_circle(xy)
     n = len(xy)
     angle = np.unwrap(np.arctan2(*(xy - centre).T[::-1]))
