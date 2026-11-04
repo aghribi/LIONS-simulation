@@ -28,7 +28,6 @@
 - [ ] Python adds a vertical spread for `espace='6d'`; the Fortran only for `'3d'` (`lions_2.0_ep.f90` line 498).
 - [ ] `mass_c` is indexed by family number in both codes.
 - [ ] Second-harmonic dBz/dy sign (README, known issue 10).
-- [ ] Push `lecture-notes` and `training-spec` to the fork? Their text discusses PSI-derived results.
 
 ## Housekeeping
 - [ ] Delete `benchmarks/runs/case_g2/{probe_opal,probe_opal_gev,try_opal}` and the older `step1` (left for A. Ghribi).
