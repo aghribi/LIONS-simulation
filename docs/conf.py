@@ -11,7 +11,8 @@ extensions = [
 ]
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
-exclude_patterns = ["_build"]
+# Working notes of the trainer, not part of the published site.
+exclude_patterns = ["_build", "training"]
 
 myst_heading_anchors = 3
 autodoc_member_order = "bysource"
