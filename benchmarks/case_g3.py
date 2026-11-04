@@ -36,7 +36,10 @@ import orbits  # noqa: E402
 from case_g2 import F_RF, HARMONIC, PSI, STEPS, SYMMETRY  # noqa: E402
 from provenance import provenance  # noqa: E402
 
-IMAGE = 'ghcr.io/opalx-project/opalx@sha256:994394a56b0d8ddeeae26285703fe9fea5e51408ebc1c811c1a3e966b4ed82b4'
+IMAGE = (
+    'ghcr.io/opalx-project/opalx@'
+    'sha256:994394a56b0d8ddeeae26285703fe9fea5e51408ebc1c811c1a3e966b4ed82b4'
+)
 INTEGRATORS = ('BORIS', 'RK4', 'DOP853')
 R_FRAME = 2.1314  # m, radius of the RING frame origin; x = r - R_FRAME
 R_SECTOR = 3.3  # m, element pose radius (RMIN + RMAX) / 2
@@ -58,12 +61,15 @@ LINEAR_TURNS = 20
 
 
 def lattice():
+    """OPALX lines: a CYCLOTRONSECTOR per sector, then the RING."""
     sectors = []
     for k in range(SYMMETRY):
         a = 2 * math.pi * k / SYMMETRY
         sectors.append(
-            f'SM{k}: CYCLOTRONSECTOR, FMAPFN="bfield.dat", SYM={SYMMETRY}, RMIN=1.9, RMAX=4.7, VMIN=-0.05, '
-            f'VMAX=0.05, X={R_SECTOR * math.cos(a) - R_FRAME!r}, Y=0, Z={R_SECTOR * math.sin(a)!r}, '
+            f'SM{k}: CYCLOTRONSECTOR, FMAPFN="bfield.dat", SYM={SYMMETRY}, '
+            f'RMIN=1.9, RMAX=4.7, VMIN=-0.05, '
+            f'VMAX=0.05, X={R_SECTOR * math.cos(a) - R_FRAME!r}, Y=0, '
+            f'Z={R_SECTOR * math.sin(a)!r}, '
             f'THETA={-a!r}, PHI=0, PSI=0;'
         )
     names = ','.join(f'SM{k}' for k in range(SYMMETRY))
@@ -71,6 +77,7 @@ def lattice():
 
 
 def run_opalx(work, name, body):
+    """Write the OPALX deck, run it in docker, return the exit code."""
     work.mkdir(parents=True, exist_ok=True)
     if not (work / 'bfield.dat').exists():
         shutil.copy(PSI / 'bfield.dat', work / 'bfield.dat')
@@ -108,10 +115,13 @@ def cof(work, energy, r_ic, pr_ic, integrator, steps, fd):
     name = f'cof_{energy:.3f}_{integrator}_{steps}_{fd:g}'
     out = work / f'{name}.json'
     out.unlink(missing_ok=True)
-    body = f'''BEAM0: BEAM, PARTICLE=PROTON, NALLOC=1, BCHARGE=1.602176634e-19, SOURCES=SOURCES0, CHARGE=1,
+    body = f'''BEAM0: BEAM, PARTICLE=PROTON, NALLOC=1, \
+BCHARGE=1.602176634e-19, SOURCES=SOURCES0, CHARGE=1,
     ENERGY=PMASS+{energy / 1000!r};
-ic: COF, LINE=MYCYCL, BEAM=BEAM0, DT={HARMONIC / F_RF / steps!r}, MAXSTEPS={3 * steps}, MAXPATH=40,
-    TIMEINTEGRATOR="{integrator}", X={r_ic / 1000 - R_FRAME!r}, PX={pr_ic / 1000!r}, Y=0, PY=0,
+ic: COF, LINE=MYCYCL, BEAM=BEAM0, DT={HARMONIC / F_RF / steps!r}, \
+MAXSTEPS={3 * steps}, MAXPATH=40,
+    TIMEINTEGRATOR="{integrator}", X={r_ic / 1000 - R_FRAME!r}, \
+PX={pr_ic / 1000!r}, Y=0, PY=0,
     FDSTEP={{{fd!r},{fd!r},{fd!r},{fd!r}}}, OUTPUT="{out.name}";'''
     code = run_opalx(work, name, body)
     if not out.exists():
@@ -120,6 +130,7 @@ ic: COF, LINE=MYCYCL, BEAM=BEAM0, DT={HARMONIC / F_RF / steps!r}, MAXSTEPS={3 * 
 
 
 def metrics(result, energy, r_ic, pr_ic, qr_ref, qz_ref):
+    """Errors of one COF result against FIXPO (r, pr/p, Qr, Qz, det)."""
     p, _, q_ref = case_g2.reference(energy, r_ic, pr_ic, qr_ref, qz_ref)
     u, m = np.array(result['coordinates']), np.array(result['matrix'])
     r_err = (u[0] + R_FRAME) / (r_ic / 1000) - 1
@@ -151,6 +162,7 @@ def fixpo():
 
 
 def write(records, outdir, name, case):
+    """Write the records to Parquet with the provenance metadata."""
     meta = {
         'case': case,
         'opalx_image': IMAGE,
@@ -170,7 +182,10 @@ def write(records, outdir, name, case):
 
 
 def sweep(outdir, runs, name, case):
-    """runs: (row, integrator, steps, fd). Failures are recorded, as in G2."""
+    """runs: (row, integrator, steps, fd).
+
+    Failures are recorded, as in G2.
+    """
     records = []
     for row, integrator, steps, fd in runs:
         energy, r_ic, pr_ic, qr_ref, qz_ref = map(float, row)
@@ -210,7 +225,9 @@ def sweep(outdir, runs, name, case):
             for k, (v, u) in values.items()
         ]
         print(
-            f"{integrator} {steps} {fd:g} {energy} MeV qr={values['qr_error'][0]:+.2e} qz={values['qz_error'][0]:+.2e} "
+            f"{integrator} {steps} {fd:g} {energy} MeV "
+            f"qr={values['qr_error'][0]:+.2e} "
+            f"qz={values['qz_error'][0]:+.2e} "
             f"det_r={values['det_r_error'][0]:+.2e}",
             file=sys.stderr,
         )
@@ -219,6 +236,7 @@ def sweep(outdir, runs, name, case):
 
 
 def step_a(outdir):
+    """Step 1a: OPALX COF over the FIXPO energies, three integrators."""
     rows = fixpo()
     sweep(
         outdir,
@@ -233,6 +251,7 @@ def step_a(outdir):
 
 
 def step_b(outdir):
+    """Step 1b: OPALX COF against steps per turn and FDSTEP."""
     rows = fixpo()[list(G3B_ROWS)]
     runs = [
         (row, i, n, 1e-6)
@@ -255,6 +274,7 @@ def step_b(outdir):
 
 
 def step_s(outdir):
+    """Step 1s: OPALX spectral tunes over the FIXPO energies."""
     rows = fixpo()
     rows = np.vstack([rows[::10], rows[-1]])
     triples = ','.join(
@@ -265,9 +285,13 @@ def step_s(outdir):
         outdir,
         'tunes',
         f'''FS0: FIELDSOLVER, TYPE=NONE, NX=16, NY=16, NZ=16;
-BEAM0: BEAM, PARTICLE=PROTON, NALLOC=1, BCHARGE=1.602176634e-19, SOURCES=SOURCES0, CHARGE=1, TUNEINITIAL={{{triples}}};
-TRACK, LINE=MYCYCL, BEAM=BEAM0, MAXSTEPS={TURNS * STEPS}, DT={HARMONIC / F_RF / STEPS!r}, STEPSPERTURN={STEPS};
-RUN, METHOD="PARALLEL", FIELDSOLVER=FS0, SPECTRALTUNES=TRUE, TURNS={TURNS}, TUNESAMPLE={TUNESAMPLE}, TUNEINTEGRATOR="RK4", TUNESECTOR="SM0";
+BEAM0: BEAM, PARTICLE=PROTON, NALLOC=1, BCHARGE=1.602176634e-19, \
+SOURCES=SOURCES0, CHARGE=1, TUNEINITIAL={{{triples}}};
+TRACK, LINE=MYCYCL, BEAM=BEAM0, MAXSTEPS={TURNS * STEPS}, \
+DT={HARMONIC / F_RF / STEPS!r}, STEPSPERTURN={STEPS};
+RUN, METHOD="PARALLEL", FIELDSOLVER=FS0, SPECTRALTUNES=TRUE, \
+TURNS={TURNS}, TUNESAMPLE={TUNESAMPLE}, TUNEINTEGRATOR="RK4", \
+TUNESECTOR="SM0";
 ENDTRACK;''',
     )
     print(f'exit {code}; see {outdir}/tunes-tunes.csv', file=sys.stderr)
@@ -355,6 +379,7 @@ def amplitude_run(args):
 
 
 def step_2(outdir):
+    """Step 2: tunes of LIONS and spline against launch amplitude."""
     global SHARED
     grids, attrs, species, mass_kg, spline, _ = case_g2.setup()
     # inherited by fork: the spline field does not pickle
@@ -371,13 +396,14 @@ def step_2(outdir):
         records,
         outdir,
         'case_g3_2.parquet',
-        'G3 step 2: LIONS and spline multi-turn tunes against launch amplitude',
+        'G3 step 2: LIONS and spline multi-turn tunes '
+        'against launch amplitude',
     )
 
 
 def excursion_run(args):
-    """Signed det(M_r) - 1 and the distance from the closed orbit over 100
-    turns, for each launch offset.
+    """Signed det(M_r) - 1 and the distance from the closed orbit
+    over 100 turns, for each launch offset.
     """
     row, outdir = args
     grids, attrs, species, _, _ = SHARED
@@ -436,6 +462,7 @@ def excursion_run(args):
 
 
 def step_2d(outdir):
+    """Step 2d: signed det(M_r) and excursions from the closed orbit."""
     global SHARED
     grids, attrs, species, mass_kg, spline, _ = case_g2.setup()
     SHARED = grids, attrs, species, mass_kg, spline
@@ -456,6 +483,7 @@ def step_2d(outdir):
 
 
 def step_2b(outdir, commensurate=False):
+    """Step 2b (2c if commensurate): Jacobian against tracking."""
     grids, attrs, species, _, _, _ = case_g2.setup()
     work = outdir / 'lions'
     work.mkdir(exist_ok=True)
@@ -478,7 +506,8 @@ def step_2b(outdir, commensurate=False):
             co, _ = orbits.closed_orbit(track, co[:2])
         if commensurate:
             print(
-                f'{energy} MeV: last turn-time correction {turn_error:.1e}, f_rev {f_rev!r}',
+                f'{energy} MeV: last turn-time correction '
+                f'{turn_error:.1e}, f_rev {f_rev!r}',
                 file=sys.stderr,
             )
         scale = np.array([1.0, co[0] / p])  # pr to m, as the Jacobian probes
@@ -539,6 +568,7 @@ def step_2b(outdir, commensurate=False):
 
 
 def report(outroot):
+    """Print the G3 summary statistics from the step outputs."""
     import pandas as pd
 
     fold, g2 = case_g2.fold, outroot.parent / 'case_g2'
@@ -581,7 +611,8 @@ def report(outroot):
             'det_z_error',
         ):
             print(
-                f'  |{m}| median {i[m].abs().median():.2e} max {i[m].abs().max():.2e}'
+                f'  |{m}| median {i[m].abs().median():.2e} '
+                f'max {i[m].abs().max():.2e}'
             )
         for m, dq in (
             ('r', j.r_eo_rel_error - j.r_eo_rel_error_o),
@@ -589,11 +620,13 @@ def report(outroot):
             ('Qz', j.qz - fold(j.qz_o)),
         ):
             print(
-                f'  minus OPAL 2024.1 {m} median {dq.abs().median():.2e} max {dq.abs().max():.2e} (n={len(j)})'
+                f'  minus OPAL 2024.1 {m} median {dq.abs().median():.2e} '
+                f'max {dq.abs().max():.2e} (n={len(j)})'
             )
         k = d.join(lions, rsuffix='_l', how='inner')
         print(
-            f'  det_r correlation with LIONS det, 24 energies: {np.corrcoef(k.det_r_error, k.det_error_l)[0, 1]:+.2f}'
+            '  det_r correlation with LIONS det, 24 energies: '
+            f'{np.corrcoef(k.det_r_error, k.det_error_l)[0, 1]:+.2f}'
         )
     b = pd.read_parquet(outroot / 'step1b' / 'case_g3_b.parquet')
     print(
@@ -616,10 +649,17 @@ def report(outroot):
         d = d.droplevel(['code', 'amplitude_m'])
         dq = d.qr - spline_qr.xs(a, level='amplitude_m')
         print(
-            f'{code} a={a:g}: Qr-FIXPO median {d.qr_error.abs().median():.1e} max {d.qr_error.abs().max():.1e}; Qz-FIXPO median '
-            f'{d.qz_error.abs().median():.1e} max {d.qz_error.abs().max():.1e}; Qr-spline median {dq.abs().median():.1e} max {dq.abs().max():.1e}, '
-            f'above 1e-3 at {d.index[dq.abs() > 1e-3].tolist() if code == "lions_hermite" else int((dq.abs() > 1e-3).sum())}, '
-            f'above 0.1 at {int((dq.abs() > 0.1).sum())}; amp ratio r {d.amp_ratio_r.min():.2f} to {d.amp_ratio_r.max():.2f} (n={len(d)})'
+            f'{code} a={a:g}: Qr-FIXPO median {d.qr_error.abs().median():.1e} '
+            f'max {d.qr_error.abs().max():.1e}; Qz-FIXPO median '
+            f'{d.qz_error.abs().median():.1e} '
+            f'max {d.qz_error.abs().max():.1e}; '
+            f'Qr-spline median {dq.abs().median():.1e} '
+            f'max {dq.abs().max():.1e}, '
+            f'above 1e-3 at '
+            f'{d.index[dq.abs() > 1e-3].tolist() if code == "lions_hermite" else int((dq.abs() > 1e-3).sum())}, '  # noqa: E501 (f-string, Python 3.10)
+            f'above 0.1 at {int((dq.abs() > 0.1).sum())}; '
+            f'amp ratio r {d.amp_ratio_r.min():.2f} '
+            f'to {d.amp_ratio_r.max():.2f} (n={len(d)})'
         )
     s = pd.read_csv(outroot / 'step1s' / 'tunes-tunes.csv')
     ref = np.loadtxt(PSI / 'refsol.dat')
@@ -628,9 +668,13 @@ def report(outroot):
     scale = (STEPS * TURNS / TUNESAMPLE - 1) * TUNESAMPLE / STEPS / TURNS
     dr, dz = s.nu_r / scale - ref[row, 1], s.nu_y / scale - ref[row, 2]
     print(
-        f'spectral minus FIXPO (not folded): Qr median {dr.abs().median():.1e} max {dr.abs().max():.1e}, '
-        f'{(dr.abs() <= 5e-3).sum()} of {len(s)} within 5e-3; Qz median {dz.abs().median():.1e}, '
-        f'{(dz.abs() <= 5e-3).sum()} within 5e-3, misses at {s.energy_MeV[dz.abs() > 5e-3].tolist()}: {dz[dz.abs() > 5e-3].round(4).tolist()}'
+        'spectral minus FIXPO (not folded): '
+        f'Qr median {dr.abs().median():.1e} max {dr.abs().max():.1e}, '
+        f'{(dr.abs() <= 5e-3).sum()} of {len(s)} within 5e-3; '
+        f'Qz median {dz.abs().median():.1e}, '
+        f'{(dz.abs() <= 5e-3).sum()} within 5e-3, '
+        f'misses at {s.energy_MeV[dz.abs() > 5e-3].tolist()}: '
+        f'{dz[dz.abs() > 5e-3].round(4).tolist()}'
     )
 
 

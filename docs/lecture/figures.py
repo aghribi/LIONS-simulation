@@ -1513,6 +1513,7 @@ def case_h():
 
 
 def g3():
+    """Tables g3, g3_det and g3_amp from the Case G3 results."""
     a = table('case_g3/step1a/case_g3_a.parquet')
     b = table('case_g3/step1b/case_g3_b.parquet')
     w = table('case_g3/step2/case_g3_2.parquet')
